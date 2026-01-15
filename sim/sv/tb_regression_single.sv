@@ -165,6 +165,36 @@ module tb_regression_single;
 
       $fclose(fd);
       $display("  Loaded %0d clauses", clause_count);
+      
+      // Limit Checks
+      if (var_count > MAX_VARS_PER_CORE * GRID_X * GRID_Y) begin
+         $display("\n[ERROR] CNF Variables (%0d) exceed MAX_VARS (%0d)!", var_count, MAX_VARS_PER_CORE * GRID_X * GRID_Y);
+         $display("[ERROR] Please increase MAX_VARS in Makefile.");
+         $finish;
+      end
+      
+      if (clause_count > MAX_CLAUSES_PER_CORE * GRID_X * GRID_Y) begin
+         $display("\n[ERROR] CNF Clauses (%0d) exceed MAX_CLAUSES (%0d)!", clause_count, MAX_CLAUSES_PER_CORE * GRID_X * GRID_Y);
+         $display("[ERROR] Please increase MAX_CLAUSES in Makefile.");
+         $finish;
+      end
+      
+      // We need to count total literals to check MAX_LITS
+      // Re-scanning clause_store to count lits
+      begin
+          int total_lits = 0;
+          foreach (clause_store[i]) begin
+              total_lits += clause_store[i].size();
+          end
+          // Note: Each clause needs 4 words in memory? No, MAX_LITS is the literal memory size.
+          // In clause_store.sv, lit_mem is [0:MAX_LITS-1].
+          // HW stores literals packed.
+          if (total_lits > MAX_LITS) begin
+             $display("\n[ERROR] CNF Literals (%0d) exceed MAX_LITS (%0d)!", total_lits, MAX_LITS);
+             $display("[ERROR] Please increase MAX_LITS in Makefile.");
+             $finish;
+          end
+      end
     end
   endtask
 

@@ -778,4 +778,23 @@ module pse #(
         end
     end
 
+    // SIMULATION ONLY: Check for hardware limit breaches
+    // synopsys translate_off
+    always @(posedge clk) begin
+        if (clause_count_q >= MAX_CLAUSES) begin
+             $display("\n[ERROR] Hardware Limit Reached: Clause Count (%0d) >= MAX_CLAUSES (%0d)", clause_count_q, MAX_CLAUSES);
+             $display("[ERROR] Simulation Terminated due to memory exhaustion.");
+             $finish;
+        end
+        // Check loosely against MAX_LITS - 32 to warn before it's absolutely critical, 
+        // or strictly against MAX_LITS. user said "warn when one of the limits is breached".
+        // The INJECT logic checks (lit_count_q < MAX_LITS - 2).
+        if (lit_count_q >= MAX_LITS - 2) begin 
+             $display("\n[ERROR] Hardware Limit Reached: Literal Count (%0d) >= MAX_LITS (%0d)", lit_count_q, MAX_LITS);
+             $display("[ERROR] Simulation Terminated due to memory exhaustion.");
+             $finish;
+        end
+    end
+    // synopsys translate_on
+
 endmodule
