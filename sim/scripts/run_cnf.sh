@@ -32,7 +32,7 @@ make regression_single > /dev/null
 
 # Check for gtimeout
 if command -v gtimeout &> /dev/null; then
-    gtimeout 15s ./obj_dir/Vtb_regression_single +CNF="$CNF_FILE" +EXPECT="$EXPECTED"
+    gtimeout 120s ./obj_dir/Vtb_regression_single +CNF="$CNF_FILE" +EXPECT="$EXPECTED"
 else
     echo "Warning: gtimeout not found. Running without timeout."
     ./obj_dir/Vtb_regression_single +CNF="$CNF_FILE" +EXPECT="$EXPECTED"

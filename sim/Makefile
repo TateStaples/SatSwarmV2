@@ -102,9 +102,9 @@ test_vde_heap:
 	@./obj_dir/Vtb_vde_heap
 
 # Default parameters for regression (can be overridden)
-MAX_VARS ?= 42
-MAX_CLAUSES ?= 104
-MAX_LITS ?= 416
+MAX_VARS ?= 256
+MAX_CLAUSES ?= 1024
+MAX_LITS ?= 4096
 
 # Output executable targets
 OBJ_SINGLE := obj_dir/Vtb_regression_single
