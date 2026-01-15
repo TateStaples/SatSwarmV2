@@ -103,14 +103,14 @@ test_vde_heap:
 
 # Default parameters for regression (can be overridden)
 MAX_VARS ?= 256
-MAX_CLAUSES ?= 1024
-MAX_LITS ?= 4096
+MAX_CLAUSES ?= 2048
+MAX_LITS ?= 16384
 
 # Output executable targets
 OBJ_SINGLE := obj_dir/Vtb_regression_single
 STAMP_SINGLE := obj_dir/.build_single_stamp
 
-$(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_SRCS)
+$(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_SRCS) Makefile
 	@echo "Building single-core regression testbench with MAX_VARS=$(MAX_VARS)..."
 	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_SRCS) \
 		--top-module tb_regression_single \

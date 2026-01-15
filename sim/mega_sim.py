@@ -111,7 +111,26 @@ class MemorySystem:
             self.watch_heads2[lit_idx] = c_idx
 
     def _lit_to_idx(self, lit):
-        return (abs(lit) * 2) + (1 if lit < 0 else 0)
+        return (lit + self.num_vars) if lit < 0 else (lit + self.num_vars - 1)
+
+    def get_storage_stats(self):
+        total_clauses = len(self.clause_db)
+        total_literals = sum(len(c.literals) for c in self.clause_db)
+        max_clause_len = max(len(c.literals) for c in self.clause_db) if self.clause_db else 0
+        return total_clauses, total_literals, max_clause_len
+
+    def get_solution_bitstring(self):
+        # 1 if assigned True, 0 if assigned False (or unassigned/phase)
+        # Using index 1 to num_vars
+        bits = []
+        for i in range(1, self.num_vars + 1):
+            val = self.assignments[i]
+            if val == 1: bits.append("1")
+            elif val == -1: bits.append("0")
+            else:
+                # Unassigned? Fallback to phase (hardware behavior)
+                bits.append("1" if self.phases[i] == 1 else "0")
+        return "".join(bits)
 # ==========================================
 # 2. Propagation Search Engine (PSE)
 # ==========================================
@@ -171,7 +190,7 @@ class PropagationSearchEngine:
                      else: prev_clause.next2 = curr_c_idx
                 
                 last_ptr = curr_c_idx
-                # Terminate for now
+                # Terminate for now (will be overwritten if another clause is kept)
                 if slot == 1: clause.next1 = None
                 else: clause.next2 = None
                 
@@ -180,14 +199,18 @@ class PropagationSearchEngine:
                 pass
             
             elif status == "CONFLICT":
-                # Repair list tail roughly and abort
+                # [CRITICAL] Preserve the REMAINING list when a conflict occurs.
+                # Otherwise we lose watches for later propagations!
                 if new_head is None: 
-                    if slot == 1: self.mem.watch_heads1[lit_idx] = curr_c_idx
-                    else: self.mem.watch_heads2[lit_idx] = curr_c_idx
+                    new_head = curr_c_idx
                 else:
                     prev_clause = self.mem.clause_db[last_ptr]
                     if slot == 1: prev_clause.next1 = curr_c_idx
                     else: prev_clause.next2 = curr_c_idx
+                
+                # Update Head before returning
+                if slot == 1: self.mem.watch_heads1[lit_idx] = new_head
+                else: self.mem.watch_heads2[lit_idx] = new_head
                 return "CONFLICT"
                 
             curr_c_idx = next_c_idx
@@ -495,7 +518,16 @@ if __name__ == "__main__":
     result = solver.solve()
     print(f"\nFinal Result: {result}")
     
+    # Storage Stats
+    total_clauses, total_lits, max_len = solver.mem.get_storage_stats()
+    print(f"Total Clauses in Storage:  {total_clauses}")
+    print(f"Total Literals in Storage: {total_lits}")
+    print(f"Max Clause Length:         {max_len}")
+    
     if result == "SAT":
+        sol_bits = solver.mem.get_solution_bitstring()
+        print(f"Solution: {sol_bits}")
+        
         # Validation
         print("\n[VALIDATION] Checking clauses...")
         all_sat = True
