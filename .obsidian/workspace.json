@@ -1,0 +1,202 @@
+{
+  "main": {
+    "id": "7c7cfa4c1222335b",
+    "type": "split",
+    "children": [
+      {
+        "id": "95c6cf3c0dd5c487",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "0198011c1d03f3fe",
+            "type": "leaf",
+            "state": {
+              "type": "pdf",
+              "state": {
+                "file": "reference/SatAccel.pdf"
+              },
+              "icon": "lucide-file-text",
+              "title": "SatAccel"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "c7af2fc629d28fe3",
+    "type": "split",
+    "children": [
+      {
+        "id": "a44d81acbd40b3ee",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7e2d339022c357b3",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "91d075b37d6bb842",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "c2d0e50017836dce",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "cda22a6b66c672ba",
+    "type": "split",
+    "children": [
+      {
+        "id": "ae9b35a15584daf4",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "43a7dbb690150a3e",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "reference/SatAccel.pdf",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks for SatAccel"
+            }
+          },
+          {
+            "id": "3d91b2b3d4f1b98a",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "reference/SatAccel.pdf",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from SatAccel"
+            }
+          },
+          {
+            "id": "0e8d643019dddafe",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "4d07a1656f4c7386",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "3864628cd5d8a3b5",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "reference/SatAccel.pdf",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of SatAccel"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "0198011c1d03f3fe",
+  "lastOpenFiles": [
+    "docs/ALGORITHM_IMPLEMENTATION.md",
+    "docs/SYSTEMVERILOG_DESIGN.md",
+    "reference/Full_HLS_impl/include/rapidjson/msinttypes/stdint.h",
+    "reference/Full_HLS_impl/include/rapidjson/msinttypes/inttypes.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/strtod.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/swap.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/meta.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/strfunc.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/stack.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/regex.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/pow10.h",
+    "reference/Full_HLS_impl/include/rapidjson/internal/itoa.h",
+    "reference/Full_HLS_impl/README.md",
+    "reference/Full_HLS/README.md",
+    "README.md"
+  ]
+}

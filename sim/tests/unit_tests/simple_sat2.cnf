@@ -1,0 +1,5 @@
+c Simple SAT test: x1 AND x2
+c Expected: SAT
+p cnf 2 2
+1 0
+2 0

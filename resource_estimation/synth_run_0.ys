@@ -1,0 +1,30 @@
+
+    # Read modified package FIRST
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/resource_estimation/temp_pkg_run_0.sv
+    
+    # Read other source files
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/interface_unit.sv
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/trail_manager.sv
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/vde.sv
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/pse.sv
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/cae.sv
+    read_verilog -sv /Users/tatestaples/Code/VeriSAT/src/Mega/solver_core.sv
+    
+    # Override top module parameters
+    chparam -set MAX_VARS 4 solver_core
+    chparam -set MAX_CLAUSES 40 solver_core
+    chparam -set MAX_LITS 160 solver_core
+    
+    # Synthesis
+    hierarchy -check -top solver_core
+    proc
+    opt -fast
+    memory -nomap
+    opt -fast
+    
+    # Flatten helps with estimation accuracy for generic cell counts
+    synth_xilinx -family xc7 -top solver_core -flatten -abc9
+    
+    # Report
+    stat
+    

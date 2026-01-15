@@ -1,0 +1,5 @@
+c Simple SAT test: (x1 OR x2) AND (x1 OR NOT x2)
+c Expected: SAT (x1=true satisfies both)
+p cnf 2 2
+1 2 0
+1 -2 0

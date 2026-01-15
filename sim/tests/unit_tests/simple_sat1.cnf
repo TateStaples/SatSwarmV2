@@ -1,0 +1,4 @@
+c Simple SAT test: single positive literal
+c Expected: SAT
+p cnf 1 1
+1 0

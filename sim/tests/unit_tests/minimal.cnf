@@ -1,0 +1,3 @@
+c Minimal test - single clause with one positive literal
+p cnf 1 1
+1 0

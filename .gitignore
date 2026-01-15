@@ -1,0 +1,28 @@
+# OS generated files
+.DS_Store
+
+# Large log files
+*.log
+sim/sv_trace.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# HDL Simulations
+*.vcd
+*.fsdb
+work/
+obj_dir/
+csrc/
+simv*
+ucli.key
+vc_hdrs.h
+DVEfiles/
+
+# Local results
+ladder_results.txt
