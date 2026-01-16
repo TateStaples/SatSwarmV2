@@ -8,6 +8,15 @@
 
 ## Resolved Issues
 
+### [FIXED] BUG-011: Invalid Literal 0 (Phantom Variable)
+- **Status**: Resolved
+- **Fixed Date**: 2026-01-16
+- **Severity**: Critical (Crash/Soundness)
+- **Description**: Solver crashed with "Implied Var 0" assertion due to `0` literals persisting in the conflict resolution engine (`cae.sv`).
+- **Root Cause**: Missing filters for `0` literals in `cae.sv` (Resolution Logic).
+- **Report**: [BUG-011_Invalid_Literal_0.md](BUG-011_Invalid_Literal_0.md)
+
+
 ### [FIXED] BUG-010: CAE Reason Staleness (Learned Clause Resolution)
 - **Status**: Resolved
 - **Fixed Date**: 2026-01-15

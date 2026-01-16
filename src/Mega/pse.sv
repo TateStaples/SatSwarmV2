@@ -536,7 +536,24 @@ module pse #(
                             propagated_valid  = 1'b1;
                             propagated_var    = lit_other;
                             propagated_reason = scan_clause_q;
+                            $strobe("[PSE TRACE] Unit %0d from Clause %0d (State %s)", lit_other, scan_clause_q, state_q.name());
                             
+
+                            // Debug Trap for Var 0
+                            // synopsys translate_off
+                            if (lit_other == 0) begin
+                                $display("\n[PSE ERROR] Clause %0d implies Var 0! Dumping state:", scan_clause_q);
+                                $display("  w1=%0d (idx=%0d) lit=%0d", w1, safe_lit_idx(lit_mem[w1]), lit_mem[w1]);
+                                $display("  w2=%0d (idx=%0d) lit=%0d", w2, safe_lit_idx(lit_mem[w2]), lit_mem[w2]);
+                                $display("  scan_list_sel=%0d (0=w1 list, 1=w2 list)", scan_list_sel_q);
+                                $display("  cstart=%0d clen=%0d", cstart, clen);
+                                $display("  Literal Memory Dump for Clause:");
+                                for (int k=0; k<8; k++) begin // just dump first 8
+                                     $display("    lit[%0d] = %0d", k, lit_mem[cstart+k]);
+                                end
+                                $fatal(1, "PSE Critical Error: Implied Var 0");
+                            end
+                            // synopsys translate_on
 
                             assign_wr_en  = 1'b1;
                             assign_wr_idx = v - 1;

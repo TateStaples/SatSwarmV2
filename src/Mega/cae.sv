@@ -566,7 +566,7 @@ module cae #(
                                 if (j < k && conflict_lits[j] == conflict_lits[k]) is_dup = 1;
                             end
                             
-                            if (!is_dup && idx < MAX_BUFFER) begin
+                            if (!is_dup && idx < MAX_BUFFER && conflict_lits[k] != 0) begin
                                 buf_lits[idx] <= conflict_lits[k];
                                 buf_levels[idx] <= conflict_levels[k];
                                 idx++;
@@ -585,7 +585,7 @@ module cae #(
                          r_lit_local = clause_read_literal;
                          r_var_local = abs_lit(r_lit_local);
                          
-                         if (r_var_local != resolve_var_q) begin
+                         if (r_var_local != resolve_var_q && r_var_local != 0) begin
                             exists_local = 1'b0;
                             for (int k = 0; k < MAX_BUFFER; k++) 
                                 if (k < buf_count_q && abs_lit(buf_lits[k]) == r_var_local) exists_local = 1'b1;

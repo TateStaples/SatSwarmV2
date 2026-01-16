@@ -109,7 +109,7 @@ module solver_core #(
     ) u_prop_fifo (
         .clk(clk),
         .rst_n(rst_n),
-        .push(pse_propagated_valid),
+        .push(pse_propagated_valid && pse_propagated_var != 0),
         .push_data({pse_propagated_reason, pse_propagated_var}),
         .pop(prop_pop),
         .pop_data(prop_fifo_out),
@@ -878,8 +878,11 @@ module solver_core #(
                     vde_request = 1'b1;
     
                     if (vde_decision_valid) begin
+
                         // Capture decision literal with saved phase
                         decision_lit_d = vde_decision_phase ? $signed(vde_decision_var) : -$signed(vde_decision_var);
+
+
     
                         // [DEBUG TRACE] Log moved to always_ff
     
@@ -1497,7 +1500,10 @@ module solver_core #(
             // PSE PROPAGATION CAPTURE FIFO
             // Handled by u_prop_fifo instance (including capture and pointers)
             if (pse_propagated_valid) begin
-                 $strobe("[CORE %0d] CAPTURED PROP to FIFO: %d", CORE_ID, pse_propagated_var);
+                 if (pse_propagated_var == 0) begin
+                     // Still keep a small alert if 0 is about to be pushed (it shouldn't due to guard)
+                     $display("[CORE %0d] ERROR: PSE triggered Var 0 propagation!", CORE_ID);
+                 end
             end
             
             // FIFO Flush logging
@@ -1551,7 +1557,7 @@ module solver_core #(
                 if (state_q == FINAL_VERIFY && vde_all_assigned)
                     $display("[CORE %0d Cycle %0d] Conflict_Analysis phase: All variables assigned -> Skipping CAE, going to SAT verification", CORE_ID, cycle_count_q);
                 if (state_q == BACKTRACK_PHASE && !vde_all_assigned && state_r_q == CONFLICT_ANALYSIS)
-                    $display("[CORE %0d] Conflict Analysis Summary: Len=%0d", CORE_ID, conflict_clause_len_q);
+                    if (DEBUG >= 1) $display("[CORE %0d] Conflict Analysis Summary: Len=%0d", CORE_ID, conflict_clause_len_q);
                 if (state_q == FINISH_UNSAT && (cae_unsat || cae_learned_len == 4'h0 || (conflict_clause_q[0] == 0 && conflict_clause_q[1] == 0)))
                     $display("[CORE %0d Cycle %0d] *** UNSAT: CAE_UNSAT=%b, Learned_Len=%0d, Clause=[%0d,%0d]", 
                              CORE_ID, cycle_count_q, cae_unsat, cae_learned_len, conflict_clause_q[0], conflict_clause_q[1]);

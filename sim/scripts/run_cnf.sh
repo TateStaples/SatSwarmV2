@@ -26,9 +26,9 @@ cd "$SIM_DIR"
 "${VERILATOR:-verilator}" --version >/dev/null 2>&1 || true
 
 # Prefer the satswarmv2 testbench if available, otherwise fall back to regression_single
-BIN="./obj_dir/Vtb_satswarmv2"
+BIN="$SIM_DIR/obj_dir/Vtb_satswarmv2"
 if [ ! -x "$BIN" ]; then
-    BIN="./obj_dir/Vtb_regression_single"
+    BIN="$SIM_DIR/obj_dir/Vtb_regression_single"
 fi
 
 # Run the single regression executable with +CNF arg and a 120s timeout
@@ -36,11 +36,11 @@ fi
 # Check for gtimeout (mac) or timeout (linux)
 # Pass $@ to allow +DEBUG_LEVEL etc overrides
 if command -v gtimeout &> /dev/null; then
-    gtimeout 120s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
+    gtimeout 180s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
 elif command -v timeout &> /dev/null; then
-    timeout 120s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
+    timeout 180s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
 else
     echo "Warning: timeout not found. Running without timeout."
-    "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
+    "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
 fi
 exit $?

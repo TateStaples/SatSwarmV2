@@ -37,6 +37,7 @@ module tb_regression_single;
     .GRID_X(GRID_X),
     .GRID_Y(GRID_Y),
     .MAX_VARS_PER_CORE(MAX_VARS_PER_CORE),
+    .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
     .MAX_LITS(MAX_LITS)
   ) dut (
     .DEBUG(debug_level),

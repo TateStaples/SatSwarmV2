@@ -163,7 +163,7 @@ module vde_heap #(
                 end else begin
                     decision_valid = 1'b1;
                     decision_var = heap_mem[0].var_id;
-                    // $display("VDE_DBG: DECIDE -> %0d (Score %0d)", decision_var, heap_mem[0].score);
+                    // if (DEBUG >= 2) $display("VDE_DBG: DECIDE -> %0d (Score %0d)", decision_var, heap_mem[0].score);
                     decision_phase = phase_hint[heap_mem[0].var_id - 1] ^ phase_offset[0];
                     // Early decision instrumentation: print top candidates for first few decisions
                     if (dbg_decision_count_q < 5) begin
@@ -213,17 +213,39 @@ module vde_heap #(
 
             HIDE_BUBBLE_DOWN_SWAP: begin
                 // Compare and swap if needed
-                automatic logic [IDX_W-1:0] left_idx = 2 * idx_q + 1;
-                automatic logic [IDX_W-1:0] right_idx = 2 * idx_q + 2;
+                automatic logic [IDX_W:0] left_idx = (idx_q << 1) + 1;
+                automatic logic [IDX_W:0] right_idx = (idx_q << 1) + 2;
                 automatic logic [IDX_W-1:0] largest = idx_q;
-                automatic logic [ACT_W-1:0] largest_score = heap_mem[idx_q].score;
 
-                if (left_idx < heap_size_q && heap_mem[left_idx].score > largest_score) begin
-                    largest = left_idx;
-                    largest_score = heap_mem[left_idx].score;
+                // Compare with Left Child
+                // Better if: Score Higher OR (Score Equal AND VarID Lower)
+                if (left_idx < heap_size_d) begin
+                    /*
+                    if (DEBUG >= 2) $display("[VDE DBG] BubbleDown: Idx=%0d (Var=%0d Sc=%0d) vs Left=%0d (Var=%0d Sc=%0d)", 
+                       idx_q, heap_mem[idx_q].var_id, heap_mem[idx_q].score,
+                       left_idx, heap_mem[left_idx].var_id, heap_mem[left_idx].score);
+                    */
+                    if (heap_mem[left_idx].score > heap_mem[largest].score ||
+                       (heap_mem[left_idx].score == heap_mem[largest].score && 
+                        heap_mem[left_idx].var_id < heap_mem[largest].var_id)) begin
+                        largest = left_idx[IDX_W-1:0];
+                        // if (DEBUG >= 2) $display("[VDE DBG]   -> Selecting Left (Better)");
+                    end
                 end
-                if (right_idx < heap_size_q && heap_mem[right_idx].score > largest_score) begin
-                    largest = right_idx;
+
+                // Compare with Right Child
+                if (right_idx < heap_size_d) begin
+                    /*
+                    if (DEBUG >= 2) $display("[VDE DBG] BubbleDown: Largest=%0d (Var=%0d Sc=%0d) vs Right=%0d (Var=%0d Sc=%0d)", 
+                       largest, heap_mem[largest].var_id, heap_mem[largest].score,
+                       right_idx, heap_mem[right_idx].var_id, heap_mem[right_idx].score);
+                    */
+                     if (heap_mem[right_idx].score > heap_mem[largest].score ||
+                        (heap_mem[right_idx].score == heap_mem[largest].score && 
+                         heap_mem[right_idx].var_id < heap_mem[largest].var_id)) begin
+                        largest = right_idx[IDX_W-1:0];
+                        // if (DEBUG >= 2) $display("[VDE DBG]   -> Selecting Right (Better)");
+                    end
                 end
 
                 if (largest != idx_q) begin
@@ -260,7 +282,13 @@ module vde_heap #(
             UNHIDE_BUBBLE_UP_SWAP: begin
                 if (idx_q > 0) begin
                     automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                    if (heap_mem[parent_idx].score < heap_mem[idx_q].score) begin
+                    automatic logic swap_needed = 0;
+                    
+                    if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
+                    else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
+                             heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
+
+                    if (swap_needed) begin
                         idx_d = parent_idx;
                         state_d = UNHIDE_BUBBLE_UP_READ;
                     end else begin
@@ -305,7 +333,13 @@ module vde_heap #(
             BUMP_BUBBLE_UP_SWAP: begin
                 if (idx_q > 0) begin
                     automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                    if (heap_mem[parent_idx].score < heap_mem[idx_q].score) begin
+                    automatic logic swap_needed = 0;
+                    
+                    if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
+                    else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
+                             heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
+
+                    if (swap_needed) begin
                         idx_d = parent_idx;
                         state_d = BUMP_BUBBLE_UP_READ;
                     end else begin
@@ -365,7 +399,7 @@ module vde_heap #(
             dbg_decision_count_q <= 0;
 
             for (i = 0; i < MAX_VARS; i = i + 1) begin
-                heap_mem[i].score <= ((i + 1) * (phase_offset + 1) * 32'd1103515245 + 32'd12345) & 32'h0000_FFFF;
+                heap_mem[i].score <= '0;
                 heap_mem[i].var_id <= i + 1;
                 pos_mem[i] <= i;
                 phase_hint[i] <= 1'b0;
@@ -411,23 +445,48 @@ module vde_heap #(
                 automatic logic [IDX_W-1:0] left_idx = 2 * idx_q + 1;
                 automatic logic [IDX_W-1:0] right_idx = 2 * idx_q + 2;
                 automatic logic [IDX_W-1:0] largest = idx_q;
-                automatic logic [ACT_W-1:0] largest_score = heap_mem[idx_q].score;
+                
+                // Compare with Left Child
+                // Better if: Score Higher OR (Score Equal AND VarID Lower)
+                if (left_idx < heap_size_d) begin
+                    /*
+                    if (DEBUG >= 2) $display("[VDE DBG] BubbleDown: Idx=%0d (Var=%0d Sc=%0d) vs Left=%0d (Var=%0d Sc=%0d)", 
+                       idx_q, heap_mem[idx_q].var_id, heap_mem[idx_q].score,
+                       left_idx, heap_mem[left_idx].var_id, heap_mem[left_idx].score);
+                    */
 
-                if (left_idx < heap_size_d && heap_mem[left_idx].score > largest_score) begin
-                    largest = left_idx;
-                    largest_score = heap_mem[left_idx].score;
+                    if (heap_mem[left_idx].score > heap_mem[largest].score ||
+                       (heap_mem[left_idx].score == heap_mem[largest].score && heap_mem[left_idx].var_id < heap_mem[largest].var_id)) begin
+                        largest = left_idx;
+                        // if (DEBUG >= 2) $display("[VDE DBG]   -> Selecting Left (Better)");
+                    end
                 end
-                if (right_idx < heap_size_d && heap_mem[right_idx].score > largest_score) begin
-                    largest = right_idx;
+
+                // Compare with Right Child
+                if (right_idx < heap_size_d) begin
+                    /*
+                     if (DEBUG >= 2) $display("[VDE DBG] BubbleDown: Largest=%0d (Var=%0d Sc=%0d) vs Right=%0d (Var=%0d Sc=%0d)", 
+                       largest, heap_mem[largest].var_id, heap_mem[largest].score,
+                       right_idx, heap_mem[right_idx].var_id, heap_mem[right_idx].score);
+                    */
+
+                     if (heap_mem[right_idx].score > heap_mem[largest].score ||
+                       (heap_mem[right_idx].score == heap_mem[largest].score && heap_mem[right_idx].var_id < heap_mem[largest].var_id)) begin
+                        largest = right_idx;
+                        // if (DEBUG >= 2) $display("[VDE DBG]   -> Selecting Right (Better)");
+                    end
                 end
 
                 if (largest != idx_q) begin
                     automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
                     automatic heap_entry_t entry_at_largest = heap_mem[largest];
+                    // if (DEBUG >= 2) $display("[VDE DBG] Swapping %0d (Var %0d) with %0d (Var %0d)", idx_q, entry_at_idx.var_id, largest, entry_at_largest.var_id);
                     heap_mem[idx_q] <= entry_at_largest;
                     heap_mem[largest] <= entry_at_idx;
                     pos_mem[entry_at_largest.var_id - 1] <= idx_q;
                     pos_mem[entry_at_idx.var_id - 1] <= largest;
+                end else begin
+                    // if (DEBUG >= 2) $display("[VDE DBG] No Swap (Settled at %0d)", idx_q);
                 end
             end
 
@@ -444,9 +503,17 @@ module vde_heap #(
             end
 
             // UNHIDE_BUBBLE_UP_SWAP: Swap if parent < current
+            // Parent is Worse if: Score Lower OR (Score Equal AND VarID Higher)
             if (state_q == UNHIDE_BUBBLE_UP_SWAP && idx_q > 0) begin
                 automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                if (heap_mem[parent_idx].score < heap_mem[idx_q].score) begin
+                automatic logic swap_needed;
+                
+                swap_needed = 0;
+                if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
+                else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
+                         heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
+
+                if (swap_needed) begin
                     automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
                     automatic heap_entry_t entry_at_parent = heap_mem[parent_idx];
                     heap_mem[idx_q] <= entry_at_parent;
@@ -464,7 +531,14 @@ module vde_heap #(
             // BUMP_BUBBLE_UP_SWAP: Swap if parent < current
             if (state_q == BUMP_BUBBLE_UP_SWAP && idx_q > 0) begin
                 automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                if (heap_mem[parent_idx].score < heap_mem[idx_q].score) begin
+                automatic logic swap_needed;
+                
+                swap_needed = 0;
+                if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
+                else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
+                         heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
+
+                if (swap_needed) begin
                     automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
                     automatic heap_entry_t entry_at_parent = heap_mem[parent_idx];
                     heap_mem[idx_q] <= entry_at_parent;
