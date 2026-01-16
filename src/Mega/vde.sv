@@ -2,6 +2,7 @@ module vde #(
     parameter int MAX_VARS = 256,
     parameter int ACT_W    = 32
 )(
+    input  int           DEBUG,
     input  logic         clk,
     input  logic         reset,
 
@@ -245,6 +246,7 @@ module vde #(
         .bump_count(h_bump_count),
         .bump_vars(h_bump_vars),
         .decay(h_decay),
+        .DEBUG(DEBUG),
         
         .busy(heap_busy)
     );

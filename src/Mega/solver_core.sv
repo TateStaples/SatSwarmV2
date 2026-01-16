@@ -7,6 +7,7 @@ module solver_core #(
     parameter int GRID_X = 2,
     parameter int GRID_Y = 2
 )(
+    input  int   DEBUG, 
     input  logic clk,  // Clock
     input  logic rst_n,  // TODO: document what this is 
     input  logic [3:0] vde_phase_offset,// TODO: document what this is 
@@ -247,8 +248,8 @@ module solver_core #(
     logic        pse_clear_assignments;
     logic        pse_clear_valid;
     logic [31:0] pse_clear_var;
-    logic [3:0]  pse_conflict_clause_len;
-    logic signed [7:0][31:0] pse_conflict_clause;
+    logic [4:0]  pse_conflict_clause_len;
+    logic signed [15:0][31:0] pse_conflict_clause;
     logic        pse_inject_req;
     logic signed [31:0] pse_inject_lit1;
     logic signed [31:0] pse_inject_lit2;
@@ -261,13 +262,13 @@ module solver_core #(
     logic [15:0] pse_assign_broadcast_reason;
     
     // Registered conflict clause (captured when conflict detected)
-    logic [3:0]  conflict_clause_len_q, conflict_clause_len_d;
-    logic signed [7:0][31:0] conflict_clause_q;
-    logic signed [7:0][31:0] conflict_clause_d;
+    logic [4:0]  conflict_clause_len_q, conflict_clause_len_d;
+    logic signed [15:0][31:0] conflict_clause_q;
+    logic signed [15:0][31:0] conflict_clause_d;
     
     // Decision levels for conflict clause literals (queried from trail manager)
-    logic [7:0][15:0] conflict_levels_q;  // Registered decision levels
-    logic [7:0][15:0] conflict_levels_d;  // Next-cycle decision levels
+    logic [15:0][15:0] conflict_levels_q;  // Registered decision levels
+    logic [15:0][15:0] conflict_levels_d;  // Next-cycle decision levels
     
     // Rescan flag for handling conflicting propagations
     logic        rescan_required_q, rescan_required_d;
@@ -285,8 +286,8 @@ module solver_core #(
     // CAE module signals
     logic        cae_start;
     logic        cae_done;
-    logic [3:0]  cae_learned_len;
-    logic signed [7:0][31:0] cae_learned_lits;
+    logic [4:0]  cae_learned_len;
+    logic signed [15:0][31:0] cae_learned_lits;
     logic        cae_unsat;
     
     // CAE-PSE Reason Interface
@@ -323,8 +324,8 @@ module solver_core #(
     // VDE signals
     logic        vde_bump_valid;
     logic [31:0] vde_bump_var;
-    logic [3:0]  vde_bump_count;
-    logic [7:0][31:0] vde_bump_vars;
+    logic [4:0]  vde_bump_count;
+    logic [15:0][31:0] vde_bump_vars;
     logic        vde_decay;
 
     // Current decision literal (signed, includes phase)
@@ -393,6 +394,7 @@ module solver_core #(
     vde #(
         .MAX_VARS(MAX_VARS)
     ) u_vde (
+        .DEBUG(DEBUG),
         .clk(clk),
         .reset(!rst_n),
         .request(vde_request),
@@ -419,6 +421,25 @@ module solver_core #(
         .decay(vde_decay)
     );
 
+    // Architectural Trace: VDE Decision
+    always_ff @(posedge clk) begin
+        if (DEBUG > 0 && vde_decision_valid) begin
+             // Note: Decision Level? trail_current_level available from trail_manager (but laggy?)
+             // vde_decision_var is the variable. vde_decision_phase is the sign?
+             // vde_decision_phase: 0=Negative (confusing naming? Usually phase=val). 
+             // Let's assume standard phase: 1=True, 0=False.
+             // But wait, vde decides a literal usually.
+             // In vde.sv: output [31:0] decision_var (unsigned index).
+             // output decision_phase.
+             // We can reconstruct the literal.
+             int lit;
+             lit = vde_decision_phase ? int'(vde_decision_var) : -int'(vde_decision_var);
+             $display("[hw_trace] [VDE] Decided: %0d at Level %0d", lit, trail_current_level + 1); 
+             // +1 because decision pushes to next level?
+             // mega_sim.py says: len(self.mem.trail_lim) + 1.
+        end
+    end
+
     // Muxed Trail Query Var
     // Trail manager query is driven by internal FSM logic usually (trail_query_var).
     // During conflict analysis resolution (BACKTRACK_PHASE), CAE drives it (cae_level_query_var).
@@ -434,6 +455,7 @@ module solver_core #(
     trail_manager #(
         .MAX_VARS(MAX_VARS)
     ) u_trail (
+        .DEBUG(DEBUG),
         .clk(clk),
         .reset(!rst_n),
         .push(trail_push),
@@ -474,6 +496,7 @@ module solver_core #(
         .MAX_LITS(MAX_LITS),
         .CORE_ID(CORE_ID)
     ) u_pse (
+        .DEBUG(DEBUG),
         .clk(clk),
         .reset(!rst_n),
         .load_valid(load_valid_mux),
@@ -517,9 +540,10 @@ module solver_core #(
     logic cae_done_actual;
     logic [15:0] cae_backtrack_level; // Explicit declaration to fix implicit warning
     cae #(
-        .MAX_LITS(8),
+        .MAX_LITS(16),
         .LEVEL_W(16)
     ) u_cae (
+        .DEBUG(DEBUG),
         .clk(clk),
         .reset(!rst_n),
         .start(cae_start),
@@ -664,7 +688,7 @@ module solver_core #(
         query_index_d           = query_index_q;
         learn_idx_d             = learn_idx_q;
         conflict_clause_len_d   = conflict_clause_len_q;
-        for (int k=0; k<8; k++) begin
+        for (int k=0; k<16; k++) begin
              conflict_levels_d[k] = conflict_levels_q[k];
              conflict_clause_d[k] = conflict_clause_q[k];
         end
@@ -876,6 +900,7 @@ module solver_core #(
                         // Push decision to trail at INCREMENTED level
                         // This allows level 0 for unit propagations, and first decision at level 1
                         trail_push = 1'b1;
+
                         trail_push_var = vde_decision_var;
                         trail_push_value = vde_decision_phase;
                         trail_push_level = decision_level_q + 1'b1;
@@ -1114,7 +1139,7 @@ module solver_core #(
 
                         // Bump variables
                         vde_bump_count = cae_learned_len;
-                        for (int i = 0; i < 8; i++) begin
+                        for (int i = 0; i < 16; i++) begin
                             if (i < cae_learned_len) begin
                                 vde_bump_vars[i] = (cae_learned_lits[i] < 0) ? 
                                                   $unsigned(-cae_learned_lits[i]) : 
@@ -1436,7 +1461,7 @@ module solver_core #(
             resync_started_q   <= 1'b0;
             rescan_required_q  <= 1'b0;
             conflict_clause_len_q <= '0;
-            for (int i = 0; i < 8; i++) begin
+            for (int i = 0; i < 16; i++) begin
                 conflict_clause_q[i] <= '0;
                 conflict_levels_q[i] <= '0;
             end
@@ -1464,7 +1489,7 @@ module solver_core #(
             resync_started_q   <= resync_started_d;
             rescan_required_q  <= rescan_required_d;
             conflict_clause_len_q <= conflict_clause_len_d;
-            for (int i = 0; i < 8; i++) begin
+            for (int i = 0; i < 16; i++) begin
                 conflict_clause_q[i] <= conflict_clause_d[i];
                 conflict_levels_q[i] <= conflict_levels_d[i];
             end
@@ -1538,19 +1563,7 @@ module solver_core #(
             // Backtrack logging
             // Backtrack logging removed
 
-            // VDE Decision Trace
-            if (vde_decision_valid && (state_q == VDE_PHASE) && !vde_decision_valid_r_q) begin
-                $display("[hw_trace] [VDE] Decided: %0d at Level %0d", 
-                         vde_decision_phase ? $signed(vde_decision_var) : -$signed(vde_decision_var),
-                         decision_level_q + 1);
-            end
-            
-            // CAE Learned Clause Trace
-            if (cae_done_edge && (state_q == BACKTRACK_PHASE) && !cae_done_edge_r_q) begin
-                 $display("[hw_trace] [CAE] Learned Clause: [%0d, %0d, %0d, %0d], Backtrack to: %0d, Trail Height: %0d",
-                          cae_learned_lits[0], cae_learned_lits[1], cae_learned_lits[2], cae_learned_lits[3],
-                           cae_backtrack_level, trail_height);
-            end
+
         end
     end
 

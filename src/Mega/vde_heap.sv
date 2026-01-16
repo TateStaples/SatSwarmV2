@@ -39,7 +39,10 @@ module vde_heap #(
     input  logic         unassign_all, // Reset assignments but KEEP SCORES
 
     // Status
-    output logic         busy
+    // Status
+    output logic         busy,
+    
+    input  int           DEBUG
 );
 
     // =========================================================================
@@ -96,6 +99,8 @@ module vde_heap #(
 
 
     integer i;
+    // Debug: count decisions to limit early instrumentation
+    integer dbg_decision_count_q;
 
     // =========================================================================
     // Combinational Logic
@@ -160,6 +165,16 @@ module vde_heap #(
                     decision_var = heap_mem[0].var_id;
                     // $display("VDE_DBG: DECIDE -> %0d (Score %0d)", decision_var, heap_mem[0].score);
                     decision_phase = phase_hint[heap_mem[0].var_id - 1] ^ phase_offset[0];
+                    // Early decision instrumentation: print top candidates for first few decisions
+                    if (dbg_decision_count_q < 5) begin
+                        automatic int top_n = (heap_size_q < 6) ? heap_size_q : 6;
+                        if (DEBUG >= 2) $display("[VDE] Decide #%0d: var=%0d phase=%0d score=%0d heap_size=%0d",
+                                 dbg_decision_count_q+1, decision_var, decision_phase, heap_mem[0].score, heap_size_q);
+                        for (int k = 0; k < top_n; k++) begin
+                            automatic int vh = heap_mem[k].var_id;
+                            if (DEBUG >= 2) $display("[VDE]   Top[%0d]: var=%0d score=%0d phase_hint=%0d", k, vh, heap_mem[k].score, phase_hint[vh-1]);
+                        end
+                    end
                     if (!request) state_d = IDLE;
                 end
             end
@@ -347,6 +362,7 @@ module vde_heap #(
             pending_value_q <= 1'b0;
             bump_queue_count_q <= '0;
             bump_increment_q <= INITIAL_BUMP;
+            dbg_decision_count_q <= 0;
 
             for (i = 0; i < MAX_VARS; i = i + 1) begin
                 heap_mem[i].score <= ((i + 1) * (phase_offset + 1) * 32'd1103515245 + 32'd12345) & 32'h0000_FFFF;
@@ -361,6 +377,8 @@ module vde_heap #(
             pending_var_q <= '0;
             pending_value_q <= 1'b0;
             bump_queue_count_q <= '0;
+            // Preserve scores and hints, but reset decision counter
+            dbg_decision_count_q <= 0;
         end else begin
             state_q <= state_d;
             heap_size_q <= heap_size_d;
@@ -370,6 +388,10 @@ module vde_heap #(
             bump_queue_count_q <= bump_queue_count_d;
             bump_queue_q <= bump_queue_d;
             bump_increment_q <= bump_increment_d;
+            // Increment debug decision counter when a decision occurs
+            if (state_q == DECIDE && heap_size_q != 0) begin
+                dbg_decision_count_q <= dbg_decision_count_q + 1;
+            end
 
             // HIDE_SWAP: Swap heap[idx] with heap[heap_size-1]
             if (state_q == HIDE_SWAP) begin

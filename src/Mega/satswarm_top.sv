@@ -7,6 +7,7 @@ module satswarm_top #(
     parameter int MAX_LITS = 2048,
     parameter int NUM_CORES = GRID_X * GRID_Y
 )(
+    input  int  DEBUG, // Runtime Debug Level
     input  logic clk,
     input  logic rst_n,
 
@@ -157,6 +158,7 @@ module satswarm_top #(
                     .GRID_X(GRID_X),
                     .GRID_Y(GRID_Y)
                 ) u_core (
+                    .DEBUG(DEBUG),
                     .clk(clk),
                     .rst_n(rst_n),
                     .vde_phase_offset(CORE_IDX[3:0]),
@@ -225,7 +227,7 @@ module satswarm_top #(
             if (host_done && !host_done_r) begin
                 for (int i = 0; i < NUM_CORES; i = i + 1) begin
                     if (solve_done_core[i]) begin
-                        $display("[CORE %0d Result] done=%b sat=%b unsat=%b", i, solve_done_core[i], is_sat_core[i], is_unsat_core[i]);
+                        if (DEBUG >= 0) $display("[CORE %0d Result] done=%b sat=%b unsat=%b", i, solve_done_core[i], is_sat_core[i], is_unsat_core[i]);
                     end
                 end
             end

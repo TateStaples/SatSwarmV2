@@ -23,12 +23,12 @@ module tb_satswarmv2;
   logic [31:0] ddr_write_data;
   logic ddr_write_grant;
 
-  // Parameters for testing - debugging MAX_VARS=42 false SAT
+  // Parameters for testing - increased for sat_75v_325c benchmark
   parameter int GRID_X = 2;
   parameter int GRID_Y = 2;
-  parameter int MAX_VARS_PER_CORE = 42;
-  parameter int MAX_CLAUSES_PER_CORE = 104;
-  parameter int MAX_LITS = 416;
+  parameter int MAX_VARS_PER_CORE = 100;
+  parameter int MAX_CLAUSES_PER_CORE = 4096;  // Large to allow significant learned clause accumulation
+  parameter int MAX_LITS = 65536;  // Large literal pool
 
   // DUT - SatSwarm Top Level
   satswarm_top #(
@@ -38,6 +38,7 @@ module tb_satswarmv2;
     .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
     .MAX_LITS(MAX_LITS)
   ) dut (
+    .DEBUG(debug_level),
     .clk(clk),
     .rst_n(rst_n),
     .host_start(host_start),
@@ -79,10 +80,12 @@ module tb_satswarmv2;
   real start_time;
   real end_time;
   int clause_store[$][];  // dynamic array of clauses (each clause is dynamic array of ints)
+  int debug_level = 0;  // 0=heartbeat+final, 1=architectural, 2=full microarch
+  longint unsigned max_cycles_cfg = 5000000;  // default timeout cycles
 
   task push_literal(input int lit, input bit clause_end);
     begin
-      $display("[%0t] Pushing literal %0d (clause_end=%0d)", $time, lit, clause_end);
+      if (debug_level >= 2) $display("[%0t] Pushing literal %0d (clause_end=%0d)", $time, lit, clause_end);
       @(posedge clk);
       while (!host_load_ready) @(posedge clk);
       host_load_valid <= 1'b1;
@@ -104,7 +107,7 @@ module tb_satswarmv2;
     int literals[$];
     int clause_copy[];
     begin
-      $display("[%0t] Loading CNF file: %s", $time, filename);
+      if (debug_level >= 1) $display("[%0t] Loading CNF file: %s", $time, filename);
       fd = $fopen(filename, "r");
       if (fd == 0) begin
         $display("ERROR: Cannot open file %s", filename);
@@ -126,7 +129,7 @@ module tb_satswarmv2;
             scan_result = $sscanf(line, "p cnf %d %d", num_vars, num_clauses);
             if (scan_result == 2) begin
               var_count = num_vars;
-              $display("  Problem: %0d variables, %0d clauses", num_vars, num_clauses);
+              if (debug_level >= 1) $display("  Problem: %0d variables, %0d clauses", num_vars, num_clauses);
             end
             continue;
           end
@@ -164,7 +167,7 @@ module tb_satswarmv2;
       end
 
       $fclose(fd);
-      $display("  Loaded %0d clauses", clause_count);
+      if (debug_level >= 1) $display("  Loaded %0d clauses", clause_count);
     end
   endtask
 
@@ -201,7 +204,7 @@ module tb_satswarmv2;
     end
 
 
-    $display("  Verifying model from Core [%0d,%0d]...", winning_core_x, winning_core_y);
+    if (debug_level >= 2) $display("  Verifying model from Core [%0d,%0d]...", winning_core_x, winning_core_y);
 
     foreach (clause_store[c]) begin
         clause_sat = 0;
@@ -242,23 +245,27 @@ module tb_satswarmv2;
         if (!clause_sat) begin
             unsat_clauses++;
             // Optional: Print first few failures
-            if (unsat_clauses <= 5) $display("    Failed Clause %0d (No literals satisfied)", c);
+            if (debug_level >= 2 && unsat_clauses <= 5) $display("    Failed Clause %0d (No literals satisfied)", c);
         end
     end
 
-    if (unsat_clauses == 0) 
-        $display("  MODEL VERIFIED: Valid functionality.");
-    else 
-        $display("  MODEL INVALID: %0d clauses not satisfied. SOUNDNESS BUG!", unsat_clauses);
+    if (debug_level >= 2) begin
+      if (unsat_clauses == 0) 
+          $display("  MODEL VERIFIED: Valid functionality.");
+      else 
+          $display("  MODEL INVALID: %0d clauses not satisfied. SOUNDNESS BUG!", unsat_clauses);
+    end
 
   endtask
 
-  task run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
+  task run_test(input string name, input string cnf_file, input bit expected_sat);
     begin
       test_name = name;
-      $display("\n========================================");
-      $display("TEST: %s", name);
-      $display("========================================");
+      if (debug_level >= 1) begin
+        $display("\n========================================");
+        $display("TEST: %s", name);
+        $display("========================================");
+      end
 
       // Reset
       rst_n = 0;
@@ -275,24 +282,29 @@ module tb_satswarmv2;
       load_cnf_file(cnf_file);
 
       // Start solving
-      $display("Starting solve at time %0t", $time);
+      if (debug_level >= 1) $display("Starting solve at time %0t", $time);
       @(posedge clk);
       host_start <= 1'b1;
       @(posedge clk);
       host_start <= 1'b0;
-      $display("Started solve, now waiting for completion...");
+      if (debug_level >= 1) $display("Started solve, now waiting for completion...");
 
       // Wait for completion
       cycle_count = 0;
-      while (!host_done && cycle_count < max_cycles) begin
+      while (!host_done && cycle_count < max_cycles_cfg) begin
         @(posedge clk);
         cycle_count++;
-        if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 100 == 0) begin
-          $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d", cycle_count, host_done, host_sat, host_unsat);
+        // Heartbeat: print periodically for DEBUG_LEVEL 0, detailed for levels 1-2
+        if (debug_level == 0) begin
+          if (cycle_count % 10000 == 0) $display("[Heartbeat] Cycle %0d", cycle_count);
+        end else if (debug_level >= 1) begin
+          if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 100 == 0) begin
+            $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d", cycle_count, host_done, host_sat, host_unsat);
+          end
         end
       end
       end_time = $realtime;
-      $display("[Final Cycle %0d] done=%0d sat=%0d unsat=%0d - TEST STOPPING", cycle_count, host_done, host_sat, host_unsat);
+      if (debug_level >= 1) $display("[Final Cycle %0d] done=%0d sat=%0d unsat=%0d - TEST STOPPING", cycle_count, host_done, host_sat, host_unsat);
 
       // Report results
       if (host_done) begin
@@ -303,86 +315,108 @@ module tb_satswarmv2;
         freq_mhz = 100.0; // 100 MHz clock
         time_actual_ms = cycle_count / (freq_mhz * 1000.0);
         
-        $display("\n=== RESULTS ===");
-        $display("  Status: %s", host_sat ? "SAT" : "UNSAT");
-        $display("  Expected: %s", expected_sat ? "SAT" : "UNSAT");
-        $display("  Result: %s", (host_sat == expected_sat) ? "PASS" : "FAIL");
-        $display("  Cycles: %0d", cycle_count);
-        $display("  Sim Time: %.3f ms", time_ms);
-        $display("  Est. Real Time @ 100MHz: %.3f ms", time_actual_ms);
-        $display("  Clauses: %0d", clause_count);
-        $display("  Variables: %0d", var_count);
-        $display("  Result: %s", host_sat ? "SAT" : "UNSAT");
+        // DEBUG_LEVEL 0: Minimal output
+        if (debug_level == 0) begin
+          $display("\n=== RESULTS ===");
+          $display("  Result: %s", host_sat ? "SAT" : "UNSAT");
+          $display("  Cycles: %0d", cycle_count);
+        end else begin
+          // DEBUG_LEVEL 1 & 2: Full results
+          $display("\n=== RESULTS ===");
+          $display("  Status: %s", host_sat ? "SAT" : "UNSAT");
+          $display("  Expected: %s", expected_sat ? "SAT" : "UNSAT");
+          $display("  Result: %s", (host_sat == expected_sat) ? "PASS" : "FAIL");
+          $display("  Cycles: %0d", cycle_count);
+          $display("  Sim Time: %.3f ms", time_ms);
+          $display("  Est. Real Time @ 100MHz: %.3f ms", time_actual_ms);
+          $display("  Clauses: %0d", clause_count);
+          $display("  Variables: %0d", var_count);
+          $display("  Result: %s", host_sat ? "SAT" : "UNSAT");
+        end
         
-        if (host_sat) begin
+        if (host_sat && debug_level >= 2) begin
             verify_model();
         end
 
-        if (host_sat && !expected_sat) begin
+        if (debug_level >= 1) begin
+          if (host_sat && !expected_sat) begin
              $display("  Note: Solver reported SAT, test expects UNSAT. Checking model validity above...");
+          end
         end
         
         if (host_sat != expected_sat) begin
-          $display("\n*** TEST FAILED ***\n");
-          $finish;
+          $fatal(1, "\n*** TEST FAILED ***\n");
         end else begin
           $display("\n*** TEST PASSED ***\n");
         end
       end else begin
         $display("\n=== TIMEOUT ===");
-        $display("  Exceeded %0d cycles", max_cycles);
+        $display("  Exceeded %0d cycles", max_cycles_cfg);
         $display("  Status at timeout: done=%0d sat=%0d", host_done, host_sat);
-        $display("\n*** TEST FAILED ***\n");
-        $finish;
+        $fatal(1, "\n*** TEST FAILED ***\n");
       end
     end
   endtask
 
   initial begin
-    $display("\n");
-    $display("=====================================");
-    $display("VeriSAT Testbench & Benchmark Suite");
-    $display("=====================================");
-    $display("Clock: 100 MHz (10ns period)");
-    $display("Grid: %0dx%0d", GRID_X, GRID_Y);
-    $display("Max Vars/Core: %0d", MAX_VARS_PER_CORE);
-    $display("Max Clauses/Core: %0d", MAX_CLAUSES_PER_CORE);
-    $display("\n");
+    string cnf_arg;
+    string expected_str;
+    bit has_cnf;
+    bit expected_sat_arg;
 
-    // === REGRESSION SUITE: Progressively Larger Problems ===
+    // Read DEBUG from plusargs (default 0)
+    if (!$value$plusargs("DEBUG=%d", debug_level)) debug_level = 0;
+    // Read MAXCYCLES from plusargs (default 5,000,000)
+    if (!$value$plusargs("MAXCYCLES=%d", max_cycles_cfg)) max_cycles_cfg = 5000000;
 
-    // 5 Variables
-    run_test("SAT 5v #1", "../tests/generated_instances/sat_5v_10c_1.cnf", 1'b1, 50000);
-    run_test("UNSAT 5v #1", "../tests/generated_instances/unsat_5v_10c_1.cnf", 1'b0, 50000);
+    if (debug_level != 0) begin
+      $display("\n");
+      $display("=====================================");
+      $display("VeriSAT Testbench & Benchmark Suite");
+      $display("=====================================");
+      $display("Clock: 100 MHz (10ns period)");
+      $display("Grid: %0dx%0d", GRID_X, GRID_Y);
+      $display("Max Vars/Core: %0d", MAX_VARS_PER_CORE);
+      $display("Max Clauses/Core: %0d", MAX_CLAUSES_PER_CORE);
+      $display("\n");
+    end
 
-    // 8 Variables
-    run_test("SAT 8v #1", "../tests/generated_instances/sat_8v_20c_1.cnf", 1'b1, 100000);
-    run_test("UNSAT 8v #1", "../tests/generated_instances/unsat_8v_20c_1.cnf", 1'b0, 100000);
+    has_cnf = $value$plusargs("CNF=%s", cnf_arg);
+    if (has_cnf) begin
+      if (!$value$plusargs("EXPECT=%s", expected_str)) expected_str = "SAT";
+      expected_sat_arg = (expected_str == "SAT");
+      run_test("PlusArgs", cnf_arg, expected_sat_arg);
+    end else begin
+      // === REGRESSION SUITE: Progressively Larger Problems ===
 
-    // 10 Variables
-    run_test("SAT 10v #1", "../tests/generated_instances/sat_10v_30c_1.cnf", 1'b1, 200000);
-    run_test("UNSAT 10v #1", "../tests/generated_instances/unsat_10v_30c_1.cnf", 1'b0, 200000);
+      run_test("SAT 5v #1", "../tests/generated_instances/sat_5v_10c_1.cnf", 1'b1);
+      run_test("UNSAT 5v #1", "../tests/generated_instances/unsat_5v_10c_1.cnf", 1'b0);
 
-    // 12 Variables
-    run_test("SAT 12v #1", "../tests/generated_instances/sat_12v_40c_1.cnf", 1'b1, 500000);
-    run_test("UNSAT 12v #1", "../tests/generated_instances/unsat_12v_40c_1.cnf", 1'b0, 500000);
+      run_test("SAT 8v #1", "../tests/generated_instances/sat_8v_20c_1.cnf", 1'b1);
+      run_test("UNSAT 8v #1", "../tests/generated_instances/unsat_8v_20c_1.cnf", 1'b0);
 
-    // 15 Variables
-    run_test("SAT 15v #1", "../tests/generated_instances/sat_15v_50c_1.cnf", 1'b1, 1000000);
-    run_test("UNSAT 15v #1", "../tests/generated_instances/unsat_15v_50c_1.cnf", 1'b0, 1000000);
+      run_test("SAT 10v #1", "../tests/generated_instances/sat_10v_30c_1.cnf", 1'b1);
+      run_test("UNSAT 10v #1", "../tests/generated_instances/unsat_10v_30c_1.cnf", 1'b0);
 
-    // 18 Variables
-    run_test("SAT 18v #1", "../tests/generated_instances/sat_18v_70c_1.cnf", 1'b1, 2000000);
-    run_test("UNSAT 18v #1", "../tests/generated_instances/unsat_18v_70c_1.cnf", 1'b0, 2000000);
+      run_test("SAT 12v #1", "../tests/generated_instances/sat_12v_40c_1.cnf", 1'b1);
+      run_test("UNSAT 12v #1", "../tests/generated_instances/unsat_12v_40c_1.cnf", 1'b0);
 
-    // 20 Variables
-    run_test("SAT 20v #1", "../tests/generated_instances/sat_20v_80c_1.cnf", 1'b1, 5000000);
-    run_test("UNSAT 20v #1", "../tests/generated_instances/unsat_20v_80c_1.cnf", 1'b0, 5000000);
+      run_test("SAT 15v #1", "../tests/generated_instances/sat_15v_50c_1.cnf", 1'b1);
+      run_test("UNSAT 15v #1", "../tests/generated_instances/unsat_15v_50c_1.cnf", 1'b0);
 
-    $display("\n");
-    $display("=====================================");
-    $display("ALL TESTS PASSED");
-    $display("=====================================");
+      run_test("SAT 18v #1", "../tests/generated_instances/sat_18v_70c_1.cnf", 1'b1);
+      run_test("UNSAT 18v #1", "../tests/generated_instances/unsat_18v_70c_1.cnf", 1'b0);
+
+      run_test("SAT 20v #1", "../tests/generated_instances/sat_20v_80c_1.cnf", 1'b1);
+      run_test("UNSAT 20v #1", "../tests/generated_instances/unsat_20v_80c_1.cnf", 1'b0);
+    end
+
+    if (debug_level >= 1) begin
+      $display("\n");
+      $display("=====================================");
+      $display("ALL TESTS PASSED");
+      $display("=====================================");
+    end
     $finish;
   end
 

@@ -8,6 +8,7 @@
 module trail_manager #(
     parameter int MAX_VARS = 256
 )(
+    input  int           DEBUG,
     input  logic         clk,
     input  logic         reset,
     
@@ -184,7 +185,7 @@ module trail_manager #(
         if (push && trail_height_q < MAX_VARS) begin
             trail_height_d = trail_height_q + 1'b1;
 
-            $strobe("[TRAIL] Push Var=%0d Value=%0d Level=%0d Reason=%04x", 
+            if (DEBUG >= 2) $strobe("[TRAIL] Push Var=%0d Value=%0d Level=%0d Reason=%04x", 
                     push_var, push_value, push_level, push_reason);
 
             // Update lookup table for this variable

@@ -30,14 +30,16 @@ module tb_regression_single;
   parameter int MAX_CLAUSES_PER_CORE = 104;
   parameter int MAX_LITS = 416;
 
+  int debug_level = 0; // Default to 0 (Minimal)
+
   // DUT - SatSwarm Top Level
   satswarm_top #(
     .GRID_X(GRID_X),
     .GRID_Y(GRID_Y),
     .MAX_VARS_PER_CORE(MAX_VARS_PER_CORE),
-    .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
     .MAX_LITS(MAX_LITS)
   ) dut (
+    .DEBUG(debug_level),
     .clk(clk),
     .rst_n(rst_n),
     .host_start(host_start),
@@ -384,6 +386,10 @@ module tb_regression_single;
     $display("\n");
 
     // Check for Command Line Arguments (Dynamic Testing)
+    if ($value$plusargs("DEBUG=%d", debug_level)) begin
+        // debug_level updated
+    end
+
     has_dynamic_cnf = 0;
     
     if ($value$plusargs("CNF=%s", dynamic_cnf)) begin

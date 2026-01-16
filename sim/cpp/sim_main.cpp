@@ -2,8 +2,8 @@
 #include "verilated.h"
 
 int main(int argc, char **argv) {
-  Verilated::commandArgs(argc, argv);
   VerilatedContext context;
+  context.commandArgs(argc, argv);
   Vtb_satswarmv2 top{&context};
 
   // Simple time advance loop; stop if the testbench calls $finish or timeout

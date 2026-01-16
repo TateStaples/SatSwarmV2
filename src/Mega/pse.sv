@@ -16,6 +16,7 @@ module pse #(
     parameter int MAX_LITS    = 2048,
     parameter int CORE_ID     = 0
 )(
+    input  int                 DEBUG,
     input  logic               clk,
     input  logic               reset,
 
@@ -665,7 +666,7 @@ module pse #(
                 if (load_clause_end) begin
                     clause_start[clause_count_q] <= lit_count_q - cur_clause_len_q;
                     clause_len[clause_count_q]   <= cur_clause_len_q + 1'b1;
-                    $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
+                    if (DEBUG >= 2) $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
                 end
             end
 
@@ -698,14 +699,14 @@ module pse #(
                 watch_next2[c]  <= watch_head2[idx2];
                 watch_head2[idx2] <= c;
 
-                $display("[MEM] Adding Watch List for %0d and %0d to clause %0d", lit_mem[w1], lit_mem[w2], c);
+                if (DEBUG >= 2) $display("[MEM] Adding Watch List for %0d and %0d to clause %0d", lit_mem[w1], lit_mem[w2], c);
             end
 
 
             
             if (watch_wr_en) begin
                 if (watch_wr_list_sel == 1'b0) begin
-                    $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit1[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
+                    if (DEBUG >= 2) $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit1[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
                     watched_lit1[watch_wr_clause_id] <= watch_wr_new_w;
 
                     if (watch_wr_prev_id == 16'hFFFF)
@@ -716,7 +717,7 @@ module pse #(
                     watch_next1[watch_wr_clause_id] <= watch_head1[watch_wr_new_idx];
                     watch_head1[watch_wr_new_idx] <= watch_wr_clause_id;
                 end else begin
-                    $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit2[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
+                    if (DEBUG >= 2) $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit2[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
                     watched_lit2[watch_wr_clause_id] <= watch_wr_new_w;
                     if (watch_wr_prev_id == 16'hFFFF)
                         watch_head2[watch_wr_old_idx] <= watch_next2[watch_wr_clause_id];
@@ -767,11 +768,11 @@ module pse #(
             reason_query_var_r_q  <= '0;
         end else begin
             if (propagated_valid && !propagated_valid_r_q)
-                $display("[hw_trace] [PSE] Propagating Unit %0d from Clause %0d", propagated_var, scan_clause_q);
+                if (DEBUG >= 1) $display("[hw_trace] [PSE] Propagating Unit %0d from Clause %0d", propagated_var, scan_clause_q);
             if (conflict_detected_q && !conflict_detected_r_q)
-                $display("[hw_trace] [PSE] Conflict detected in Clause %0d: [%0d, %0d, ...]", scan_clause_q, conflict_clause_q[0], conflict_clause_q[1]);
+                if (DEBUG >= 1) $display("[hw_trace] [PSE] Conflict detected in Clause %0d: [%0d, %0d, ...]", scan_clause_q, conflict_clause_q[0], conflict_clause_q[1]);
             if (reason_query_var != 0 && reason_query_var != reason_query_var_r_q)
-                 $display("[PSE QUERY] Var=%0d -> Reason=%h Valid=%b", reason_query_var, reason_query_clause, reason_query_valid);
+                 if (DEBUG >= 2) $display("[PSE QUERY] Var=%0d -> Reason=%h Valid=%b", reason_query_var, reason_query_clause, reason_query_valid);
             conflict_detected_r_q <= conflict_detected_q;
             propagated_valid_r_q  <= propagated_valid;
             reason_query_var_r_q  <= reason_query_var;
