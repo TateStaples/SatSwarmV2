@@ -24,8 +24,8 @@ module tb_satswarmv2;
   logic ddr_write_grant;
 
   // Parameters for testing - increased for sat_75v_325c benchmark
-  parameter int GRID_X = 2;
-  parameter int GRID_Y = 2;
+  parameter int GRID_X = 1;
+  parameter int GRID_Y = 1;
   parameter int MAX_VARS_PER_CORE = 100;
   parameter int MAX_CLAUSES_PER_CORE = 4096;  // Large to allow significant learned clause accumulation
   parameter int MAX_LITS = 65536;  // Large literal pool
@@ -184,6 +184,7 @@ module tb_satswarmv2;
     // Let's match the labels I just added: y->cols, x->rows.
     // So distinct path is dut.cols[y].rows[x].
     if (dut.cols[0].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=0; end
+`ifdef MULTICORE
     if (dut.cols[0].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=0; end // y=0, x=1 ??
     // loops: for y... : cols; for x... : rows
     // so cols[y].rows[x]
@@ -193,10 +194,10 @@ module tb_satswarmv2;
     // Core 2: y=1, x=0 -> cols[1].rows[0]
     // Core 3: y=1, x=1 -> cols[1].rows[1]
     
-    if (dut.cols[0].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=0; end
     if (dut.cols[0].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=0; end
     if (dut.cols[1].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=1; end
     if (dut.cols[1].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=1; end
+`endif
 
     if (winning_core_x == -1) begin
         $display("  Error: host_sat is true but no core reports is_sat?");
@@ -222,15 +223,19 @@ module tb_satswarmv2;
                 
                 // Get trail height for winning core
                 if (winning_core_x == 0 && winning_core_y == 0) trail_h = dut.cols[0].rows[0].u_core.u_trail.trail_height_q;
+`ifdef MULTICORE
                 if (winning_core_x == 1 && winning_core_y == 0) trail_h = dut.cols[0].rows[1].u_core.u_trail.trail_height_q;
                 if (winning_core_x == 0 && winning_core_y == 1) trail_h = dut.cols[1].rows[0].u_core.u_trail.trail_height_q;
                 if (winning_core_x == 1 && winning_core_y == 1) trail_h = dut.cols[1].rows[1].u_core.u_trail.trail_height_q;
+`endif
                 
                 for (int i=0; i < trail_h && i < MAX_VARS_PER_CORE; i++) begin
                     if (winning_core_x == 0 && winning_core_y == 0) begin tv = dut.cols[0].rows[0].u_core.u_trail.trail[i].variable; val = dut.cols[0].rows[0].u_core.u_trail.trail[i].value; end
+`ifdef MULTICORE
                     if (winning_core_x == 1 && winning_core_y == 0) begin tv = dut.cols[0].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[0].rows[1].u_core.u_trail.trail[i].value; end
                     if (winning_core_x == 0 && winning_core_y == 1) begin tv = dut.cols[1].rows[0].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[0].u_core.u_trail.trail[i].value; end
                     if (winning_core_x == 1 && winning_core_y == 1) begin tv = dut.cols[1].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[1].u_core.u_trail.trail[i].value; end
+`endif
                     
                     if (tv == var_idx) begin
                         state = val ? 2'b10 : 2'b01;

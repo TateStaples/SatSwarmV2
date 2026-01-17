@@ -24,8 +24,8 @@ module tb_unsat_tests;
   logic ddr_write_grant;
 
   // Parameters for testing
-  parameter int GRID_X = 2;
-  parameter int GRID_Y = 2;
+  parameter int GRID_X = 1;
+  parameter int GRID_Y = 1;
   parameter int MAX_VARS_PER_CORE = 128;
   parameter int MAX_CLAUSES_PER_CORE = 128;
   parameter int MAX_LITS = 512;
