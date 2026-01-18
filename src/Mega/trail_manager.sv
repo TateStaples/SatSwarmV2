@@ -134,7 +134,8 @@ module trail_manager #(
 
 
         // Debug Log if Query Failed but we expected it to succeed (for Var 1)
-        if (!query_valid && query_var == 1 && trail_height_q > 0) begin
+        // Debug Log if Query Failed but we expected it to succeed (for Var 1)
+        if (DEBUG > 0 && !query_valid && query_var == 1 && trail_height_q > 0) begin
              $display("[TRAIL DBG] Query Failed for Var 1. Height=%0d", trail_height_q);
              for(int k=0; k<20; k++) begin // limited dump
                  if (k < trail_height_q)
@@ -345,7 +346,7 @@ module trail_manager #(
                         trail[k].level <= push_level;
                         trail[k].is_decision <= push_is_decision;
                         trail[k].reason <= push_reason;
-                        $display("[TRAIL DBG] WRITING trail[%0d] <= Var %0d", k, push_var);
+                        if (DEBUG > 0) $display("[TRAIL DBG] WRITING trail[%0d] <= Var %0d", k, push_var);
                     end
                 end
             end

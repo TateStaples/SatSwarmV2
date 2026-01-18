@@ -4,6 +4,7 @@ module solver_core #(
     parameter int MAX_VARS = 256,
     parameter int MAX_CLAUSES = 256,
     parameter int MAX_LITS = 2048,
+    parameter int MAX_CLAUSE_LEN = 32,
     parameter int GRID_X = 1,
     parameter int GRID_Y = 1
 )(
@@ -151,10 +152,10 @@ module solver_core #(
     logic        restart_pending_q, restart_pending_d;
 
     // Simple conflict-triggered restart threshold (tunable)
-    localparam int RESTART_CONFLICT_THRESHOLD = 16'd256;
+    localparam int RESTART_CONFLICT_THRESHOLD = 16'd0; // Restarts DISABLED per user request
     
     // Loop counter for QUERY_CONFLICT_LEVELS state
-    logic [3:0]  query_index_q, query_index_d;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  query_index_q, query_index_d;
     
     // Trail Manager Control
     logic        trail_push;
@@ -248,8 +249,8 @@ module solver_core #(
     logic        pse_clear_assignments;
     logic        pse_clear_valid;
     logic [31:0] pse_clear_var;
-    logic [4:0]  pse_conflict_clause_len;
-    logic signed [15:0][31:0] pse_conflict_clause;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  pse_conflict_clause_len;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0] pse_conflict_clause;
     logic        pse_inject_req;
     logic signed [31:0] pse_inject_lit1;
     logic signed [31:0] pse_inject_lit2;
@@ -262,20 +263,21 @@ module solver_core #(
     logic [15:0] pse_assign_broadcast_reason;
     
     // Registered conflict clause (captured when conflict detected)
-    logic [4:0]  conflict_clause_len_q, conflict_clause_len_d;
-    logic signed [15:0][31:0] conflict_clause_q;
-    logic signed [15:0][31:0] conflict_clause_d;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  conflict_clause_len_q, conflict_clause_len_d;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0] conflict_clause_q;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0] conflict_clause_d;
     
     // Decision levels for conflict clause literals (queried from trail manager)
-    logic [15:0][15:0] conflict_levels_q;  // Registered decision levels
-    logic [15:0][15:0] conflict_levels_d;  // Next-cycle decision levels
+    // Decision levels for conflict clause literals (queried from trail manager)
+    logic [MAX_CLAUSE_LEN-1:0][15:0] conflict_levels_q;  // Registered decision levels
+    logic [MAX_CLAUSE_LEN-1:0][15:0] conflict_levels_d;  // Next-cycle decision levels
     
     // Rescan flag for handling conflicting propagations
     logic        rescan_required_q, rescan_required_d;
 
 
     // Learned clause append iterator and muxed host/learned load to PSE
-    logic [3:0]  learn_idx_q, learn_idx_d;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  learn_idx_q, learn_idx_d;
     logic        learn_load_valid;
     logic signed [31:0] learn_load_literal;
     logic        learn_load_clause_end;
@@ -286,8 +288,8 @@ module solver_core #(
     // CAE module signals
     logic        cae_start;
     logic        cae_done;
-    logic [4:0]  cae_learned_len;
-    logic signed [15:0][31:0] cae_learned_lits;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  cae_learned_len;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0] cae_learned_lits;
     logic        cae_unsat;
     
     // CAE-PSE Reason Interface
@@ -297,7 +299,7 @@ module solver_core #(
     
     // CAE-PSE Clause Read Interface
     logic [15:0] cae_clause_read_id;
-    logic [3:0]  cae_clause_read_idx;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  cae_clause_read_idx;
     logic signed [31:0] cae_clause_read_lit;
     logic [15:0] cae_clause_read_len;
     
@@ -494,6 +496,7 @@ module solver_core #(
         .MAX_VARS(MAX_VARS),
         .MAX_CLAUSES(MAX_CLAUSES),
         .MAX_LITS(MAX_LITS),
+        .MAX_CLAUSE_LEN(MAX_CLAUSE_LEN),
         .CORE_ID(CORE_ID)
     ) u_pse (
         .DEBUG(DEBUG),
@@ -540,7 +543,7 @@ module solver_core #(
     logic cae_done_actual;
     logic [15:0] cae_backtrack_level; // Explicit declaration to fix implicit warning
     cae #(
-        .MAX_LITS(16),
+        .MAX_LITS(MAX_CLAUSE_LEN),
         .LEVEL_W(16)
     ) u_cae (
         .DEBUG(DEBUG),
@@ -688,7 +691,7 @@ module solver_core #(
         query_index_d           = query_index_q;
         learn_idx_d             = learn_idx_q;
         conflict_clause_len_d   = conflict_clause_len_q;
-        for (int k=0; k<16; k++) begin
+        for (int k=0; k<MAX_CLAUSE_LEN; k++) begin
              conflict_levels_d[k] = conflict_levels_q[k];
              conflict_clause_d[k] = conflict_clause_q[k];
         end
@@ -990,7 +993,7 @@ module solver_core #(
                         trail_push_level = decision_level_q;
                         trail_push_is_decision = 1'b0;
                         trail_push_reason = fifo_reason; // Use reason from PSE
-                        $strobe("[CORE %0d] Pushing Prop %0d (Var %0d) @ Level %0d. DecLvlQ=%0d", CORE_ID, fifo_lit, prop_var, trail_push_level, decision_level_q);
+                        if (DEBUG > 0) $strobe("[CORE %0d] Pushing Prop %0d (Var %0d) @ Level %0d. DecLvlQ=%0d", CORE_ID, fifo_lit, prop_var, trail_push_level, decision_level_q);
 
 
                         // IMPORTANT: We do NOT broadcast back to PSE here.
@@ -1086,15 +1089,15 @@ module solver_core #(
                     // Capture Result
                     if (trail_query_valid) begin
                         conflict_levels_d[query_index_q] = trail_query_level;
-                        $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> Level=%0d", 
-                                 CORE_ID, q_lit, q_var, trail_query_level);
+                        if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> Level=%0d", 
+                                CORE_ID, q_lit, q_var, trail_query_level);
                         // Advance
                         query_index_d = query_index_q + 4'd1;
                     end else begin
                         // If not found in trail, assume current level (should not happen for valid conflict)
                         // Or if 0, implies unassigned?
-                        $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> INVALID (Using DecLvl=%0d)", 
-                                 CORE_ID, q_lit, q_var, decision_level_q);
+                        if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> INVALID (Using DecLvl=%0d)", 
+                                CORE_ID, q_lit, q_var, decision_level_q);
                         conflict_levels_d[query_index_q] = decision_level_q;
                         query_index_d = query_index_q + 4'd1;
                     end
@@ -1122,6 +1125,7 @@ module solver_core #(
 */
                 
                 cae_start = 1'b1;
+                stats_inc_conflict = 1'b1; // Fix: Increment conflict counter
                 conflict_seen_d = 1'b0;
                 prop_count_d = '0;
                 state_d = BACKTRACK_PHASE;
@@ -1172,7 +1176,7 @@ module solver_core #(
 
             // Stream learned clause into PSE via internal load interface (append-only)
             APPEND_LEARNED: begin
-                $strobe("[CORE %0d] Entering APPEND_LEARNED. Len=%0d Idx=%0d", CORE_ID, cae_learned_len, learn_idx_q);
+                if (DEBUG > 0) $strobe("[CORE %0d] Entering APPEND_LEARNED. Len=%0d Idx=%0d", CORE_ID, cae_learned_len, learn_idx_q);
                 if (learn_idx_q < cae_learned_len) begin
                     // Respect PSE load_ready before sending next literal
                     if (load_ready) begin
@@ -1180,9 +1184,9 @@ module solver_core #(
                         learn_load_literal    = cae_learned_lits[learn_idx_q];
                         learn_load_clause_end = (learn_idx_q == (cae_learned_len - 4'd1));
                         learn_idx_d           = learn_idx_q + 4'd1;
-                        $strobe("[CORE %0d] APPEND_LEARNED[%0d/%0d]: lit=%0d end=%0d ready=%0d mux=%0d", CORE_ID, learn_idx_q, cae_learned_len, cae_learned_lits[learn_idx_q], learn_load_clause_end, load_ready, load_valid_mux);
+                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED[%0d/%0d]: lit=%0d end=%0d ready=%0d mux=%0d", CORE_ID, learn_idx_q, cae_learned_len, cae_learned_lits[learn_idx_q], learn_load_clause_end, load_ready, load_valid_mux);
                     end else begin
-                        $strobe("[CORE %0d] APPEND_LEARNED waiting for load_ready (idx=%0d len=%0d)", CORE_ID, learn_idx_q, cae_learned_len);
+                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED waiting for load_ready (idx=%0d len=%0d)", CORE_ID, learn_idx_q, cae_learned_len);
                     end
                     state_d = APPEND_LEARNED;
                 end else begin : append_complete_block
@@ -1191,7 +1195,7 @@ module solver_core #(
                     // logic skip_broadcast;
                     
                     final_assert_lit = (cae_learned_len > 0) ? cae_learned_lits[0] : decision_lit_q;
-                    $strobe("[CORE %0d] APPEND_LEARNED_CALC: Len=%0d Lit0=%0d DecLit=%0d", CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
+                    if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC: Len=%0d Lit0=%0d DecLit=%0d", CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
                     assert_var = (final_assert_lit < 0) ? $unsigned(-final_assert_lit) : $unsigned(final_assert_lit);
                     
                     // Skip broadcast for 1x1 grid (no neighbors to receive)
@@ -1214,7 +1218,7 @@ module solver_core #(
                              // Latch inputs now to decouple from combinational glitches
                              decision_lit_d = final_assert_lit;
                              
-                             $strobe("[CORE %0d] APPEND_LEARNED_CALC (Broadcast): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
+                             if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Broadcast): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
                                      CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
                              
                              state_d = APPEND_PUSH;
@@ -1225,7 +1229,7 @@ module solver_core #(
                         // No Broadcast needed. Proceed to PUSH state.
                         decision_lit_d = final_assert_lit;
                         
-                        $strobe("[CORE %0d] APPEND_LEARNED_CALC (Local): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
+                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Local): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
                                 CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
 
                         state_d = APPEND_PUSH;
@@ -1249,7 +1253,7 @@ module solver_core #(
                  // GUARD: Only execute push ONCE (when cycle_count is 0)
                  // This prevents duplicate pushes if the FSM stalls or executes twice.
                  if (cycle_count_q == 0) begin
-                     $strobe("[CORE %0d] APPEND_PUSH: Executing Push with Stable Lit %0d (Var %0d)", CORE_ID, decision_lit_q, stable_var);
+                     if (DEBUG > 0) $strobe("[CORE %0d] APPEND_PUSH: Executing Push with Stable Lit %0d (Var %0d)", CORE_ID, decision_lit_q, stable_var);
                      
                      // 1. Start PSE for BCP
                      state_d = PSE_PHASE;
@@ -1508,7 +1512,7 @@ module solver_core #(
             
             // FIFO Flush logging
             if ((state_q == IDLE && start_solve) || prop_flush) begin
-                 if (prop_flush) $display("[CORE %0d] FIFO FLUSHED.", CORE_ID);
+                 if (prop_flush && DEBUG > 0) $display("[CORE %0d] FIFO FLUSHED.", CORE_ID);
             end
         end
     end

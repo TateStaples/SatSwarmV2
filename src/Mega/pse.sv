@@ -14,6 +14,7 @@ module pse #(
     parameter int MAX_VARS    = 256,
     parameter int MAX_CLAUSES = 256,
     parameter int MAX_LITS    = 2048,
+    parameter int MAX_CLAUSE_LEN = 32,
     parameter int CORE_ID     = 0
 )(
     input  int                 DEBUG,
@@ -46,8 +47,8 @@ module pse #(
     input  logic [15:0]        assign_broadcast_reason, // New: Explicit reason from solver_core
 
     // Conflict clause export (for CAE)
-    output logic [3:0]         conflict_clause_len,
-    output logic signed [7:0][31:0] conflict_clause,
+    output logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]         conflict_clause_len,
+    output logic signed [MAX_CLAUSE_LEN-1:0][31:0] conflict_clause,
 
     // Clause Injection Interface (from Solver Core RX)
     input  logic               inject_valid,
@@ -62,7 +63,7 @@ module pse #(
     
     // Clause literal read interface (for CAE to read clause contents)
     input  logic [15:0]        clause_read_id,        // Clause ID to read
-    input  logic [3:0]         clause_read_lit_idx,   // Literal index within clause
+    input  logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]         clause_read_lit_idx,   // Literal index within clause
     output logic signed [31:0] clause_read_literal,   // Literal value
     output logic [15:0]        clause_read_len,       // Clause length
     
@@ -132,7 +133,7 @@ module pse #(
     logic signed [31:0] cs_wr_literal;
     
     logic [15:0] cs_rd_clause_id;
-    logic [3:0]  cs_rd_lit_idx;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  cs_rd_lit_idx;
     logic signed [31:0] cs_rd_literal;
     logic [15:0] cs_rd_clause_len;
     logic [15:0] cs_rd_clause_start;
@@ -178,8 +179,8 @@ module pse #(
     logic               initialized_q, initialized_d;
 
     logic        conflict_detected_q, conflict_detected_d;
-    logic [3:0]  conflict_clause_len_q, conflict_clause_len_d;
-    logic signed [7:0][31:0] conflict_clause_q, conflict_clause_d;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  conflict_clause_len_q, conflict_clause_len_d;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0] conflict_clause_q, conflict_clause_d;
     
     // Reason clause write request
     logic        reason_wr_en;          // Enable write to reason table
@@ -300,7 +301,7 @@ module pse #(
 
         hold_d             = clear_assignments ? 1'b1 : (start ? 1'b0 : hold_q);
         conflict_detected_d = start ? 1'b0 : conflict_detected_q;
-        conflict_clause_len_d = start ? 4'h0 : conflict_clause_len_q;
+        conflict_clause_len_d = start ? '0 : conflict_clause_len_q;
         conflict_clause_d = start ? '0 : conflict_clause_q;
         sampled_d         = 1'b0;
 
@@ -536,7 +537,7 @@ module pse #(
                             propagated_valid  = 1'b1;
                             propagated_var    = lit_other;
                             propagated_reason = scan_clause_q;
-                            $strobe("[PSE TRACE] Unit %0d from Clause %0d (State %s)", lit_other, scan_clause_q, state_q.name());
+                            if (DEBUG > 0) $display("[PSE TRACE] Unit %0d from Clause %0d (State SCAN_WATCH)", lit_other, scan_clause_q);
                             
 
                             // Debug Trap for Var 0
@@ -568,8 +569,8 @@ module pse #(
                             scan_clause_d = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
                         end else begin
                             conflict_detected_d = 1'b1;
-                            conflict_clause_len_d = clen[3:0];
-                            for (int k = 0; k < 8; k++) begin
+                            conflict_clause_len_d = clen[$clog2(MAX_CLAUSE_LEN+1)-1:0];
+                            for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
                                 if ($unsigned(k) < $unsigned(clen))
                                     conflict_clause_d[k] = lit_mem[cstart + k];
                             end
@@ -652,7 +653,7 @@ module pse #(
                 watch_head2[i] <= 16'hFFFF;
             end
             conflict_detected_q   <= 1'b0;
-            conflict_clause_len_q <= 4'd0;
+            conflict_clause_len_q <= '0;
             conflict_clause_q     <= '0;
         end else begin
             state_q          <= state_d;

@@ -182,7 +182,7 @@ while IFS= read -r f; do
                 echo "Output:"
                 echo "$OUTPUT"
                 echo "--------------------------------------------------------"
-            } | tee -a "$RESULT_LOG"
+            } >> "$RESULT_LOG"
             FAILED=$((FAILED + 1))
         fi
     fi

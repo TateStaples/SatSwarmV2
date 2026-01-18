@@ -26,7 +26,7 @@ module tb_satswarmv2;
   // Parameters for testing - increased for sat_75v_325c benchmark
   parameter int GRID_X = 1;
   parameter int GRID_Y = 1;
-  parameter int MAX_VARS_PER_CORE = 100;
+  parameter int MAX_VARS_PER_CORE = 256;
   parameter int MAX_CLAUSES_PER_CORE = 4096;  // Large to allow significant learned clause accumulation
   parameter int MAX_LITS = 65536;  // Large literal pool
 
@@ -301,7 +301,10 @@ module tb_satswarmv2;
         cycle_count++;
         // Heartbeat: print periodically for DEBUG_LEVEL 0, detailed for levels 1-2
         if (debug_level == 0) begin
-          if (cycle_count % 10000 == 0) $display("[Heartbeat] Cycle %0d", cycle_count);
+          if (cycle_count % 10000 == 0) begin
+             // Access internal signal total_conflicts from Core 0 (assuming single core or interest in Core 0)
+             $display("[Heartbeat] Cycle %0d | Conflicts: %0d", cycle_count, dut.cols[0].rows[0].u_core.total_conflicts);
+          end
         end else if (debug_level >= 1) begin
           if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 100 == 0) begin
             $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d", cycle_count, host_done, host_sat, host_unsat);

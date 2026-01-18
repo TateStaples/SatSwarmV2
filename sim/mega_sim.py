@@ -523,6 +523,7 @@ if __name__ == "__main__":
     print(f"Total Clauses in Storage:  {total_clauses}")
     print(f"Total Literals in Storage: {total_lits}")
     print(f"Max Clause Length:         {max_len}")
+    print(f"Total Conflicts:           {solver.cae.conflict_count}")
     
     if result == "SAT":
         sol_bits = solver.mem.get_solution_bitstring()

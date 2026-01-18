@@ -53,7 +53,7 @@ module cae #(
 
     // Clause read interface (from PSE)
     output logic [15:0]             clause_read_id,
-    output logic [3:0]              clause_read_lit_idx,
+    output logic [$clog2(MAX_LITS+1)-1:0]   clause_read_lit_idx,
     input  logic signed [31:0]      clause_read_literal,
     input  logic [15:0]             clause_read_len,
     
@@ -81,7 +81,7 @@ module cae #(
     // Internal storage
     // Use a slightly larger buffer for resolution intermediate steps if needed,
     // but ultimately valid clauses must fit in MAX_LITS
-    localparam int MAX_BUFFER = 32;
+    localparam int MAX_BUFFER = 2 * MAX_LITS;
     logic signed [31:0] buf_lits   [0:MAX_BUFFER-1];
     logic [LEVEL_W-1:0] buf_levels [0:MAX_BUFFER-1];
     logic [4:0]         buf_count_q, buf_count_d;
@@ -96,8 +96,8 @@ module cae #(
     
     // Resolution state
     logic [15:0] trail_scan_idx_q, trail_scan_idx_d;
-    logic [3:0]  init_idx_q, init_idx_d;
-    logic [3:0]  reason_lit_idx_q, reason_lit_idx_d;
+    logic [$clog2(MAX_LITS+1)-1:0]  init_idx_q, init_idx_d;
+    logic [$clog2(MAX_LITS+1)-1:0]  reason_lit_idx_q, reason_lit_idx_d;
     logic [15:0] reason_len_q, reason_len_d;
     logic [15:0] reason_clause_id_q, reason_clause_id_d;
     logic signed [31:0] resolve_lit_q, resolve_lit_d;

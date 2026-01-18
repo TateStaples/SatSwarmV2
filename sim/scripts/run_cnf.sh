@@ -27,11 +27,10 @@ cd "$SIM_DIR"
 
 # Prefer the satswarmv2 testbench if available, otherwise fall back to regression_single
 BIN="$SIM_DIR/obj_dir/Vtb_satswarmv2"
-if [ ! -x "$BIN" ]; then
-    BIN="$SIM_DIR/obj_dir/Vtb_regression_single"
-fi
+# if [ ! -x "$BIN" ]; then
+#     BIN="$SIM_DIR/obj_dir/Vtb_regression_single"
+# fi
 
-# Run the single regression executable with +CNF arg and a 120s timeout
 # Run the single regression executable with +CNF arg and a 120s timeout
 # Check for gtimeout (mac) or timeout (linux)
 # Pass $@ to allow +DEBUG_LEVEL etc overrides
