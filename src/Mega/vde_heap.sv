@@ -213,9 +213,9 @@ module vde_heap #(
 
             HIDE_BUBBLE_DOWN_SWAP: begin
                 // Compare and swap if needed
-                automatic logic [IDX_W:0] left_idx = (idx_q << 1) + 1;
-                automatic logic [IDX_W:0] right_idx = (idx_q << 1) + 2;
-                automatic logic [IDX_W-1:0] largest = idx_q;
+                logic [IDX_W:0] left_idx = (idx_q << 1) + 1;
+                logic [IDX_W:0] right_idx = (idx_q << 1) + 2;
+                logic [IDX_W-1:0] largest = idx_q;
 
                 // Compare with Left Child
                 // Better if: Score Higher OR (Score Equal AND VarID Lower)
@@ -281,8 +281,8 @@ module vde_heap #(
 
             UNHIDE_BUBBLE_UP_SWAP: begin
                 if (idx_q > 0) begin
-                    automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                    automatic logic swap_needed = 0;
+                    logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
+                    logic swap_needed = 0;
                     
                     if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
                     else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
@@ -332,8 +332,8 @@ module vde_heap #(
 
             BUMP_BUBBLE_UP_SWAP: begin
                 if (idx_q > 0) begin
-                    automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                    automatic logic swap_needed = 0;
+                    logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
+                    logic swap_needed = 0;
                     
                     if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
                     else if (heap_mem[parent_idx].score == heap_mem[idx_q].score && 
@@ -429,9 +429,9 @@ module vde_heap #(
 
             // HIDE_SWAP: Swap heap[idx] with heap[heap_size-1]
             if (state_q == HIDE_SWAP) begin
-                automatic logic [IDX_W-1:0] last_idx = heap_size_q - 1;
-                automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
-                automatic heap_entry_t entry_at_last = heap_mem[last_idx];
+                logic [IDX_W-1:0] last_idx = heap_size_q - 1;
+                heap_entry_t entry_at_idx = heap_mem[idx_q];
+                heap_entry_t entry_at_last = heap_mem[last_idx];
 
                 heap_mem[idx_q] <= entry_at_last;
                 heap_mem[last_idx] <= entry_at_idx;
@@ -442,9 +442,9 @@ module vde_heap #(
 
             // HIDE_BUBBLE_DOWN_SWAP: Swap if needed
             if (state_q == HIDE_BUBBLE_DOWN_SWAP) begin
-                automatic logic [IDX_W-1:0] left_idx = 2 * idx_q + 1;
-                automatic logic [IDX_W-1:0] right_idx = 2 * idx_q + 2;
-                automatic logic [IDX_W-1:0] largest = idx_q;
+                logic [IDX_W-1:0] left_idx = 2 * idx_q + 1;
+                logic [IDX_W-1:0] right_idx = 2 * idx_q + 2;
+                logic [IDX_W-1:0] largest = idx_q;
                 
                 // Compare with Left Child
                 // Better if: Score Higher OR (Score Equal AND VarID Lower)
@@ -478,8 +478,8 @@ module vde_heap #(
                 end
 
                 if (largest != idx_q) begin
-                    automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
-                    automatic heap_entry_t entry_at_largest = heap_mem[largest];
+                    heap_entry_t entry_at_idx = heap_mem[idx_q];
+                    heap_entry_t entry_at_largest = heap_mem[largest];
                     // if (DEBUG >= 2) $display("[VDE DBG] Swapping %0d (Var %0d) with %0d (Var %0d)", idx_q, entry_at_idx.var_id, largest, entry_at_largest.var_id);
                     heap_mem[idx_q] <= entry_at_largest;
                     heap_mem[largest] <= entry_at_idx;
@@ -492,9 +492,9 @@ module vde_heap #(
 
             // UNHIDE_SWAP: Swap heap[idx] with heap[heap_size]
             if (state_q == UNHIDE_SWAP) begin
-                automatic logic [IDX_W-1:0] size_idx = heap_size_q;
-                automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
-                automatic heap_entry_t entry_at_size = heap_mem[size_idx];
+                logic [IDX_W-1:0] size_idx = heap_size_q;
+                heap_entry_t entry_at_idx = heap_mem[idx_q];
+                heap_entry_t entry_at_size = heap_mem[size_idx];
 
                 heap_mem[idx_q] <= entry_at_size;
                 heap_mem[size_idx] <= entry_at_idx;
@@ -505,8 +505,8 @@ module vde_heap #(
             // UNHIDE_BUBBLE_UP_SWAP: Swap if parent < current
             // Parent is Worse if: Score Lower OR (Score Equal AND VarID Higher)
             if (state_q == UNHIDE_BUBBLE_UP_SWAP && idx_q > 0) begin
-                automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                automatic logic swap_needed;
+                logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
+                logic swap_needed;
                 
                 swap_needed = 0;
                 if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
@@ -514,8 +514,8 @@ module vde_heap #(
                          heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
 
                 if (swap_needed) begin
-                    automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
-                    automatic heap_entry_t entry_at_parent = heap_mem[parent_idx];
+                    heap_entry_t entry_at_idx = heap_mem[idx_q];
+                    heap_entry_t entry_at_parent = heap_mem[parent_idx];
                     heap_mem[idx_q] <= entry_at_parent;
                     heap_mem[parent_idx] <= entry_at_idx;
                     pos_mem[entry_at_parent.var_id - 1] <= idx_q;
@@ -530,8 +530,8 @@ module vde_heap #(
 
             // BUMP_BUBBLE_UP_SWAP: Swap if parent < current
             if (state_q == BUMP_BUBBLE_UP_SWAP && idx_q > 0) begin
-                automatic logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
-                automatic logic swap_needed;
+                logic [IDX_W-1:0] parent_idx = (idx_q - 1) >> 1;
+                logic swap_needed;
                 
                 swap_needed = 0;
                 if (heap_mem[parent_idx].score < heap_mem[idx_q].score) swap_needed = 1;
@@ -539,8 +539,8 @@ module vde_heap #(
                          heap_mem[parent_idx].var_id > heap_mem[idx_q].var_id) swap_needed = 1;
 
                 if (swap_needed) begin
-                    automatic heap_entry_t entry_at_idx = heap_mem[idx_q];
-                    automatic heap_entry_t entry_at_parent = heap_mem[parent_idx];
+                    heap_entry_t entry_at_idx = heap_mem[idx_q];
+                    heap_entry_t entry_at_parent = heap_mem[parent_idx];
                     heap_mem[idx_q] <= entry_at_parent;
                     heap_mem[parent_idx] <= entry_at_idx;
                     pos_mem[entry_at_parent.var_id - 1] <= idx_q;

@@ -1,6 +1,6 @@
 
     # Read modified package FIRST
-    read_verilog -sv /Users/tatestaples/Code/SatSwarmV2/resource_estimation/temp_pkg_run_0.sv
+    read_verilog -sv /Users/tatestaples/Code/SatSwarmV2/resource_estimation/temp_pkg_run_1.sv
     
     # Read other source files
     read_verilog -sv /Users/tatestaples/Code/SatSwarmV2/src/Mega/utils/sfifo.sv
@@ -15,15 +15,15 @@
     read_verilog -sv /Users/tatestaples/Code/SatSwarmV2/src/Mega/solver_core.sv
     
     # Override top module parameters
-    chparam -set MAX_VARS 4 solver_core
-    chparam -set MAX_CLAUSES 40 solver_core
-    chparam -set MAX_LITS 160 solver_core
+    chparam -set MAX_VARS 8 solver_core
+    chparam -set MAX_CLAUSES 80 solver_core
+    chparam -set MAX_LITS 320 solver_core
     
     # Synthesis
     hierarchy -check -top solver_core
     proc
     opt -fast
-    # memory -nomap
+    memory -nomap
     opt -fast
     
     # Flatten helps with estimation accuracy for generic cell counts

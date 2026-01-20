@@ -55,9 +55,13 @@ def run_synthesis(run_id, var_max, temp_pkg_path):
     read_verilog -sv {temp_pkg_path}
     
     # Read other source files
+    read_verilog -sv {os.path.join(SRC_DIR, "utils", "sfifo.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "interface_unit.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "trail_manager.sv")}
+    read_verilog -sv {os.path.join(SRC_DIR, "vde_heap.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "vde.sv")}
+    read_verilog -sv {os.path.join(SRC_DIR, "stats_manager.sv")}
+    read_verilog -sv {os.path.join(SRC_DIR, "resync_controller.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "pse.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "cae.sv")}
     read_verilog -sv {os.path.join(SRC_DIR, "solver_core.sv")}
@@ -88,8 +92,8 @@ def run_synthesis(run_id, var_max, temp_pkg_path):
     start_time = time.time()
     try:
         with open(log_filename, 'w') as logfile:
-            # 5 minute timeout per run
-            subprocess.run(["yosys", ys_filename], stdout=logfile, stderr=subprocess.STDOUT, check=True, timeout=300)
+            # 10 minute timeout per run
+            subprocess.run(["yosys", ys_filename], stdout=logfile, stderr=subprocess.STDOUT, check=True, timeout=600)
     except subprocess.TimeoutExpired:
         print(f"Error: Synthesis timed out for {var_max} after 300s.")
         return None
