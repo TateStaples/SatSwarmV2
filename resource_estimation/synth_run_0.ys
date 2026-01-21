@@ -23,12 +23,11 @@
     hierarchy -check -top solver_core
     proc
     opt -fast
-    # memory -nomap
+    memory -nomap
     opt -fast
     
     # Flatten helps with estimation accuracy for generic cell counts
-    # synth_xilinx -family xc7 -top solver_core -flatten -abc9
-    synth_xilinx -family xc7 -top solver_core
+    synth_xilinx -family xc7 -top solver_core -flatten -abc9
     
     # Report
     stat

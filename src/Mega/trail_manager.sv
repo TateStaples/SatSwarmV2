@@ -149,14 +149,19 @@ module trail_manager #(
     always_comb begin
         // Initialize temps
         trail_entry_t entry;
-        entry = '{default:'0};
+        logic found_cut;
+
+        entry = '0;
+        found_cut = 0;
+
         
         if (trail_read_idx < trail_height_q) begin
-            trail_read_var        = trail[trail_read_idx].variable;
-            trail_read_value      = trail[trail_read_idx].value;
-            trail_read_level      = trail[trail_read_idx].level;
-            trail_read_is_decision = trail[trail_read_idx].is_decision;
-            trail_read_reason      = trail[trail_read_idx].reason;
+            entry = trail[trail_read_idx];
+            trail_read_var        = entry.variable;
+            trail_read_value      = entry.value;
+            trail_read_level      = entry.level;
+            trail_read_is_decision = entry.is_decision;
+            trail_read_reason      = entry.reason;
         end else begin
             trail_read_var        = '0;
             trail_read_value      = 1'b0;
@@ -190,7 +195,7 @@ module trail_manager #(
         backtrack_value = 1'b0;
         
         bt_idx_tmp = '0;
-        current_entry = '{default:'0};
+        current_entry = '0;
         
         // Push logic: update lookup table with new variable assignment
         if (push && trail_height_q < MAX_VARS) begin
@@ -271,19 +276,16 @@ module trail_manager #(
                  // So we search for the FIRST entry that has level > target?
                  // No, standard loop 0..height-1.
                  if (k < trail_height_q) begin
-                     if (trail[k].level > truncate_level_target) begin
-                         // This entry is invalid.
-                         // The new height is k (exclusive of this entry).
-                         // Since we want the first invalid index to be the new height.
-                         // But we need to do this carefully.
-                         // Let's iterate forward.
-                         // If trail[k].level <= target, kept.
-                         // If trail[k].level > target, cut here.
-                         trail_height_d = k;
-                         break; // Found cut point
-                     end else begin
-                         // This entry is valid, so new height is at least k+1
-                         trail_height_d = k + 1;
+                     if (!found_cut) begin
+                         if (trail[k].level > truncate_level_target) begin
+                             // This entry is invalid.
+                             // The new height is k (exclusive of this entry).
+                             trail_height_d = k;
+                             found_cut = 1; // Mark as found to stop updating
+                         end else begin
+                             // This entry is valid, so new height is at least k+1
+                             trail_height_d = k + 1;
+                         end
                      end
                  end
             end
