@@ -15,12 +15,18 @@ RTL_SRCS := $(abspath ../src/Mega/satswarmv2_pkg.sv \
             ../src/Mega/utils/sfifo.sv \
             ../src/Mega/utils/stack.sv)
 
+# Mini DPLL sources (no CAE, no VDE heap)
+MINI_SRCS := $(abspath ../src/Mini/mini_pkg.sv \
+             ../src/Mini/mini_pse.sv \
+             ../src/Mini/mini_solver_core.sv \
+             ../src/Mini/mini_top.sv)
+
 VERILATOR_FLAGS := -Wall --timing --sv --cc --exe \
   --Wno-fatal --Wno-UNUSED --Wno-PINCONNECTEMPTY --Wno-UNOPTFLAT \
   --Wno-INITIALDLY --Wno-WIDTHTRUNC --Wno-WIDTHEXPAND --Wno-MODDUP \
   --Wno-BLKANDNBLK --Wno-WIDTH
 
-.PHONY: all build test benchmark clean help debug_single regression_single regression_multi
+.PHONY: all build test benchmark clean help debug_single regression_single regression_multi mini
 
 all: build
 
@@ -127,10 +133,25 @@ regression_single: $(STAMP_SINGLE)
 regression_multi: $(STAMP_SINGLE)
 	@echo "Multi-core regression testbench build handled by $(STAMP_SINGLE) target"
 
+# Mini DPLL target (pure DPLL without CAE)
+OBJ_MINI := obj_dir_mini/Vtb_mini
+STAMP_MINI := obj_dir_mini/.build_mini_stamp
+
+$(STAMP_MINI): sv/tb_mini.sv $(MINI_SRCS) Makefile
+	@echo "Building Mini DPLL testbench..."
+	@mkdir -p obj_dir_mini
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_mini.sv cpp/sim_mini.cpp $(MINI_SRCS) \
+		--top-module tb_mini \
+		-CFLAGS "-std=c++17 -Wno-unknown-warning-option" \
+		-I../src/Mini \
+		-Mdir obj_dir_mini \
+		--build -j 8
+	@touch $(STAMP_MINI)
+
+mini: $(STAMP_MINI)
 
 clean:
-
-	rm -rf obj_dir logs *.vcd benchmark_results.txt .build_*_stamp
+	rm -rf obj_dir obj_dir_mini logs *.vcd benchmark_results.txt .build_*_stamp
 
 help:
 	@echo "SatSwarmv2 Makefile Targets:"
@@ -138,5 +159,6 @@ help:
 	@echo "  make test      - Build and run test suite"
 	@echo "  make benchmark - Run benchmarks and save results"
 	@echo "  make wave      - Build with waveform tracing and view"
+	@echo "  make mini      - Build Mini DPLL solver (no CAE)"
 	@echo "  make clean     - Remove build artifacts"
 
