@@ -33,6 +33,8 @@ package mini_pkg;
         BACKTRACK,
         FLIP_DECISION,
         CLEAR_THEN_DECIDE,  // Wait for clear to complete then make decision
+        RESTART_WAIT,       // Wait for PSE to settle IDLE (Handshake Part 2: Assert Start)
+        WAIT_FOR_PSE_IDLE,  // Wait for PSE to become Ready (Handshake Part 1)
         SAT_DONE,
         UNSAT_DONE
     } solver_state_t;

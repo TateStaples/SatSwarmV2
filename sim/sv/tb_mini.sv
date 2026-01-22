@@ -281,6 +281,7 @@ module tb_mini;
         if (!$value$plusargs("DEBUG=%d", DEBUG)) begin
             DEBUG = 0;
         end
+        $display("DEBUG ARG VALUE: %d", DEBUG);
 
         $display("\n");
         $display("=====================================");

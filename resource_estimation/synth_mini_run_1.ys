@@ -1,0 +1,22 @@
+
+    # Read modified package and memory estimation file
+    read_verilog -sv /Users/tatestaples/Code/SatSwarmV2/resource_estimation/temp_pkg_mini_run_1.sv /Users/tatestaples/Code/SatSwarmV2/resource_estimation/mini_memory_estimation.sv
+    
+    # Override top module parameters
+    chparam -set MAX_VARS 512 mini_memory_estimation
+    chparam -set MAX_CLAUSES 5120 mini_memory_estimation
+    chparam -set MAX_LITS 20480 mini_memory_estimation
+    
+    # Synthesis
+    hierarchy -check -top mini_memory_estimation
+    proc
+    opt -fast
+    # memory -nomap
+    opt -fast
+    
+    # Flatten helps with estimation accuracy for generic cell counts
+    synth_xilinx -family xcu -top mini_memory_estimation
+    
+    # Report
+    stat
+    

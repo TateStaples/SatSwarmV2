@@ -5,6 +5,7 @@
 
 import mini_pkg::*;
 
+
 module mini_solver_core #(
     parameter int MAX_VARS = 256,
     parameter int MAX_CLAUSES = 256,
@@ -32,22 +33,32 @@ module mini_solver_core #(
     output logic [31:0] decision_count
 );
 
+
     // =========================================================================
     // DPLL FSM States
     // =========================================================================
-    solver_state_t state_q, state_d;
+    mini_pkg::solver_state_t state_q, state_d;
 
     // =========================================================================
     // Decision Stack for Chronological Backtracking
     // Each entry tracks: variable, tried_positive, tried_negative
     // =========================================================================
-    logic [31:0] decision_var_stack [0:MAX_VARS-1];
-    logic        decision_tried_pos [0:MAX_VARS-1];
-    logic        decision_tried_neg [0:MAX_VARS-1];
+    (* ram_style = "block" *) logic [31:0] decision_var_stack [0:MAX_VARS-1];
+    logic [MAX_VARS-1:0] decision_tried_pos;
+    logic [MAX_VARS-1:0] decision_tried_neg;
     logic [15:0] decision_level_q, decision_level_d;
     
     // Trail markers for each decision level
-    logic [15:0] trail_lim [0:MAX_VARS-1];
+    (* ram_style = "block" *) logic [15:0] trail_lim [0:MAX_VARS-1];
+
+    // Helper: Clamped indices to prevent OOB access if level grows uncheck
+    // This allows the solver to recover via backtracking instead of getting stuck
+    localparam IDX_W = $clog2(MAX_VARS);
+    logic [IDX_W-1:0] idx_curr;
+    logic [IDX_W-1:0] idx_prev;
+    
+    assign idx_curr = decision_level_q[IDX_W-1:0];
+    assign idx_prev = (decision_level_q - 1'b1); // Slice happens automatically
 
     // =========================================================================
     // PSE Instance
@@ -99,8 +110,8 @@ module mini_solver_core #(
     always_comb begin
         next_var = 0;
         all_assigned = 1'b1;
-        for (int v = 1; v <= pse_max_var_seen && v <= MAX_VARS; v++) begin
-            if (u_pse.assign_state[v-1] == 2'b00 && next_var == 0) begin
+        for (int v = 1; v <= MAX_VARS; v++) begin
+            if (v <= pse_max_var_seen && u_pse.assign_state[v-1] == 2'b00 && next_var == 0) begin
                 next_var = v;
                 all_assigned = 1'b0;
             end
@@ -136,6 +147,7 @@ module mini_solver_core #(
 
         case (state_q)
             IDLE: begin
+                if (DEBUG > 0) $display("[CORE] State: %d Level: %0d", state_q, decision_level_q);
                 if (start_solve) begin
                     decision_level_d = 0;
                     conflict_count_d = 0;
@@ -168,7 +180,7 @@ module mini_solver_core #(
                     pse_decision_var = -$signed(next_var);
                     pse_start = 1'b1;
                     
-                    if (DEBUG >= 1) $display("[DPLL] Decided: %0d at Level %0d", -$signed(next_var), decision_level_q + 1);
+                    if (DEBUG >= 1) $display("[DPLL] Decided: %0d at Level %0d (NextVar: %0d MaxSeen: %0d)", -$signed(next_var), decision_level_q + 1, next_var, pse_max_var_seen);
                     
                     state_d = PROPAGATE;
                 end else begin
@@ -183,7 +195,8 @@ module mini_solver_core #(
                     state_d = UNSAT_DONE;
                 end else begin
                     // Check if we can flip the current decision
-                    if (!decision_tried_pos[decision_level_q-1]) begin
+                    if (DEBUG >= 1) $display("[DPLL] Conflict at Level %0d. Tried Pos[%0d] = %b", decision_level_q, decision_level_q-1, decision_tried_pos[idx_prev]);
+                    if (!decision_tried_pos[idx_prev]) begin
                         // Flip to positive polarity
                         state_d = FLIP_DECISION;
                     end else begin
@@ -196,9 +209,11 @@ module mini_solver_core #(
             FLIP_DECISION: begin
                 // Undo to the trail height at this decision level
                 pse_undo_enable = 1'b1;
-                pse_undo_to_height = trail_lim[decision_level_q-1];
+                pse_undo_to_height = trail_lim[idx_prev];
                 
-                if (DEBUG >= 1) $display("[DPLL] Flipping to: %0d at Level %0d (undo to %0d)", decision_var_stack[decision_level_q-1], decision_level_q, trail_lim[decision_level_q-1]);
+                
+                if (DEBUG >= 1) $display("[DPLL] Flipping to: %0d at Level %0d (undo to %0d). WRITE tried_pos[%0d] <= 1", decision_var_stack[idx_prev], decision_level_q, trail_lim[idx_prev], decision_level_q-1);
+
                 
                 // Go to intermediate state to pulse start after undo completes
                 state_d = CLEAR_THEN_DECIDE;
@@ -206,13 +221,30 @@ module mini_solver_core #(
 
             CLEAR_THEN_DECIDE: begin
                 // Keep undoing while trail_height > undo_to_height
-                if (pse_trail_height > trail_lim[decision_level_q-1]) begin
+                if (pse_trail_height > trail_lim[idx_prev]) begin
                     pse_undo_enable = 1'b1;
-                    pse_undo_to_height = trail_lim[decision_level_q-1];
+                    pse_undo_to_height = trail_lim[idx_prev];
                 end else begin
-                    // Undo complete, restart with opposite polarity
-                    pse_decision_var = $signed(decision_var_stack[decision_level_q-1]);
-                    pse_start = 1'b1;
+                    // Undo complete, transition to WAIT_FOR_PSE_IDLE to start handshake
+                    state_d = WAIT_FOR_PSE_IDLE;
+                end
+            end
+
+            WAIT_FOR_PSE_IDLE: begin
+                // Stage 1: Wait for PSE to settle in IDLE (load_ready=1)
+                // This ensures PSE has finished UNDO state transition
+                if (load_ready) begin
+                    state_d = RESTART_WAIT;
+                end
+            end
+
+            RESTART_WAIT: begin
+                // Stage 2: Assert start and wait for PSE acceptance
+                pse_decision_var = $signed(decision_var_stack[idx_prev]);
+                pse_start = 1'b1;
+                
+                // Wait for load_ready to go LOW, indicating PSE moved to SEED_DECISION
+                if (!load_ready) begin
                     state_d = PROPAGATE;
                 end
             end
@@ -220,7 +252,7 @@ module mini_solver_core #(
             BACKTRACK: begin
                 // Undo current decision level
                 pse_undo_enable = 1'b1;
-                pse_undo_to_height = trail_lim[decision_level_q-1];
+                pse_undo_to_height = trail_lim[idx_prev];
                 decision_level_d = decision_level_q - 1;
                 
                 if (decision_level_d == 0) begin
@@ -263,6 +295,7 @@ module mini_solver_core #(
                 trail_lim[i] <= 0;
             end
         end else begin
+            if (DEBUG > 0) $display("[CORE] State: %d Level: %0d", state_q, decision_level_q);
             state_q <= state_d;
             decision_level_q <= decision_level_d;
             conflict_count_q <= conflict_count_d;
@@ -270,21 +303,20 @@ module mini_solver_core #(
             
             // Record decision when making one - capture trail height for backtracking
             if (state_q == DECIDE && next_var != 0) begin
-                decision_var_stack[decision_level_q] <= next_var;
-                decision_tried_pos[decision_level_q] <= 1'b0;
-                decision_tried_neg[decision_level_q] <= 1'b1;
-                trail_lim[decision_level_q] <= pse_trail_height;  // Record trail height before this decision
+                decision_var_stack[idx_curr] <= next_var;
+                decision_tried_pos[idx_curr] <= 1'b0;
+                decision_tried_neg[idx_curr] <= 1'b1;
+                trail_lim[idx_curr] <= pse_trail_height;  // Record trail height before this decision
             end
             
             // Mark positive tried when flipping
             if (state_q == FLIP_DECISION) begin
-                decision_tried_pos[decision_level_q-1] <= 1'b1;
+                decision_tried_pos[idx_prev] <= 1'b1;
             end
-            
             // Reset decision tracking when backtracking
             if (state_q == BACKTRACK) begin
-                decision_tried_pos[decision_level_q-1] <= 1'b0;
-                decision_tried_neg[decision_level_q-1] <= 1'b0;
+                decision_tried_pos[idx_prev] <= 1'b0;
+                decision_tried_neg[idx_prev] <= 1'b0;
             end
         end
     end

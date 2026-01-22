@@ -43,34 +43,35 @@ module mini_pse #(
         WAIT_PROP,      // Wait one cycle for prop_queue update
         DEQ_PROP,
         SCAN_WATCH,
-        COMPLETE
+        COMPLETE,
+        UNDO_ASSIGNMENTS
     } state_e;
 
     // Assignment encoding: 2'b00 = unassigned, 2'b01 = false, 2'b10 = true
-    logic [1:0] assign_state [0:MAX_VARS-1];
+    (* ram_style = "block" *) logic [1:0] assign_state [0:MAX_VARS-1];
 
     // Clause Store
-    logic [15:0] clause_len    [0:MAX_CLAUSES-1];
-    logic [15:0] clause_start  [0:MAX_CLAUSES-1];
-    logic signed [31:0] lit_mem [0:MAX_LITS-1];
+    (* ram_style = "block" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
+    (* ram_style = "block" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
+    (* ram_style = "block" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists
-    logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
-    logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
+    (* ram_style = "block" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
+    (* ram_style = "block" *) logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
     logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
     logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
-    logic [15:0] watch_head1   [0:2*MAX_VARS-1];
-    logic [15:0] watch_head2   [0:2*MAX_VARS-1];
+    (* ram_style = "block" *) logic [15:0] watch_head1   [0:2*MAX_VARS-1];
+    (* ram_style = "block" *) logic [15:0] watch_head2   [0:2*MAX_VARS-1];
 
     // Propagation queue - simple array-based FIFO
-    logic signed [31:0] prop_queue [0:MAX_LITS-1];
+    (* ram_style = "block" *) logic signed [31:0] prop_queue [0:MAX_LITS-1];
     logic [15:0] prop_wr_ptr, prop_rd_ptr;
     logic prop_empty;
     
     assign prop_empty = (prop_wr_ptr == prop_rd_ptr);
 
     // Trail for backtracking - stores literals in assignment order
-    logic signed [31:0] trail_mem [0:MAX_VARS-1];
+    (* ram_style = "block" *) logic signed [31:0] trail_mem [0:MAX_VARS-1];
     logic [15:0] trail_height_q;
 
     // State registers
@@ -128,6 +129,36 @@ module mini_pse #(
     assign load_ready = (state_q == IDLE || state_q == LOAD_CLAUSE || state_q == COMPLETE);
     wire load_fire = load_valid && load_ready;
 
+    // Yosys synthesis fix: intermediate signals for INIT_WATCHES and SECTION_DECISION
+    // to avoid automatic variables inside always_ff
+    logic [15:0] init_c;
+    logic [15:0] init_b;
+    logic [15:0] init_l;
+    logic [15:0] init_w1_addr;
+    logic [15:0] init_w2_addr;
+    logic [15:0] init_idx1;
+    logic [15:0] init_idx2;
+    
+    assign init_c = init_clause_idx_q;
+    assign init_b = clause_start[init_c];
+    assign init_l = clause_len[init_c];
+    assign init_w1_addr = init_b;
+    assign init_w2_addr = (init_l > 1) ? init_b + 1 : init_b;
+    assign init_idx1 = safe_lit_idx(lit_mem[init_w1_addr]);
+    assign init_idx2 = safe_lit_idx(lit_mem[init_w2_addr]);
+
+    logic [31:0] seed_v;
+    assign seed_v = (registered_decision_q < 0) ? -registered_decision_q : registered_decision_q;
+
+    logic [31:0] prop_v;
+    assign prop_v = (propagated_var < 0) ? -propagated_var : propagated_var;
+
+    // Undo helper signals (continuous assignment for single-port read)
+    logic signed [31:0] undo_raw_var;
+    logic [31:0] undo_var_idx;
+    assign undo_raw_var = trail_mem[trail_height_q - 1]; // Use trail_height_q from FF
+    assign undo_var_idx = (undo_raw_var < 0) ? -undo_raw_var : undo_raw_var;
+
     // Main combinational logic
     always_comb begin
         logic [31:0] v;
@@ -139,8 +170,19 @@ module mini_pse #(
         logic [15:0] repl_idx;
         logic signed [31:0] repl_lit;
 
+        // Initialize locals to avoid latches
+        v = '0;
+        neg_lit = '0;
+        w1 = '0; w2 = '0; cstart = '0; clen = '0;
+        lit_watch = '0; lit_other = '0; l = '0;
+        other_truth = 2'b00; t = 2'b00;
+        found_repl = 1'b0;
+        repl_idx = '0;
+        repl_lit = '0;
+
         // Defaults - undo_enable forces state back to IDLE for undo processing
-        state_d            = (undo_enable && trail_height_q > undo_to_height) ? IDLE : state_q;
+        // Defaults
+        state_d            = state_q;
         clause_count_d     = clause_count_q;
         lit_count_d        = lit_count_q;
         cur_clause_len_d   = cur_clause_len_q;
@@ -206,8 +248,10 @@ module mini_pse #(
             end
 
             RESET_WATCHES: begin
+                $display("[PSE] RESET Idx: %0d Limit: %0d", reset_idx_q, MAX_CLAUSES + 2*MAX_VARS);
                 if (reset_idx_q < MAX_CLAUSES + 2*MAX_VARS) begin
                     reset_idx_d = reset_idx_q + 1'b1;
+                    state_d = RESET_WATCHES;
                 end else begin
                     init_clause_idx_d = '0;
                     state_d = INIT_WATCHES;
@@ -216,7 +260,9 @@ module mini_pse #(
 
             INIT_WATCHES: begin
                 if (init_clause_idx_q < clause_count_q) begin
+                    $display("[PSE] INIT Idx: %0d Count: %0d", init_clause_idx_q, clause_count_q);
                     init_clause_idx_d = init_clause_idx_q + 1'b1;
+                    state_d = INIT_WATCHES;
                 end else begin
                     initialized_d = 1'b1;
                     state_d = SEED_DECISION;
@@ -346,6 +392,12 @@ module mini_pse #(
                 end
             end
 
+            UNDO_ASSIGNMENTS: begin
+                // State transitions handled by always_ff override for sequential logic
+                // But we default to holding state here
+                state_d = UNDO_ASSIGNMENTS;
+            end
+
             default: state_d = IDLE;
         endcase
     end
@@ -371,14 +423,10 @@ module mini_pse #(
             registered_decision_q <= '0;
             trail_height_q <= '0;
             
-            for (i = 0; i < MAX_VARS; i = i + 1) begin
-                assign_state[i] <= 2'b00;
-            end
-            for (i = 0; i < 2*MAX_VARS; i = i + 1) begin
-                watch_head1[i] <= 16'hFFFF;
-                watch_head2[i] <= 16'hFFFF;
-            end
+            // RAM inference optimization: Remove async reset for large arrays
+            // assign_state and watch_heads are cleared in RESET_WATCHES state
         end else begin
+            $display("[PSE] State: %d Scan: %0d", state_q, scan_clause_q);
             state_q <= state_d;
             clause_count_q <= clause_count_d;
             lit_count_q <= lit_count_d;
@@ -408,7 +456,13 @@ module mini_pse #(
             end
 
             // Reset watches
+            // Reset watches and state
             if (state_q == RESET_WATCHES) begin
+                // Clear assignment state sequentially (enables RAM inference)
+                if (reset_idx_q < MAX_VARS) begin
+                    assign_state[reset_idx_q] <= 2'b00;
+                end
+                
                 if (reset_idx_q < MAX_CLAUSES) begin
                     watched_lit1[reset_idx_q] <= 16'hFFFF;
                     watched_lit2[reset_idx_q] <= 16'hFFFF;
@@ -422,27 +476,18 @@ module mini_pse #(
 
             // Initialize watches
             if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
-                automatic logic [15:0] c = init_clause_idx_q;
-                automatic logic [15:0] b = clause_start[c];
-                automatic logic [15:0] l = clause_len[c];
-                automatic logic [15:0] w1_addr = b;
-                automatic logic [15:0] w2_addr = (l > 1) ? b + 1 : b;
-                automatic logic [15:0] idx1 = safe_lit_idx(lit_mem[w1_addr]);
-                automatic logic [15:0] idx2 = safe_lit_idx(lit_mem[w2_addr]);
-                
-                watched_lit1[c] <= w1_addr;
-                watched_lit2[c] <= w2_addr;
-                watch_next1[c] <= watch_head1[idx1];
-                watch_head1[idx1] <= c;
-                watch_next2[c] <= watch_head2[idx2];
-                watch_head2[idx2] <= c;
+                watched_lit1[init_c] <= init_w1_addr;
+                watched_lit2[init_c] <= init_w2_addr;
+                watch_next1[init_c] <= watch_head1[init_idx1];
+                watch_head1[init_idx1] <= init_c;
+                watch_next2[init_c] <= watch_head2[init_idx2];
+                watch_head2[init_idx2] <= init_c;
             end
 
             // Seed decision - add to prop queue, assign, and record in trail
             if (state_q == SEED_DECISION && registered_decision_q != 0) begin
-                automatic logic [31:0] v = (registered_decision_q < 0) ? -registered_decision_q : registered_decision_q;
-                if (v > 0 && v <= MAX_VARS && assign_state[v-1] == 2'b00) begin
-                    assign_state[v-1] <= (registered_decision_q < 0) ? 2'b01 : 2'b10;
+                if (seed_v > 0 && seed_v <= MAX_VARS && assign_state[seed_v-1] == 2'b00) begin
+                    assign_state[seed_v-1] <= (registered_decision_q < 0) ? 2'b01 : 2'b10;
                     prop_queue[prop_wr_ptr] <= registered_decision_q;
                     prop_wr_ptr <= prop_wr_ptr + 1;
                     // Record in trail for backtracking
@@ -458,9 +503,8 @@ module mini_pse #(
 
             // Unit propagation - assign, enqueue, and record in trail
             if (propagated_valid) begin
-                automatic logic [31:0] v = (propagated_var < 0) ? -propagated_var : propagated_var;
-                if (v > 0 && v <= MAX_VARS && assign_state[v-1] == 2'b00) begin
-                    assign_state[v-1] <= (propagated_var < 0) ? 2'b01 : 2'b10;
+                if (prop_v > 0 && prop_v <= MAX_VARS && assign_state[prop_v-1] == 2'b00) begin
+                    assign_state[prop_v-1] <= (propagated_var < 0) ? 2'b01 : 2'b10;
                     prop_queue[prop_wr_ptr] <= propagated_var;
                     prop_wr_ptr <= prop_wr_ptr + 1;
                     // Record in trail for backtracking
@@ -471,23 +515,33 @@ module mini_pse #(
 
             // Undo assignments to specific height (level-aware backtracking)
             // This undoes ALL assignments above target height in one cycle
-            if (undo_enable && trail_height_q > undo_to_height) begin
-                // Clear all assignments from trail entries above target height
-                for (int j = undo_to_height; j < trail_height_q && j < MAX_VARS; j++) begin
-                    automatic logic signed [31:0] lit = trail_mem[j];
-                    automatic logic [31:0] v = (lit < 0) ? -lit : lit;
-                    if (v > 0 && v <= MAX_VARS) begin
-                        assign_state[v-1] <= 2'b00;
-                    end
-                end
-                trail_height_q <= undo_to_height;
-                // Reset prop queue
+            // Sequential Undo Logic
+            // If undo requested, take control and switch to UNDO_ASSIGNMENTS
+            if (undo_enable && trail_height_q > undo_to_height && state_q != UNDO_ASSIGNMENTS) begin
+                state_q <= UNDO_ASSIGNMENTS;
                 conflict_detected_q <= 1'b0;
                 prop_wr_ptr <= '0;
                 prop_rd_ptr <= '0;
-                state_q <= IDLE;
-                // Force watch reinitialization (watches corrupted by replacements)
-                initialized_q <= 1'b0;
+                // initialized_q <= 1'b0; // Force watch reinitialization
+            end
+
+            // Perform sequential undo (one variable per cycle)
+            if (state_q == UNDO_ASSIGNMENTS) begin
+                if (trail_height_q > undo_to_height) begin
+                    // Read trail and clear assignment
+                    // Uses pre-calculated undo_var_idx from continuous assignment
+                    
+                    if (undo_var_idx > 0 && undo_var_idx <= MAX_VARS) begin
+                        assign_state[undo_var_idx - 1] <= 2'b00;
+                    end
+                    trail_height_q <= trail_height_q - 1;
+                    
+                    // Stay in UNDO state until done
+                    state_q <= UNDO_ASSIGNMENTS; 
+                end else begin
+                    // Done
+                    state_q <= IDLE;
+                end
             end
         end
     end

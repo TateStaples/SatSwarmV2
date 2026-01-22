@@ -35,13 +35,19 @@ if [ ! -x "$BIN" ]; then
     exit 1
 fi
 
+# Construct command arguments
+DEBUG_VAL=${DEBUG:-0}
+ARGS="+CNF=$CNF_FILE +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=$DEBUG_VAL $@"
+
+echo "Executing: $BIN $ARGS"
+
 # Run the Mini testbench with a 120s timeout
 if command -v gtimeout &> /dev/null; then
-    gtimeout 120s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
+    gtimeout 120s "$BIN" $ARGS
 elif command -v timeout &> /dev/null; then
-    timeout 120s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
+    timeout 120s "$BIN" $ARGS
 else
     echo "Warning: timeout not found. Running without timeout."
-    "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES +DEBUG=0 "$@"
+    "$BIN" $ARGS
 fi
 exit $?
