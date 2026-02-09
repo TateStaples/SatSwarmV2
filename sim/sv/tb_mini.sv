@@ -17,9 +17,9 @@ module tb_mini;
 
     // Parameters
     parameter int MAX_VARS = 256;
-    parameter int MAX_CLAUSES = 256;
-    parameter int MAX_LITS = 2048;
-    parameter int MAX_CLAUSE_LEN = 16;
+    parameter int MAX_CLAUSES = 1024;
+    parameter int MAX_LITS = 8192;
+    parameter int MAX_CLAUSE_LEN = 32;
 
     // Debug level from command line
     int DEBUG = 0;

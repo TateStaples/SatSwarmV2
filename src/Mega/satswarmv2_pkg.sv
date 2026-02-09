@@ -75,6 +75,14 @@ package satswarmv2_pkg;
   } conflict_t;
 
   typedef struct packed {
+    logic [7:0]       lbd;            // LBD score (0-255)
+    logic             is_ref;         // 1=Reference (Pointer), 0=Value (Literals)
+    logic [6:0]       reserved;       // Padding/Future use
+    logic [15:0]      length;         // Clause Length
+    logic [63:0]      payload;        // Data: {Lit1, Lit2} OR {Pointer}
+  } shared_packet_t;
+
+  typedef struct packed {
     logic [PTR_W-1:0] ptr;
     logic [15:0]      len;
   } clause_ref_t;

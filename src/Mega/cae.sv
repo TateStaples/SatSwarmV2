@@ -447,19 +447,19 @@ module cae #(
                     for (int k = 0; k < MAX_BUFFER; k++) begin
                         if (k < buf_count_q) begin
                             // GUARD: Skip Var 0 (should never appear)
-                            if (abs_lit(buf_lits[k]) == 0) continue;
-                            
-                            if (!found_uip && buf_levels[k] == max_lvl) begin
-                                // This is the UIP - KEEP it and place first
-                                uip_lit = buf_lits[k];
-                                output_clause_d[0] = uip_lit;  // Keep as-is (already correct asserting form)
-                                found_uip = 1'b1;
-                                // $strobe("[CAE DEBUG FINALIZE] UIP found: lit=%0d (kept)", uip_lit);
-                            end else begin
-                                // Non-UIP literals go after
-                                if (out_idx < MAX_LITS) begin
-                                    output_clause_d[out_idx] = buf_lits[k];
-                                    out_idx = out_idx + 1;
+                            if (abs_lit(buf_lits[k]) != 0) begin
+                                if (!found_uip && buf_levels[k] == max_lvl) begin
+                                    // This is the UIP - KEEP it and place first
+                                    uip_lit = buf_lits[k];
+                                    output_clause_d[0] = uip_lit;  // Keep as-is (already correct asserting form)
+                                    found_uip = 1'b1;
+                                    // $strobe("[CAE DEBUG FINALIZE] UIP found: lit=%0d (kept)", uip_lit);
+                                end else begin
+                                    // Non-UIP literals go after
+                                    if (out_idx < MAX_LITS) begin
+                                        output_clause_d[out_idx] = buf_lits[k];
+                                        out_idx = out_idx + 1;
+                                    end
                                 end
                             end
                         end

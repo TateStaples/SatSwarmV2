@@ -1,0 +1,10 @@
+# Diagnose CAE synthesis time
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/cae.sv
+chparam -set MAX_VARS 256 cae
+chparam -set MAX_LITS 32 cae
+hierarchy -check -top cae
+proc
+opt
+stat

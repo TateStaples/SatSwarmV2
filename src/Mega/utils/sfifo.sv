@@ -46,7 +46,7 @@ module sfifo #(
 
     localparam ADDR_W = $clog2(DEPTH);
     
-    logic [WIDTH-1:0] mem [0:DEPTH-1];
+    (* ram_style = "block" *) logic [WIDTH-1:0] mem [0:DEPTH-1];
     logic [ADDR_W-1:0] wr_ptr;
     logic [ADDR_W-1:0] rd_ptr;
     logic [ADDR_W:0]   cnt;

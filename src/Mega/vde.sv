@@ -31,7 +31,9 @@ module vde #(
     // Multi-bump for learned clause
     input  logic [3:0]   bump_count,
     input  logic [7:0][31:0] bump_vars,
-    input  logic         decay
+    input  logic         decay,
+    output logic         busy,
+    output logic         pending_ops
 );
 
     // =========================================================================
@@ -60,12 +62,13 @@ module vde #(
 
     localparam FIFO_DEPTH = 256;
     localparam CNT_W = $clog2(FIFO_DEPTH+1);
-    localparam ENTRY_W = $bits(fifo_entry_t);
-
+    
     logic [CNT_W:0] count; // Note count width check
     logic fifo_full, fifo_empty;
     logic fifo_push, fifo_pop;
     fifo_entry_t fifo_in, fifo_out;
+    
+    localparam ENTRY_W = $bits(fifo_in);
     logic [ENTRY_W-1:0] fifo_push_bits, fifo_pop_bits;
     
     assign fifo_push_bits = fifo_in;
@@ -89,7 +92,7 @@ module vde #(
         .full(fifo_full),
         .empty(fifo_empty),
         .count(count), // Adjust width if needed
-        .flush(clear_all)
+        .flush(clear_all || unassign_all)
     );
 
     // FIFO Write Logic
@@ -129,7 +132,11 @@ module vde #(
     logic             ack_bump;
 
     always_ff @(posedge clk or posedge reset) begin
-        if (reset || clear_all) begin
+        if (reset) begin
+            held_bump_valid <= 1'b0;
+            held_bump_count <= '0;
+            held_bump_vars  <= '0;
+        end else if (clear_all || unassign_all) begin
             held_bump_valid <= 1'b0;
             held_bump_count <= '0;
             held_bump_vars  <= '0;
@@ -147,7 +154,8 @@ module vde #(
     logic held_decay;
     logic ack_decay;
     always_ff @(posedge clk or posedge reset) begin
-        if (reset || clear_all) held_decay <= 1'b0;
+        if (reset) held_decay <= 1'b0;
+        else if (clear_all || unassign_all) held_decay <= 1'b0;
         else if (decay) held_decay <= 1'b1;
         else if (ack_decay) held_decay <= 1'b0;
     end
@@ -250,5 +258,9 @@ module vde #(
         
         .busy(heap_busy)
     );
+
+    // Pending ops: assignments/clears/bumps/decay in flight or heap busy
+    assign pending_ops = !fifo_empty || held_bump_valid || held_decay || heap_busy;
+    assign busy = heap_busy;
 
 endmodule

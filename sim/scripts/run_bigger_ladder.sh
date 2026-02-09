@@ -49,7 +49,7 @@ for file in $FILES; do
     printf "  %-40s ... " "$BASENAME"
     
     # Run the test, capturing output
-    OUTPUT=$("$SCRIPT_DIR/run_cnf.sh" "$file" "$EXPECTED" 2>&1)
+    OUTPUT=$("$SCRIPT_DIR/run_cnf.sh" "$file" "$EXPECTED" 2>&1 || true)
     
     if echo "$OUTPUT" | grep -q "TEST PASSED"; then
         echo "PASSED"

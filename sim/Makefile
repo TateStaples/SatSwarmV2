@@ -12,6 +12,7 @@ RTL_SRCS := $(abspath ../src/Mega/satswarmv2_pkg.sv \
             ../src/Mega/vde.sv \
             ../src/Mega/vde_heap.sv \
             ../src/Mega/trail_manager.sv \
+            ../src/Mega/shared_clause_buffer.sv \
             ../src/Mega/utils/sfifo.sv \
             ../src/Mega/utils/stack.sv)
 
@@ -31,12 +32,43 @@ VERILATOR_FLAGS := -Wall --timing --sv --cc --exe \
 all: build
 
 
-build:
-	@echo "Building SatSwarmv2 with Verilator..."
+build: build_1x1
+	@mkdir -p obj_dir
+	@cp obj_dir_1x1/Vtb_satswarmv2 obj_dir/Vtb_satswarmv2
+
+# Build 1x1 grid (single core) for benchmark comparison
+build_1x1:
+	@echo "Building SatSwarmv2 1x1 (Single Core) for Benchmark..."
 	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
 		--top-module $(TOP) \
+		-GGRID_X=1 -GGRID_Y=1 \
 		-CFLAGS "-std=c++17" \
 		-I../src/Mega \
+		-Mdir obj_dir_1x1 \
+		--build -j 8
+
+# Build 2x2 grid (4 cores) for benchmark comparison  
+build_2x2:
+	@echo "Building SatSwarmv2 2x2 (4 Cores) for Benchmark..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=2 -GGRID_Y=2 \
+		-CFLAGS "-std=c++17" \
+		-DMULTICORE \
+		-I../src/Mega \
+		-Mdir obj_dir_2x2 \
+		--build -j 8
+
+# Build 3x3 grid (9 cores) for benchmark comparison  
+build_3x3:
+	@echo "Building SatSwarmv2 3x3 (9 Cores) for Benchmark..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=3 -GGRID_Y=3 \
+		-CFLAGS "-std=c++17" \
+		-DMULTICORE \
+		-I../src/Mega \
+		-Mdir obj_dir_3x3 \
 		--build -j 8
 
 test: build
@@ -161,4 +193,3 @@ help:
 	@echo "  make wave      - Build with waveform tracing and view"
 	@echo "  make mini      - Build Mini DPLL solver (no CAE)"
 	@echo "  make clean     - Remove build artifacts"
-

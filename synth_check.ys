@@ -1,0 +1,34 @@
+
+# Read sources
+read_verilog -sv -D SYNTHESIS src/Mega/satswarmv2_pkg.sv
+read_verilog -sv -D SYNTHESIS src/Mega/mega_pkg.sv
+read_verilog -sv -D SYNTHESIS src/Mega/utils/sfifo.sv
+read_verilog -sv -D SYNTHESIS src/Mega/utils/stack.sv
+read_verilog -sv -D SYNTHESIS src/Mega/interface_unit.sv
+read_verilog -sv -D SYNTHESIS src/Mega/trail_manager.sv
+read_verilog -sv -D SYNTHESIS src/Mega/vde_heap.sv
+read_verilog -sv -D SYNTHESIS src/Mega/vde.sv
+read_verilog -sv -D SYNTHESIS src/Mega/stats_manager.sv
+read_verilog -sv -D SYNTHESIS src/Mega/resync_controller.sv
+read_verilog -sv -D SYNTHESIS src/Mega/pse.sv
+read_verilog -sv -D SYNTHESIS src/Mega/cae.sv
+read_verilog -sv -D SYNTHESIS src/Mega/solver_core.sv
+
+# Setup hierarchy
+hierarchy -check -top solver_core
+
+# Set parameters to realistic size for resource check
+# MAX_VARS=256 is the target
+chparam -set MAX_VARS 256 solver_core
+chparam -set MAX_CLAUSES 1024 solver_core
+chparam -set MAX_LITS 4096 solver_core
+
+# General synthesis steps (fast)
+proc
+opt -fast
+memory_collect
+memory_map
+opt -fast
+
+# Print statistics
+stat

@@ -26,14 +26,42 @@ module solver_core #(
      input  logic        load_clause_end,
      output logic        load_ready,
 
-    // NoC Interface (4 directions: N, S, E, W)
-     input  satswarmv2_pkg::noc_packet_t rx_pkt [3:0],
-     input  logic rx_valid [3:0],
-     output logic rx_ready [3:0],
+        // NoC Interface (4 directions: N, S, E, W)
+    `ifdef SYNTHESIS
+        input  satswarmv2_pkg::noc_packet_t rx_pkt_0,
+        input  satswarmv2_pkg::noc_packet_t rx_pkt_1,
+        input  satswarmv2_pkg::noc_packet_t rx_pkt_2,
+        input  satswarmv2_pkg::noc_packet_t rx_pkt_3,
+        input  logic rx_valid_0,
+        input  logic rx_valid_1,
+        input  logic rx_valid_2,
+        input  logic rx_valid_3,
+        output logic rx_ready_0,
+        output logic rx_ready_1,
+        output logic rx_ready_2,
+        output logic rx_ready_3,
 
-     output satswarmv2_pkg::noc_packet_t tx_pkt [3:0],
-     output logic tx_valid [3:0],
-     input  logic tx_ready [3:0],
+        output satswarmv2_pkg::noc_packet_t tx_pkt_0,
+        output satswarmv2_pkg::noc_packet_t tx_pkt_1,
+        output satswarmv2_pkg::noc_packet_t tx_pkt_2,
+        output satswarmv2_pkg::noc_packet_t tx_pkt_3,
+        output logic tx_valid_0,
+        output logic tx_valid_1,
+        output logic tx_valid_2,
+        output logic tx_valid_3,
+        input  logic tx_ready_0,
+        input  logic tx_ready_1,
+        input  logic tx_ready_2,
+        input  logic tx_ready_3,
+    `else
+        input  satswarmv2_pkg::noc_packet_t rx_pkt [3:0],
+        input  logic rx_valid [3:0],
+        output logic rx_ready [3:0],
+
+        output satswarmv2_pkg::noc_packet_t tx_pkt [3:0],
+        output logic tx_valid [3:0],
+        input  logic tx_ready [3:0],
+    `endif
 
     // ------ Global memory interface (to arbiter) ------ //
     output logic        global_read_req,
@@ -48,6 +76,42 @@ module solver_core #(
     output logic [31:0] global_write_data,
     input  logic        global_write_grant
 );
+
+`ifdef SYNTHESIS
+    // Rebuild 4-port arrays for internal logic under Yosys
+    satswarmv2_pkg::noc_packet_t rx_pkt [3:0];
+    logic rx_valid [3:0];
+    logic rx_ready [3:0];
+    satswarmv2_pkg::noc_packet_t tx_pkt [3:0];
+    logic tx_valid [3:0];
+    logic tx_ready [3:0];
+
+    assign rx_pkt[0] = rx_pkt_0;
+    assign rx_pkt[1] = rx_pkt_1;
+    assign rx_pkt[2] = rx_pkt_2;
+    assign rx_pkt[3] = rx_pkt_3;
+    assign rx_valid[0] = rx_valid_0;
+    assign rx_valid[1] = rx_valid_1;
+    assign rx_valid[2] = rx_valid_2;
+    assign rx_valid[3] = rx_valid_3;
+    assign rx_ready_0 = rx_ready[0];
+    assign rx_ready_1 = rx_ready[1];
+    assign rx_ready_2 = rx_ready[2];
+    assign rx_ready_3 = rx_ready[3];
+
+    assign tx_pkt_0 = tx_pkt[0];
+    assign tx_pkt_1 = tx_pkt[1];
+    assign tx_pkt_2 = tx_pkt[2];
+    assign tx_pkt_3 = tx_pkt[3];
+    assign tx_valid_0 = tx_valid[0];
+    assign tx_valid_1 = tx_valid[1];
+    assign tx_valid_2 = tx_valid[2];
+    assign tx_valid_3 = tx_valid[3];
+    assign tx_ready[0] = tx_ready_0;
+    assign tx_ready[1] = tx_ready_1;
+    assign tx_ready[2] = tx_ready_2;
+    assign tx_ready[3] = tx_ready_3;
+`endif
 
     // =========================================================================
     // TOP-LEVEL INVARIANTS:
@@ -67,6 +131,7 @@ module solver_core #(
         IDLE,
         // INVARIANT: VDE runs only when PSE is done and no conflict exists.
         VDE_PHASE,              // Renamed from PROPAGATE: Request decision from VDE
+        VDE_FALLBACK,           // Fallback scan for unassigned variable
         // INVARIANT: PSE runs to completion. Logic must handle "Redundant" vs "Conflicting" props.
         PSE_PHASE,              // Renamed from ACCUMULATE_PROPS: Wait for PSE propagation
         QUERY_CONFLICT_LEVELS,  // NEW: Query decision levels for conflict clause (one per cycle)
@@ -93,8 +158,9 @@ module solver_core #(
     logic [31:0] cycle_count_q, cycle_count_d;
     logic [15:0] decision_level_q, decision_level_d;
     // PSE Propagation FIFO (Robust Capture)
-    parameter FIFO_DEPTH = 32;
-    parameter FIFO_WIDTH = $clog2(FIFO_DEPTH);
+    // Size to MAX_VARS to avoid dropping propagations in large UNSAT chains.
+    localparam int FIFO_DEPTH = MAX_VARS;
+    localparam int FIFO_WIDTH = $clog2(FIFO_DEPTH);
     // prop_fifo array removed
     // prop_wr_ptr, prop_rd_ptr removed
     logic prop_fifo_empty;
@@ -125,6 +191,7 @@ module solver_core #(
     // Resync iterator for rebuilding PSE assign_state from trail
     logic [31:0] resync_idx_q, resync_idx_d;
     logic        resync_started_q, resync_started_d;
+    logic        resync_append_learned_q, resync_append_learned_d;
     
     // Track whether we've started PSE in this propagation round
     // to avoid checking stale conflict_detected from prior rounds
@@ -152,7 +219,7 @@ module solver_core #(
     logic        restart_pending_q, restart_pending_d;
 
     // Simple conflict-triggered restart threshold (tunable)
-    localparam int RESTART_CONFLICT_THRESHOLD = 16'd0; // Restarts DISABLED per user request
+    localparam int RESTART_CONFLICT_THRESHOLD = 16'd64; // Enable restarts for long SAT runs
     
     // Loop counter for QUERY_CONFLICT_LEVELS state
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  query_index_q, query_index_d;
@@ -275,6 +342,13 @@ module solver_core #(
     // Rescan flag for handling conflicting propagations
     logic        rescan_required_q, rescan_required_d;
 
+    // VDE repeat-decision guard (avoid livelock on already-assigned vars)
+    logic [5:0]  vde_repeat_count_q, vde_repeat_count_d;
+    logic [31:0] vde_repeat_var_q, vde_repeat_var_d;
+
+    // Fallback scan index for unassigned variable search
+    logic [31:0] fallback_idx_q, fallback_idx_d;
+
 
     // Learned clause append iterator and muxed host/learned load to PSE
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  learn_idx_q, learn_idx_d;
@@ -329,6 +403,8 @@ module solver_core #(
     logic [4:0]  vde_bump_count;
     logic [15:0][31:0] vde_bump_vars;
     logic        vde_decay;
+    logic        vde_busy;
+    logic        vde_pending_ops;
 
     // Current decision literal (signed, includes phase)
     logic signed [31:0] decision_lit_q, decision_lit_d;
@@ -420,7 +496,9 @@ module solver_core #(
         .bump_var(vde_bump_var),
         .bump_count(vde_bump_count),
         .bump_vars(vde_bump_vars),
-        .decay(vde_decay)
+        .decay(vde_decay),
+        .busy(vde_busy),
+        .pending_ops(vde_pending_ops)
     );
 
     // Architectural Trace: VDE Decision
@@ -677,6 +755,7 @@ module solver_core #(
         // Fix Latches by assigning defaults
         cycle_count_d           = cycle_count_q;
         resync_started_d        = resync_started_q;
+        resync_append_learned_d = resync_append_learned_q;
         resync_idx_d            = resync_idx_q;
         restart_pending_d       = restart_pending_q;
         restart_count_d         = restart_count_q;
@@ -723,6 +802,11 @@ module solver_core #(
 
         // Resync Controller Defaults
         resync_start = 1'b0;
+
+        // VDE repeat-decision guard defaults
+        vde_repeat_count_d = vde_repeat_count_q;
+        vde_repeat_var_d   = vde_repeat_var_q;
+        fallback_idx_d     = fallback_idx_q;
 
         // Initialize temporary variables (prevent latches)
         lit = '0;
@@ -812,6 +896,9 @@ module solver_core #(
         iface_diverge_target   = 4'h0;
         iface_diverge_lit      = 32'h0;
         iface_force_ready      = 1'b1;
+        iface_clause_bcast_req = 1'b0;
+        iface_clause_lbd       = 8'h0;
+        iface_clause_ptr       = 64'h0;
 
         // VDE defaults
         vde_request       = 1'b0;
@@ -824,7 +911,7 @@ module solver_core #(
         vde_bump_valid    = 1'b0;
         vde_bump_var      = '0;
         vde_bump_count    = '0;
-        for (int k = 0; k < 8; k++) begin
+        for (int k = 0; k < 16; k++) begin
             vde_bump_vars[k] = '0;
         end
         vde_decay         = 1'b0;
@@ -841,6 +928,10 @@ module solver_core #(
                 trail_clear_all = 1'b1; // Maintain reset state while IDLE
                 vde_clear_all = 1'b1;
                 pse_clear_assignments = 1'b1;
+                resync_append_learned_d = 1'b0;
+                vde_repeat_count_d = '0;
+                vde_repeat_var_d   = '0;
+                fallback_idx_d     = 32'd1;
                 if (start_solve) begin
                     state_d = VDE_PHASE;
                     decision_level_d = '0;
@@ -854,6 +945,7 @@ module solver_core #(
                     trail_clear_all = 1'b1;
                     vde_clear_all = 1'b1;
                     pse_clear_assignments = 1'b1;
+                    resync_append_learned_d = 1'b0;
                     $strobe("[CORE %0d] Starting Solve. max_var=%0d, clauses=%0d", CORE_ID, vde_max_var, pse_clause_count);
                     verify_mode_d = 1'b0;
                 end
@@ -871,62 +963,165 @@ module solver_core #(
                 // This happens when PSE generates a prop that conflicts with the trail (e.g. 1=T, Prop=-1)
                 // This indicates a conflict that PSE missed because it acted on stale assignment state.
                 // Restarting the scan (with current assignment state) will force PSE to see the conflict.
-                if (rescan_required_q) begin
+                if (stats_restart_pending) begin
+                    // Conflict-driven restart: backtrack to level 0 and resync
+                    stats_inc_restart = 1'b1;
+                    stats_clear_restart_counter = 1'b1;
+                    decision_level_d = 16'd0;
+                    trail_truncate_en = 1'b1;
+                    trail_truncate_level = 16'd0;
+                    vde_unassign_all = 1'b1;
+                    pse_clear_assignments = 1'b1;
+                    resync_started_d = 1'b0;
+                    resync_idx_d     = 32'd0;
+                    resync_append_learned_d = 1'b0;
+                    rescan_required_d = 1'b0;
+                    prop_flush = 1'b1;
+                    state_d = RESYNC_PSE;
+                end else if (rescan_required_q) begin
                      resync_started_d  = 1'b0;
-                     resync_idx_d       = 32'd1;
+                     resync_idx_d       = 32'd0;
                      rescan_required_d  = 1'b0; // Clear flag
+                     resync_append_learned_d = 1'b0;
                      state_d            = RESYNC_PSE;
                 end else begin
                     // Request a decision from VDE
-                    vde_request = 1'b1;
+                    vde_request = !vde_pending_ops;
     
                     if (vde_decision_valid) begin
+                        // Guard: If VDE returns a var already assigned on the trail,
+                        // sync VDE (and optionally PSE) and request a new decision
+                        trail_query_var = vde_decision_var;
+                        if (trail_query_valid) begin
+                            vde_request = 1'b0; // Pause decision requests to let VDE absorb assignments
 
-                        // Capture decision literal with saved phase
-                        decision_lit_d = vde_decision_phase ? $signed(vde_decision_var) : -$signed(vde_decision_var);
+                            // Track repeat decisions to avoid livelock
+                            if (vde_decision_var == vde_repeat_var_q) begin
+                                vde_repeat_count_d = vde_repeat_count_q + 1'b1;
+                            end else begin
+                                vde_repeat_var_d   = vde_decision_var;
+                                vde_repeat_count_d = 6'd1;
+                            end
 
+                            if (vde_repeat_count_q >= 6'd16) begin
+                                // Fallback to a direct scan for an unassigned variable
+                                vde_repeat_count_d = '0;
+                                vde_repeat_var_d   = '0;
+                                fallback_idx_d     = 32'd1;
+                                state_d = VDE_FALLBACK;
+                            end else begin
+                                vde_assign_valid = 1'b1;
+                                vde_assign_var   = vde_decision_var;
+                                vde_assign_value = trail_query_value;
 
-    
-                        // [DEBUG TRACE] Log moved to always_ff
-    
-                        // Track this decision for potential backtracking
-                        last_decision_var_d = vde_decision_var;
-                        last_decision_phase_d = vde_decision_phase;
-                        
-                        // Broadcast decision to PSE so it stays in sync
-                        pse_assign_broadcast_valid = 1'b1;
-                        pse_assign_broadcast_var   = vde_decision_var;
-                        pse_assign_broadcast_value = vde_decision_phase;
-                        
-                        // Mark decision assignment in VDE
-                        vde_assign_valid = 1'b1;
-                        vde_assign_var   = vde_decision_var;
-                        vde_assign_value = vde_decision_phase;
-                        
-                        // Push decision to trail at INCREMENTED level
-                        // This allows level 0 for unit propagations, and first decision at level 1
-                        trail_push = 1'b1;
+                                // Keep PSE in sync if its shadow state is stale
+                                pse_assign_broadcast_valid = 1'b1;
+                                pse_assign_broadcast_var   = vde_decision_var;
+                                pse_assign_broadcast_value = trail_query_value;
 
-                        trail_push_var = vde_decision_var;
-                        trail_push_value = vde_decision_phase;
-                        trail_push_level = decision_level_q + 1'b1;
-                        trail_push_is_decision = 1'b1;
-                        
-                        // Increment decision level immediately
-                        decision_level_d = decision_level_q + 1'b1;
-                        
-                        // Start PSE propagation with chosen decision
-                        pse_start     = 1'b1;
-                        pse_started_d = 1'b1; // Mark that we've started PSE in this round
-                        cycle_count_d = '0;
-                        state_d       = PSE_PHASE; // CRITICAL FIX: Transition to PSE scanning!
+                                state_d = VDE_PHASE;
+                            end
+                        end else begin
+                            vde_repeat_count_d = '0;
+                            vde_repeat_var_d   = '0;
+                            // Capture decision literal with saved phase
+                            decision_lit_d = vde_decision_phase ? $signed(vde_decision_var) : -$signed(vde_decision_var);
+
+                            // [DEBUG TRACE] Log moved to always_ff
+
+                            // Track this decision for potential backtracking
+                            last_decision_var_d = vde_decision_var;
+                            last_decision_phase_d = vde_decision_phase;
+                            
+                            // Broadcast decision to PSE so it stays in sync
+                            pse_assign_broadcast_valid = 1'b1;
+                            pse_assign_broadcast_var   = vde_decision_var;
+                            pse_assign_broadcast_value = vde_decision_phase;
+                            
+                            // Mark decision assignment in VDE
+                            vde_assign_valid = 1'b1;
+                            vde_assign_var   = vde_decision_var;
+                            vde_assign_value = vde_decision_phase;
+                            
+                            // Push decision to trail at INCREMENTED level
+                            // This allows level 0 for unit propagations, and first decision at level 1
+                            trail_push = 1'b1;
+
+                            trail_push_var = vde_decision_var;
+                            trail_push_value = vde_decision_phase;
+                            trail_push_level = decision_level_q + 1'b1;
+                            trail_push_is_decision = 1'b1;
+                            
+                            // Increment decision level immediately
+                            decision_level_d = decision_level_q + 1'b1;
+                            
+                            // Start PSE propagation with chosen decision
+                            pse_start     = 1'b1;
+                            pse_started_d = 1'b1; // Mark that we've started PSE in this round
+                            cycle_count_d = '0;
+                            state_d       = PSE_PHASE; // CRITICAL FIX: Transition to PSE scanning!
+                        end
                     end else if (vde_all_assigned) begin
+                        vde_repeat_count_d = '0;
+                        vde_repeat_var_d   = '0;
                         // Nothing left to decide; run final verification
                         $strobe("[CORE %0d] VDE_PHASE: All assigned, max_var=%0d", CORE_ID, vde_max_var);
                         state_d = FINAL_VERIFY;
                     end else begin
                         // Wait for VDE to issue a decision
                         state_d = VDE_PHASE;
+                    end
+                end
+            end
+
+            // Fallback: linear scan for an unassigned variable if VDE repeats
+            VDE_FALLBACK: begin
+                // Default to start at 1 if uninitialized
+                if (fallback_idx_q == 0) begin
+                    fallback_idx_d = 32'd1;
+                end
+
+                if (vde_max_var == 0) begin
+                    // No variables known, move to final verify
+                    state_d = FINAL_VERIFY;
+                end else if (fallback_idx_q > vde_max_var) begin
+                    // All vars assigned
+                    state_d = FINAL_VERIFY;
+                    fallback_idx_d = 32'd1;
+                end else begin
+                    trail_query_var = fallback_idx_q;
+                    if (!trail_query_valid) begin
+                        // Use fallback decision with positive phase
+                        decision_lit_d = $signed(fallback_idx_q);
+                        last_decision_var_d = fallback_idx_q;
+                        last_decision_phase_d = 1'b1;
+
+                        // Broadcast decision to PSE and update VDE
+                        pse_assign_broadcast_valid = 1'b1;
+                        pse_assign_broadcast_var   = fallback_idx_q;
+                        pse_assign_broadcast_value = 1'b1;
+
+                        vde_assign_valid = 1'b1;
+                        vde_assign_var   = fallback_idx_q;
+                        vde_assign_value = 1'b1;
+
+                        // Push decision to trail
+                        trail_push = 1'b1;
+                        trail_push_var = fallback_idx_q;
+                        trail_push_value = 1'b1;
+                        trail_push_level = decision_level_q + 1'b1;
+                        trail_push_is_decision = 1'b1;
+
+                        decision_level_d = decision_level_q + 1'b1;
+                        pse_start     = 1'b1;
+                        pse_started_d = 1'b1;
+                        cycle_count_d = '0;
+                        state_d       = PSE_PHASE;
+                        fallback_idx_d = 32'd1;
+                    end else begin
+                        // Move to next var
+                        fallback_idx_d = fallback_idx_q + 1'b1;
+                        state_d = VDE_FALLBACK;
                     end
                 end
             end
@@ -970,6 +1165,11 @@ module solver_core #(
                     
                     // Consume from FIFO
                     prop_pop = 1'b1;
+
+                    // Guard: ignore invalid literal 0 entries (should never occur)
+                    if (prop_var == 0) begin
+                        // Do not propagate or update trail on invalid literal
+                    end else begin
                     
                     // Query trail to see if this variable is already assigned
                     trail_query_var = prop_var;
@@ -1009,15 +1209,20 @@ module solver_core #(
                         
                         if (existing_value == new_value) begin
                             // REDUNDANT: Variable already has this value.
-                            // This effectively means the clause is satisfied.
-                            // Safe to ignore without action.
+                            // Keep PSE in sync if its shadow state is stale.
+                            pse_assign_broadcast_valid  = 1'b1;
+                            pse_assign_broadcast_var    = prop_var;
+                            pse_assign_broadcast_value  = existing_value;
+                            pse_assign_broadcast_reason = fifo_reason;
                         end else begin
                             // CONFLICT: PSE wants to set X to !V, but Trail says X=V.
                             // This implies the clause generating this propagation is actually a CONFLICT clause.
                             // PSE missed this because it had stale state (thought X was unassigned).
                             // ACTION: Force re-broadcast of the TRUE value to PSE, then RESCAN.
                             // The Rescan will force PSE to re-evaluate the clause with the correct value, raising a conflict.
-//                            $strobe("[CORE %0d] CONFLICT PROP: var=%0d is val=%0d, PSE tried val=%0d. Forcing Resync & Rescan.", CORE_ID, prop_var, existing_value, new_value);
+                            // synopsys translate_off
+                            if (DEBUG > 0) $strobe("[CORE %0d] CONFLICT PROP: var=%0d existing=%0d new=%0d reason=%0d", CORE_ID, prop_var, existing_value, new_value, fifo_reason);
+                            // synopsys translate_on
                             
                             // Re-broadcast the correct existing value to PSE
                             pse_assign_broadcast_valid = 1'b1;
@@ -1027,6 +1232,7 @@ module solver_core #(
                             // Trigger full rescan to catch the conflict
                             rescan_required_d = 1'b1;
                         end
+                    end
                     end
                 end
                 
@@ -1063,7 +1269,8 @@ module solver_core #(
                             // Timeout: Force RESYNC to ensure PSE state is clean before next decision
 //                            $strobe("[CORE %0d] Timeout: Resyncing PSE state before continuing.", CORE_ID);
                             resync_started_d = 1'b0;
-                            resync_idx_d     = 32'd1;
+                            resync_idx_d     = 32'd0;
+                            resync_append_learned_d = 1'b0;
                             state_d          = RESYNC_PSE;
                         end else begin
                             // PSE finished cleanly with no actions -> Ready for next decision
@@ -1169,6 +1376,7 @@ module solver_core #(
                         resync_idx_d     = 32'd0;
                         learn_idx_d      = 4'd0; // CRITICAL FIX: Reset learned clause index
                         rescan_required_d = 1'b0;
+                        resync_append_learned_d = 1'b1;
                         state_d          = RESYNC_PSE;
                     end
                 end
@@ -1302,6 +1510,7 @@ module solver_core #(
                 resync_started_d = 1'b0;
                 resync_idx_d     = 32'd0;
                 rescan_required_d = 1'b0;
+                resync_append_learned_d = 1'b1;
                 state_d          = RESYNC_PSE;
             end
             
@@ -1346,10 +1555,19 @@ module solver_core #(
                          pse_assign_broadcast_value = cae_trail_read_value;
                          pse_assign_broadcast_reason = 16'hFFFF; // Safe default for replay
 
+                         // synopsys translate_off
+                         if (DEBUG > 0) $strobe("[CORE %0d] RESYNC[%0d/%0d] var=%0d val=%0d", CORE_ID, resync_idx_q, trail_height, cae_trail_read_var, cae_trail_read_value);
+                         // synopsys translate_on
+
                          resync_idx_d = resync_idx_q + 1;
                     end else begin
                         // Done Replaying
-                        state_d = APPEND_LEARNED;
+                        if (resync_append_learned_q) begin
+                            state_d = APPEND_LEARNED;
+                        end else begin
+                            state_d = RESYNC_PSE_SETTLE;
+                        end
+                        resync_append_learned_d = 1'b0;
                         
                         // Wait! If this was called from PSE_START_AFTER_LEARN, we shouldn't append learned again?
                         // PSE_START_AFTER_LEARN is effectively dead code or used for re-sync.
@@ -1466,7 +1684,11 @@ module solver_core #(
             learn_idx_q        <= '0;
             resync_idx_q       <= '0;
             resync_started_q   <= 1'b0;
+            resync_append_learned_q <= 1'b0;
             rescan_required_q  <= 1'b0;
+            vde_repeat_count_q <= '0;
+            vde_repeat_var_q   <= '0;
+            fallback_idx_q     <= 32'd1;
             conflict_clause_len_q <= '0;
             for (int i = 0; i < 16; i++) begin
                 conflict_clause_q[i] <= '0;
@@ -1494,7 +1716,11 @@ module solver_core #(
             learn_idx_q        <= learn_idx_d;
             resync_idx_q       <= resync_idx_d;
             resync_started_q   <= resync_started_d;
+            resync_append_learned_q <= resync_append_learned_d;
             rescan_required_q  <= rescan_required_d;
+            vde_repeat_count_q <= vde_repeat_count_d;
+            vde_repeat_var_q   <= vde_repeat_var_d;
+            fallback_idx_q     <= fallback_idx_d;
             conflict_clause_len_q <= conflict_clause_len_d;
             for (int i = 0; i < 16; i++) begin
                 conflict_clause_q[i] <= conflict_clause_d[i];

@@ -1,0 +1,682 @@
+                                                                                                                                                                   VeriSAT: the Hardware Design of Modern SAT Solver
+                                                                                                                                                                                                                         Yue Tao1 , Shaowei Cai1,2,*
+                                                                                                                                                                                       1
+                                                                                                                                                                                         Key Laboratory of System Software, Institute of Software, Chinese Academy of Sciences
+                                                                                                                                                                                      2
+                                                                                                                                                                                        School of Computer Science and Technology, University of Chinese Academy of Sciences
+2025 IEEE/ACM International Conference On Computer Aided Design (ICCAD) | 979-8-3315-1560-7/25/$31.00 ©2025 IEEE | DOI: 10.1109/ICCAD66269.2025.11240752
+
+
+
+
+                                                                                                                                                                                                                           Beijing, China
+                                                                                                                                                                                                                 taoyue@iscas.ac.cn, caisw@ios.ac.cn
+
+
+
+                                                                                                                                                              Abstract—VeriSAT is the first modern SAT solver implemented en-                 2) Preprocessing and in-processing: Simplification of the origi-
+                                                                                                                                                           tirely in synthesizable SystemVerilog, leveraging FPGA architecture for               nal or intermediate problem before or during solving[28, 17].
+                                                                                                                                                           hardware acceleration. This paper introduces the design of VeriSAT,
+                                                                                                                                                                                                                                              3) Parallelism: The development of parallel SAT solvers utiliz-
+                                                                                                                                                           focusing on hardware-specific optimizations that significantly improve
+                                                                                                                                                           performance over traditional software-based solvers. By rethinking key                ing multicore and distributed computing allows the division
+                                                                                                                                                           SAT components for hardware, VeriSAT introduces custom data struc-                    of the solving process across multiple instances, optimizing
+                                                                                                                                                           tures and parallelized processes to accelerate solving efficiency.                    performance through intelligent job scheduling and reduced
+                                                                                                                                                              Central to VeriSAT’s architecture are hardware-optimized data struc-               communication overhead [34, 22].
+                                                                                                                                                           tures. A linked-list based literal-watching mechanism, enhanced with
+                                                                                                                                                           cached watching literals, reduces latency in unit propagation. Addition-           4) Optimization towards hardware: Improvements in the use of
+                                                                                                                                                           ally, a concurrent propagation tree enables simultaneous traversal for                modern CPU architectures, such as adopting of lazy evaluation
+                                                                                                                                                           faster conflict detection. The solver’s pipelined clause learning further             data structures [8], utilizing custom memory allocators [13],
+                                                                                                                                                           boosts throughput, allowing rapid conflict analysis without compromising              and compiler directives for enhanced cache prefetching [32].
+                                                                                                                                                           performance.
+                                                                                                                                                              Extensive benchmarking demonstrates that VeriSAT outperforms two                 As the complexity of modern computing devices and compilers
+                                                                                                                                                           other FPGA-based solvers, SAT-Hard and SAT-Accel, by a factor of                 grows, optimizing algorithms to fully leverage hardware becomes
+                                                                                                                                                           1044x and is 18x faster, respectively, on curated benchmark instances.           more difficult. This paper takes a different approach, starting with
+                                                                                                                                                           Additionally, VeriSAT shows a 30x speedup over the popular CPU-based
+                                                                                                                                                           MiniSat solver for specific datasets, validating the effectiveness of our
+                                                                                                                                                                                                                                            the hardware itself, designing and optimizing a dedicated hardware
+                                                                                                                                                           design optimizations.                                                            solution for SAT solving to achieve superior performance and energy
+                                                                                                                                                              VeriSAT represents a significant leap forward in FPGA-based SAT               efficiency. However, this endeavor presents several challenges:
+                                                                                                                                                           solving, offering unprecedented efficiency through its hardware-tailored
+                                                                                                                                                           design. This work lays the foundation for future advancements in                   1) Design Paradigm Shift: Software algorithms assume abun-
+                                                                                                                                                           hardware-accelerated SAT solvers and paves the way for more scalable,                 dant, flexible storage and high-level operation abstractions,
+                                                                                                                                                           high-performance solutions in both academic and industrial applications.              whereas hardware requires adapting to fixed resources and con-
+                                                                                                                                                                                                                                                 straints, necessitating a rethinking of the algorithm’s structure.
+                                                                                                                                                             Index Terms—FPGA, CDCL, SAT, solver, hardware, verification
+                                                                                                                                                                                                                                              2) Ensuring Correctness and Completeness: Unlike software,
+                                                                                                                                                                                      I. I NTRODUCTION                                           hardware implementations must explicitly manage all aspects
+                                                                                                                                                                                                                                                 of the algorithm to guarantee correctness and completeness.
+                                                                                                                                                              The Boolean satisfiability (SAT) problem is a classical problem
+                                                                                                                                                                                                                                              3) Optimizing for Hardware: Identifying components of the
+                                                                                                                                                           of proving whether an assignment of truth values to variables exists
+                                                                                                                                                                                                                                                 algorithm that can be parallelized or pipelined to fully exploit
+                                                                                                                                                           to make the Boolean formula true. It is a hard problem in com-
+                                                                                                                                                                                                                                                 the advantage of hardware’s flexibility and concurrence.
+                                                                                                                                                           puter science and is the first problem identified as NP-Complete[2].
+                                                                                                                                                           Meanwhile, due to the simplicity of its form, a wide range of                       To address these challenges, we present VeriSAT, a SAT solver
+                                                                                                                                                           problems from diverse domains can be naturally expressed as SAT                  designed with synthesizable SystemVerilog and implemented in
+                                                                                                                                                           problems, including traditional tasks of artificial intelligence, such as        FPGA for precise tracking of hardware structure and behavior at
+                                                                                                                                                           the automatic theorem proving [10, 25, 18] and automated planning                fine granularity, enabling full visibility into the solver’s internals
+                                                                                                                                                           [35]. In the realm of electronic design automation (EDA), SAT                    for targeted optimizations and efficient hardware mapping of each
+                                                                                                                                                           solvers are instrumental in tasks such as formal verification [6],               solving stage. In particular, following contributions are made in this
+                                                                                                                                                           combinational equivalence checking [7, 27, 33], and automatic test               paper:
+                                                                                                                                                           pattern generation [3, 30].                                                        • Optimized Memory Scheme and Data Structure: We de-
+                                                                                                                                                              A SAT solver is a software tool that determines the satisfiability of             signed a hardware-friendly memory scheme and custom data
+                                                                                                                                                           a given Boolean formula, typically expressed in Conjunctive Normal                   structures tailored for FPGA, minimizing memory latency and
+                                                                                                                                                           Form (CNF). After decades of development, modern SAT solvers                         maximizing throughput.
+                                                                                                                                                           are now capable of efficiently handling very large and complex                     • Concurrent Propagation Engine: To enhance the efficiency of
+                                                                                                                                                           problems from various domains. Recent advancements in SAT solver                     the unit propagation stage, we have developed a concurrent prop-
+                                                                                                                                                           technology focus on three main areas:                                                agation engine capable of simultaneously processing multiple
+                                                                                                                                                              1) Heuristic improvements: More intelligent variable selection                    propagation operations. This parallelization significantly reduces
+                                                                                                                                                                 strategies have been developed to prioritize variables that are                the time required to propagate literals, accelerating the overall
+                                                                                                                                                                 likely to lead to conflicts, increase the speed of solving and                 performance of the solver during this critical phase.
+                                                                                                                                                                 reduce the search space [13, 24].                                            • Pipelined Conflict Analysis Engine: In the stage of conflict
+                                                                                                                                                                                                                                                analysis and clause learning, we have implemented pipeline op-
+                                                                                                                                                             This work was supported by the Strategic Priority Research Program of the
+                                                                                                                                                           Chinese Academy of Sciences (Grant No. XDA0320000 and XDA0320300),
+                                                                                                                                                                                                                                                timizations to handle the complex tasks of identifying conflicts
+                                                                                                                                                           and by the CCF-Huawei Populus Grove Fund.                                            and generating learned clauses in a more efficient manner. This
+                                                                                                                                                             *Corresponding author: Shaowei Cai (caisw@ios.ac.cn).                              pipeline design improves throughput and reduces the cycle time
+
+
+
+
+                                                                                                                                                                      Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+    for resolving conflicts and makes the discovery of conflict faster,               Algorithm 1: Modern CDCL Algorithm Framework
+    which is crucial to maintaining high performance in solving SAT              1  while res = Undef do
+    problems.                                                                     2    if prop(F, V ) = CONF then
+  • Extensive    Benchmarking and Comparison: We con-                             3        bakLev ← conf(F, V );
+    ducted extensive experiments to evaluate the performance of                   4        if bakLev < 0 then
+    VeriSAT against two other FPGA-based CDCL SAT solvers:                        5            res ← UNSAT;
+    SystemVerilog-based SAT-Hard and HLS-based SAT-Accel.
+    The results show that VeriSAT outperforms SAT-Hard by a                       6            else
+    factor of 1044x and is 18x faster than SAT-Accel on curated                   7                back(F, V, bakLev);
+    benchmark instances, showcasing the effectiveness of our design               8        else
+    choices and optimizations. We also conducted comparison be-                   9            if all variables are assigned then
+    tween MiniSat on CPU, which shows that VeriSAT outperforms                   10                res ← SAT;
+    MiniSat by 30x for specific datasets.
+                                                                                 11            else
+                           II. P RELIMINARIES                                    12                decide(V );
+A. Boolean Satisfiability Problem                                                13                updateHeuristics(V );
+   The Boolean Satisfiability (SAT) problem is about proving the                 14                if a restart condition is met then
+satisfiability of a Boolean formula. A Boolean formula consists of               15                    restart(F, V );
+a finite set of Boolean variables, assuming V = {x1 , x2 , ..., xn }. A
+                                                                                 16        if rephase condition is met then
+                                        W its negation ¬x. A clause
+literal l of the variable x is either x or
+                                                                                 17             rephase(V );
+ω is a disjunction of literals, given by j lj . A Conjunctive Normal
+Form (CNF) formula ϕ is given by:                                                18        if clause deletion condition is met then
+                              ^        ^_                                        19             reduceClauseDB(F );
+                        ϕ=       ωi =       lij
+                                i         i   j                                  20    return res;
+   Variables assume one of three states: True, False, or Undet
+(unassigned). A literal l is satisfied if it evaluates to True under the
+current assignment, and unsatisfied if it evaluates to False. A clause
+                                                                                         a conflict is encountered or no further unit clauses can be
+(a disjunction of literals) is satisfied if at least one literal is satisfied,
+                                                                                         propagated.
+unsatisfied if all literals are unsatisfied and remain Undet otherwise.
+                                                                                       • Conflict Analysis (conf): When a conflict is detected, the
+A clause with exactly one Undet literal and all others unsatisfied is
+                                                                                         solver analyzes the conflicting clauses to identify a new learned
+called a unit clause.
+                                                                                         clause. This process identifies the First Unique Implication
+   We distinguish between two notions of unit clause. A structural
+                                                                                         Point (First UIP), which represents a key decision point in the
+unit clause refers to a clause that contains exactly one literal in the
+                                                                                         implication graph that causally leads to the conflict.
+original or learned formula. In contrast, during solving, we refer
+                                                                                       • Non-chronological Backtracking (back): The algorithm then
+to a clause as a unit clause under assignment when it contains
+                                                                                         backtracks non-chronologically to the First UIP. By backtracking
+exactly one unassigned literal and all others are currently falsified.
+                                                                                         to the appropriate level and enforcing the learned clause (which
+Unless otherwise specified, we use the ’unit clause’ to refer to this
+                                                                                         typically negates the UIP), CDCL guarantees that the solver
+assignment-dependent definition.
+                                                                                         does not revisit the same conflict based on the current partial
+B. Modern SAT Solving Algorithm                                                          assignment.
+                                                                                       • Variable Decision (decide): If no conflict occurs, a new
+   The first practical complete algorithm is DPLL[1] (Davis-Putnam-
+Logemann-Loveland), which explores all possible assignments to                           decision is made by selecting a variable and assigning a value to
+variables using a depth-first search approach. Conflict-Driven Clause                    it. Typically, heuristics are used to prioritize variables, improving
+Learning (CDCL), the successor of DPLL, incorporates clause learn-                       search efficiency by guiding the solver toward likely solutions.
+ing and non-chronological backtracking, which significantly reduce                  CDCL can be viewed as a process of consecutive refutation: each
+search space and allow solvers to solve larger and more complex                  time unit propagation uncovers a conflict, the solver locates the
+instances more efficiently. The CDCL algorithm is widely considered              First UIP in the implication graph and derives a learned clause
+the core of modern SAT solvers, such as MiniSat [13] and Kissat [29],            that blocks the conflicting partial assignment. By backjumping
+which are optimized with advanced heuristics and data structures.                non-chronologically to just before the First UIP and adding this clause
+Modern SAT solvers have introduced several optimizations to further              to the database, CDCL incrementally prunes the conflicting region
+improve performance, such as dynamic heuristics for variable selec-              of the search space, avoiding redundant exploration. Repeating this
+tion, restarts to escape local minima, clause elimination to reduce              cycle progressively tightens the formula, allowing CDCL to converge
+the size of the clause database, and advanced memory management                  rapidly when refuting unsatisfiable formulas.
+techniques to optimize resource usage.                                              While CDCL excels at proving unsatisfiability through successive
+   The Conflict-Driven Clause Learning (CDCL) algorithm consists                 refutations, efficiently finding a satisfying assignment requires careful
+of several fundamental stages that guide its operation through the               guidance of the search process. To this end, modern SAT solvers rely
+search space. In the following, we describe these key components:                heavily on heuristics to prioritize decisions and clause management.
+   • Unit Propagation (prop): This stage repeatedly applies unit                 Variable selection heuristics and clause quality metrics play crucial
+      propagation, deducing the values of variables based on the                 roles in steering the solver toward promising regions of the search
+      current partial assignment. The process continues until either             space, accelerating the discovery of a satisfying assignment when one
+
+
+
+
+           Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+exists.                                                                                              Processing   Programming
+  These techniques include:                                                                          System       Logic
+  • Restart: Periodic restarts help the solver escape local minima by
+                                                                                        Literal Memory               VeriSAT Solving Logic                  Conflict Analysis Engine
+     abandoning the current search state and beginning a new search.                                                  Clause Context                           Clause Learn Logic
+     This prevents the solver from becoming stuck in unfruitful areas                                                  Literal Watching Lists
+     of the search space.                                                                                                                                      Backtracking Logic
+                                                                                                                       Clause Entry Table
+  • Phase Saving: Phase saving retains the most recent variable
+     assignments from previous search attempts, which can be reused
+                                                                                                                      Variable Context                      Propagation Engine
+     in future decisions. This minimizes the impact of unsuccessful
+                                                                                                                       Propagation Trail                           Dispatcher
+     searches and guides the solver toward a solution.
+  • Variable Decision Heuristics: These heuristics guide the                            DDR4 Controller                Variable Assignment                      C C C C
+     decision-making process in choosing which variables to assign.
+     By dynamically adjusting the decision strategy based on the                        AXI4-Lite Slave            External Memory                          Variable Decision
+     search history, heuristics help prioritize variables that are more                                            Access                                   Engine
+     likely to lead to a solution.                                                                                                                State
+                                                                                                                   I/O Manager                  Registers
+                                                                                 Input CNF formula
+  Besides, what is not shown in the algorithm list is the data structure         SAT/UNSAT result
+of storing information.                                                          Cycle stats.
+       III. P ROGRESS OF FPGA- BASED SAT S OLVERS AND
+                        ACCELERATORS                                                                 Fig. 1. The Overall architecture of VeriSAT
+
+A. Early Works
+   The idea of accelerating SAT problem solving with FPGAs dates                Additionally, SAT-Accel [36], a high-level synthesis (HLS)-based
+back to the late 1990s and early 2000s. Skliarova et al. [11] summa-            SAT solver, further pushes the boundaries of hardware-accelerated
+rized the early efforts in this domain, noting that, with the gradual           SAT solving.
+adoption of commercial FPGA devices, pioneering research began to
+explore their potential for SAT solving. Notable early works include                                                   IV. V ERI SAT
+Suyama et al. [9], Plazner [5], and Zhong [4], among others. These              A. Overview of VeriSAT design
+works introduced the first category of FPGA-based SAT solvers,                     As depicted in Figure 1, The solving logic of VeriSAT solver can
+referred to as instance-specific implementation. The limited hardware           be organized as three principal modules, each corresponding to a core
+resources and the need for frequent reconfiguration led to the decline          step of the CDCL framework:
+of this approach.
+                                                                                   • Propagation Search Engine (PSE): Implements Boolean Con-
+B. Recent Works                                                                       straint Propagation (BCP). PSE scans watched clauses to detect
+   Several notable advancements in FPGA-based SAT solving                             conflicts or unit clauses. Upon encountering a conflict, it invokes
+emerged after 2017, as summarized by Sohanghpurwala. [23]. During                     the Conflict Analysis Engine; if no conflict and no further unit
+this period, research focused on both incomplete and complete                         clauses remain, it hands control to the Variable Decision Engine.
+SAT solving algorithms, exploiting FPGA’s parallelism capabilities.                • Conflict Analysis Engine (CAE): Performs conflict analysis
+
+Early FPGA implementations, including those based on local search                     when PSE reports a conflict. CAE analyzes the implication
+algorithms like WSAT, demonstrated the potential for hardware                         graph to derive a learned clause and compute the backtracking
+acceleration in SAT solving.                                                          level. If the backtracking level is negative, the solver concludes
+   For incomplete SAT algorithms, FPGA implementations of WSAT                        UNSAT. Otherwise, CAE appends the learned clause to the
+were explored in [12] and [15], while [20] describes an FPGA imple-                   clause database, backjumps to the computed decision level, and
+mentation of ProbSAT, another local search-based approach. These                      returns the control to PSE.
+works highlighted FPGA’s ability to efficiently explore the solution               • Variable Decision Engine (VDE): Responsible for branching
+
+space; however, the limitations of local search algorithms meant that                 decisions. VDE applies a dynamic variable selection heuristic
+these solutions could not guarantee satisfiability or unsatisfiability.               to pick an unassigned variable and assigns it a truth value. If
+   As FPGA hardware matured, many FPGA-based complete SAT                             all variables are assigned without conflict, the solver concludes
+solvers adopted heterogeneous architectures, using FPGAs as accel-                    SAT. Otherwise, VDE updates the heuristic data structures and
+erators for specific parts of the CDCL algorithm. Operations such                     invokes PSE to continue propagation.
+as unit propagation and clause learning were recognized for their                  It should be noted that, based on the foundation of the current
+potential to be parallelized or pipelined, which led to several efforts         CDCL algorithm, all three main modules must run alternately to
+in FPGA-based acceleration. For example, [21] and [14] attempted to             maintain the correctness and completeness of the algorithm. Unlike
+accelerate the unit propagation stage by creating multiple hardware             other hardware pipelining schemes that require multiple modules to
+threads, while [16] used FPGAs to speed up the conflict analysis                run in the same time window, making any modules mentioned above
+procedure.                                                                      work concurrently will violate the correctness and completeness of
+   For complete SAT solvers implemented directly in hardware, a                 the algorithm.
+batch of DPLL-based designs are proposed , such as in [31] and [19].
+These implementations focus on embedding the DPLL algorithm into                B. Memory Scheme in VeriSAT
+FPGA hardware for more efficient SAT solving. A recent contribution               The memory scheme of VeriSAT is designed to decouple context
+in this direction is SAT-Hard [26], which proposes a monolithic                 and memory storage as much as possible, with each functional mod-
+state-machine-based implementation of the full CDCL framework.                  ule owning its respective memory. Unlike other FPGA applications,
+
+
+
+
+          Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+  BlockRAM                                                  External Memory
+       0       0x00
+                       LBD PTR LEN NEXT WLIT                                                                   Propagation Dispatcher
+      0x01                0x00 0x03 0x04
+      0x12                                                                                                                                     Conf.
+      0x02      0x04      0x13 0x06 0x12                                                        Read-Write                                     Broadcasting
+                                                                                                Aribtration
+      0xAB
+                0x12      0x2A 0x05 0x00                                                                           C       C       C       C
+      0x32                                      AXI4-Lite                                                                                       Multi-Write
+      0xEA                                                                                                                                      Arbitration
+  2×VAR_MAX
+                        Clause Memory                       Massive Literal Memory
+                                                                                                 VAR
+Fig. 2. The Memory scheme of Clause Entry Table and Literal Watching
+                                                                                                 MEM
+Lists
+
+
+such as stream processors, where data flow and is processed on the fly,
+                                                                                                              Watching Lists
+SAT solving algorithms like CDCL are stateful and involve massive
+search spaces. Therefore, the design of the memory scheme and                                       Fig. 3. The anatomy of Propagation Engine
+storage devices must come first, before translating the procedural
+algorithm into hardware logic. To optimize for both capacity and                           and memory overwriting is eliminated, avoiding the complexities
+extensibility, the memory is organized into a multi-level memory                           of designing a dynamic memory allocator on FPGA. Second,
+hierarchy, with distinct types of memory allocated based on their                          the atomic operations allowed by this design enable concurrent
+usage and access patterns. This approach ensures that the layout and                       read/write access to the watching lists, improving overall per-
+behavior of the memory system directly influence the algorithmic                           formance and scalability.
+logic, allowing for efficient and scalable hardware implementations.
+                                                                                        The variable context is responsible for storing the state of the
+   VeriSAT makes extensive use of two types of memory: on-chip                       current variables and their associated information:
+memory (OCM), typically arranged in the FPGA fabric and directly
+                                                                                        • Trail: The trail is a core memory structure that underpins the
+accessible by the logic, and external memory, such as DDR-SDRAM,
+                                                                                           unit propagation, clause learning, and backtracking processes.
+which can be accessed through peripherals or custom communication
+                                                                                           It represents the current state of the solving process and is
+devices. For the SAT solving logic, the memory is categorized into
+                                                                                           crucial for all solving logic. The trail is stored in OCM for high-
+two primary contexts that are critical for the CDCL algorithm: the
+                                                                                           speed access, and additional contextual information is associated
+clause context and the variable context. The clause context deals with
+                                                                                           with it, such as the decision level and reason clause storage.
+the CNF formula itself, including literals and clauses. Its memory
+                                                                                           Controlled by the propagation engine, the trail is designed to
+management is structured as follows:
+                                                                                           support safe concurrent access, incorporating mechanisms for
+  • Literal Memory: All literals are stored in external memory be-                         read-write arbitration and prioritized writes to ensure efficient
+    cause of their large volume and infrequent updates. This storage                       operation during these critical tasks.
+    choice ensures that the memory footprint remains manageable                         • Variable Assignment: The variable assignments need to be
+    while maintaining quick access to clauses. Two registers are set                       updated and accessed concurrently during the search process.
+    to record the current number of literals and the address pointer                       To ensure fast access, this information is stored in LUTRAM,
+    of the newly written literal, for helping the clause addition. Note                    which guarantees that the results are available with 1 clock cycle.
+    that when a true unit clause (the clause that contains only one                     • Historical Phases and Variable Activity Scores: These data
+    literal) is being added, either from original clauses or learned                       structures are used to inform the heuristics when selecting new
+    clauses, it will trigger backtracking and assign the variable as                       variables. The activity scores reflect the importance of each
+    assumption.                                                                            variable, helping the solver prioritize the variables that are more
+  • Clause Entry Table and Literal Watching Lists: The clause                              likely to lead to a solution.
+    entry table is stored linearly in OCM. In most cases, the table is                  In summary, the memory scheme in VeriSAT is carefully designed
+    not moved or shifted; new clauses, whether from initialization                   to support the core operations of the CDCL algorithm, while lever-
+    or clause learning, are simply appended at the end of the table.                 aging the FPGA’s memory hierarchy for optimal performance. By
+    Each clause entry also caches frequently checked literals and                    efficiently managing memory for both the clause context and the
+    stores the LBD (literal block distance) information for restarting.              variable context, the memory scheme well supports the algorithm
+    This design optimizes the memory access time by minimizing                       built upon it.
+    the need to repeatedly fetch literals from external memory.
+    The watching list is implemented as a linked list built upon the                 C. Unit Propagation with the Concurrent Propagation Engine
+    clause entry table, as shown in Fig, 2. In addition to a list of                   1) Design of the Concurrent Propagation Engine: Traditional
+    list headers, the clause entries themselves are linked together,                 software SAT solvers process the trail of implied literals strictly
+    allowing for flexible clause management. This structure enables                  sequentially, scanning each watching list one literal at a time. In
+    efficient reordering of clause entries within the same watching                  contrast, VeriSAT’s Concurrent Propagation Engine (CPE) em-
+    list without the need to move or copy the actual data.                           ploys a single dispatcher and multiple concurrent cursors to exploit
+    This approach provides two key benefits. First, the operations                   FPGA concurrency (shown in Figure 3). The dispatcher and cursors
+    are significantly simplified: the need for frequent data movement                operate as follows:
+
+
+
+
+              Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+  1) Dispatching. When a new literal is assigned (either by decision                 Algorithm 2: Conflict Analysis with Inlined Clause Mini-
+     or backjump), the dispatcher immediately assigns it to an idle                  mization
+     cursor, which begins scanning the watch list of that literal.                    Input : Conflict clause C, decision levels level [·],
+  2) Concurrent Propagation. Whenever a cursor discovers a                                    reason clauses reason[·], assignment trail trail
+     propagatable literal, it returns it to the dispatcher, which en-                 Output: Learned clause learnt, backtrack level
+     queues it on the trail and dispatches another cursor to scan its
+                                                                                 1 learnt ← [ ];
+     corresponding watch list.
+                                                                                 2 resLit ← 0;
+  3) Conflict Broadcast. If any cursor detects a conflict, it reports                                           
+                                                                                 3 topLevel ← level |C[0]| ;
+     this to the dispatcher, which then issues an instantaneous halt
+                                                                                 4 repeat
+     signal to all other cursors and forwards the conflicting clause
+                                                                                 5     paths ← 0;
+     to the Conflict Analysis Engine.
+                                                                                 6     for i ← (resLit = 0) 0 : 1 to |C| − 1 do
+  4) Completion. If no conflict arises, the dispatcher continues to
+                                                                                 7         lit ← C[i];
+     assign the remaining unscanned literals to idle cursors. Once
+                                                                                 8         var ← |lit|;
+     all newly enqueued literals have been processed and no further
+                                                                                 9         if ¬visited[var] ∧ level[var] > 0 then
+     propagation is possible, control returns to the Variable Decision
+                                                                                10             visited[var] ← true;
+     Engine.
+                                                                                11             if level[var] ≥ topLevel then
+   2) Maintaining Read-Write Consistency: The concurrent execu-                 12                  paths ← paths + 1;
+tion of cursors may cause data hazard, we implement a lightweight               13             else
+arbitration mechanism to maintain the read-write consistency:                   14                  redundant ← true;
+  • Read-Write Arbitration: Before each read or write, every                    15                  foreach u ∈ reason[var] do
+    cursor broadcasts its target address to a comparison network.               16                      if |u| ̸= var ∧ ¬visited[|u|] then
+    If a cursor attempts to read an address currently being written             17                           redundant ← false;
+    by another cursor , the network detects an address match and
+    stalls the reading cursor until the writing one finishes. This               18                  if ¬redundant then
+    enforces true Read-After-Write semantics both for checking                   19                      append lit to learnt;
+    variable assignments and for moving clause entries between
+    watching lists.                                                             20    find last visited literal lit in trail with level ≥ topLevel,
+  • Multi Write Arbitration: When multiple cursors contend                              assign it to resLit;
+    to write simultaneously (to the assignment table or clause                  21    visited[|resLit|] ← false;
+    database), the fixed priority scheme ensures that only the highest          22    paths ← paths − 1;
+    priority cursor proceeds, preventing livelock and guaranteeing              23    C ← reason[|resLit|];
+    forward progress.                                                           24 until paths = 0;
+
+   Because unit propagation is confluent (the final conflict or assign-         25    learnt[0] ← −resLit;
+ment set does not depend on operation order), these concurrency
+controls preserve the logical behavior of the CDCL algorithm while
+delivering significant performance gains on FPGA. The number of
+cursors used in the system is determined by the available hardware               done in combinational logic. Since we stored all the literals in the
+resources, including the number of ports for communicating with                  external memory, this can be a performance impact to the whole
+external memory and the logical resources required for implementing              solving process. To mitigate this situation, we introduced the fine-
+the comparison network.                                                          grained pipeline based on delayed shift registers. The registers will
+                                                                                 be reset to zero, and unconditionally shift after reset.
+D. Conflict Analysis Engine                                                         The delayed registers works like the history version of data. For
+                                                                                 example, we note the delayed registers of retrieved literal as lit−1 ,
+   The Conflict Analysis Engine (CAE) module implements the
+                                                                                 lit−2 , lit−3 , indicating that they store the data of lit 1, 2, and 3
+essence of the First-UIP method entirely on the FPGA fabric. The
+                                                                                 cycles before. When issuing the read request, the registers are reset
+First-UIP is identified as the most recently assigned decision at
+                                                                                 within same cycle. When lit−3 is not zero, it means it is the data
+the current highest decision level. By negating the value of this
+                                                                                 retrieved 3 cycles ago, and henceforth a valid literal data. Similar
+assignment, the same conflict can be avoid for subsequent assignment.
+                                                                                 procedure is applied to retrieving the decision level and visited mark
+The learned clause, as the result of consecutive resolution, can avoid
+                                                                                 data.
+entering the same conflict regardless to the current assignment. The
+                                                                                    With this simple pipeline design, the efficiency of conflict analysis
+procedure is listed in Algorithm 2.
+                                                                                 in VeriSAT is dramatically improved.
+   Unlike the propagation check, the procedure of clause learning
+requires to check each literal of the clauses that participated the unit
+                                                                                 E. Variable Decision Engine
+propagation.
+   The process of checking if a literal is the First UIP consists of three          The Variable Decision Engine (VDE) is invoked after unit propa-
+steps, 1) retrieve the literal, 2) check the decision level, and 3) the          gation when no conflicts are detected. It selects the next branching
+visited mark. In our implementation, retrieving literal from external            variable using the Variable State Independent Decay Sum (VSIDS)
+requires 4 cycles according to the clock of FPGA, and retrieving                 heuristic. The VDE maintains an activity score table for each variable,
+the decision level and visited mark require another 3 cycles. (the               which is initialized to 0 and updated during conflict analysis. The
+first cycle is for setting the read address.) And a comparison of the            decay factor of 0.9275 is calculated as x − (x ≫ 16), avoiding
+literal’s decision level with the highest level of conflict clause is            floating-point operations to minimize the hardware complexity.
+
+
+
+
+           Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+                  Read            Valid                                                                     VI. E VALUATION AND B ENCHMARK
+                  Transac. Literal Data
+                  Starts          Arrived                                                    A. General Benchmark
+                  Lit Lit Lit Lit Lit Lit Lit Lit Lit
+                                                                                                We evaluated the performance of VeriSAT on a set of diverse
+     Retrieving       Lit-1 Lit-1 Lit-1 Lit-1 Lit-1 Lit-1 Lit-1 Lit-1 Lit-1
+        Literal                                                                              instances of SAT problems. The data sets used in this evaluation
+       (3 cyc.)             Lit-2 Lit-2 Lit-2 Lit-2 Lit-2 Lit-2 Lit-2 Lit-2 Lit-2            include instances from both the SATCOMP benchmark and SATLIB,
+                                  Lit-3 Lit-3 Lit-3 Lit-3 Lit-3 Lit-3 Lit-3 Lit-3 Lit-3      which are widely recognized for benchmarking SAT solvers.
+                                   Lv Lv Lv Lv Lv Lv Lv Lv Lv                                   UF and UUF instances: These are generated from the SATLIB
+                                  Mk Mk Mk Mk Mk Mk Mk Mk Mk                                 benchmark, where the UF instances are random 3-SAT problems
+   Check Decision                       Lv-1 Lv-1 Lv-1 Lv-1 Lv-1 Lv-1 Lv-1 Lv-1 Lv-1         and the UUF instances are similar but with a higher percentage of
+     Level and
+    Visited mark                       Mk-1  Mk-1Mk-1Mk-1Mk-1Mk-1Mk-1Mk-1Mk-1                unsatisfiable instances.
+      (2 cyc.)
+                                              Lv-2 Lv-2 Lv-2 Lv-2 Lv-2 Lv-2 Lv-2 Lv-2 Lv-2      QG, BMC, HOLE, II, and LOGISTICS: These instances also
+                                                                                             come from SATLIB, each presenting different problem structures and
+                                             Mk-2Mk-2Mk-2Mk-2Mk-2Mk-2Mk-2Mk-2Mk-2
+                                                                                             variable-to-clause ratios, which provide valuable insight into solver
+   Comparison                                Cmp Cmp CmpCmp Cmp Cmp CmpCmp Cmp               performance across a range of configurations.
+                                              Valid
+                                              Decision Level                                    PLANNING and BATTLESHIP: These are families of instances
+                                              Visited Mark
+                                              Arrived                                        from the SATCOMP benchmark, obtained from the benchmark-
+                                                                                             database.de. They are designed to test the solver’s ability to handle
+Fig. 4. The Pipeline optimization. The cells on horizontal direction indicates               real-world problem structures, typically involving complex optimiza-
+the cycles used                                                                              tion problems.
+                                                                                                The results of our experiments, shown in Table II, present the
+                                                                                             average number of cycles and the average time (in ms) to solve
+   The VDE uses a min-heap to efficiently select the variable with the                       SAT instances using VeriSAT@150MHz on an FPGA, alongside
+least activity score in O(log n) time. The maintenance of the min-heap                       MiniSat running on a high performance AMD EPYC 7542 CPU.
+is non-blocking; updates to the variable scores and decision-making                          The comparison highlights the performance of VeriSAT in terms of
+logic will check if the heap is busy and wait until maintenance is                           its cycle count and time per instance, as well as the speedup over
+completed.                                                                                   MiniSat.
+   Additionally, phase saving ensures the variable phase is stored                              Notably, the instances from PLANNING and BATTLESHIP (from
+before a restart and restored afterward, reducing redundant searches                         SATCOMP) demonstrate extreme speedups of 2.34x and 11.71x,
+and improving solver efficiency.                                                             respectively, highlighting VeriSAT’s efficiency in tackling structured
+                                                                                             problem instances that might involve more complex heuristics and
+                                                                                             optimizations. For QG, BMC, and HOLE, which are larger and
+                      V. I MPLEMENTATION OF V ERI SAT                                        more challenging problem instances, VeriSAT achieves speedups of
+                                                                                             1.12x, 9.41x, and 251.83x, respectively. These results suggest that
+   We deployed VeriSAT on a Xilinx ZU9EG FPGA platform,                                      the FPGA-based implementation scales well with larger problems,
+which features a Xilinx XCZU9EG core and a Processing System                                 delivering a significant reduction in execution time compared to the
+(PS) that includes four Cortex-A53 processors operating at 1 GHz.                            CPU-based solver.
+The PS system also provides a DDR4 controller and four high-                                    However, for the UF/UUF dataset as the number of variable grows,
+performance AXI4 slave ports connected to the Programmable Logic                             the average solving time of VeriSAT grows fast. This demonstrate
+(PL), or FPGA fabric. The clock frequency for this configuration                             some incapability of handling random instances, which can be further
+was set at 150 MHz, ensuring high throughput and efficient ex-                               studied.
+ecution. The underlying Alinx AXU9EG platform provides four
+Micron MT40A512M16LY-062E DDR4 memory modules, with 2GB                                      B. Solver Comparison
+dedicated to the SAT solver. To communicate with DDR4 memory,                                   We also performed a comparison between the state-of-the-art
+we implemented an AXI4-Lite master IP that interfaces between                                (SOTA) stand-alone FPGA-based CDCL SAT solver, including SAT-
+the PL and the PS. We used Xilinx Vivado 2023.4 for synthesizing                             Accel and SAT-Hard.
+and implementing the design on the FPGA, and Verilator 5.020 for                                Table III presents a comparison of resource utilization and im-
+simulation and verification. The final design of VeriSAT can hold up                         plementation level of the algorithm between VeriSAT, SAT-Hard,
+to 16,384 variables and 1,048,576 literals in total. Table I shows the                       SAT-Accel, and MiniSat. and Table IV shows the runtime compar-
+comparison of resource utilization between VeriSAT, SAT-Accel, and                           ison based on the public benchmark instance and record. VeriSAT
+SAT-Hard.                                                                                    demonstrates significant speedups, achieving up to 1043.97x over
+   In the input stage, the text-based DIMACS CNF file is first parsed                        SAT-Hard and 17.94x over SAT-Accel. Its FPGA-based design excels
+in a driver program residing on the PS side. The clauses and literals                        in structured problems, while SAT-Accel and SAT-Hard struggle,
+are transmitted sequentially through the data port by the parsing                            particularly with larger or more complex instances. But it should be
+process, while the address port serves as the control signal. Each                           noted that for the publicly accessible instances that are used by SAT-
+literal is sequentially stored in the Literal Memory, and an additional                      Accel, all from SATCOMP, are not able to be solved by VeriSAT,
+control signal is used to indicate whether the current literal is the last                   due to the limitation of hardware resource and randomness.
+one in a clause.                                                                                SAT-Hard is the first known stand-alone FPGA-based SAT solver
+   Finally, the registers containing the solve result, status and statis-                    that implements CDCL. However, due to its monolithic state ma-
+tical information such as the cycle counter are exposed to the driver                        chine design and the limited logic resources on the FPGA device,
+program for monitoring and control.                                                          its solving ability is not ideal. SAT-Accel, on the other hand, is
+
+
+
+
+              Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+                                                                TABLE I
+                           C OMPARISON OF FPGA R ESOURCE U TILIZATION FOR SAT-ACCEL , V ERI SAT, AND SAT-H ARD
+
+                  2*Resource          SAT-Accel (XCU55C)                   VeriSAT (XCZU9EG)                 SAT-Hard (XC7Z020)
+                                    Used   Available       %            Used    Available      %          Used   Available      %
+                  LUT             251,283  1,303,680  19.00%           15,770    274,080   5.75%          1,894    53,200   3.56%
+                  FF              324,891  2,607,360  12.00%            9,175    548,160   1.67%            765   106,400   0.72%
+                  DSP                  48      9,024   0.50%                0       2,520  0.00%              0          0  0.00%
+                  BRAM                419      2,016  21.00%              707         912 77.52%            109        140 77.86%
+                  URAM                778        960  81.00%                0           0  0.00%              0          0  0.00%
+
+
+                                                                  TABLE II
+                                       C OMPARISON OF SAT S OLVER P ERFORMANCE ON D IFFERENT DATASETS
+
+                                Dataset                                      VeriSAT@150MHz                           MiniSat               Speedup
+      Dataset           #Var. Range       #Cl. Range        #Inst            Cycles  Time (ms)          TO      Mean Time (ms)       TO
+      UF20                 20 - 20          91 - 91         1000           2,803.15       0.02            0                0.6        28         30.0
+      UF50                 50 - 50         218 - 218        1000          39,240.15       0.26            0                0.7        11         2.69
+      UF75                 75 - 75         325 - 325         100         298,172.04       1.99            0                1.1         0         0.55
+      UF100               100 - 100        430 - 430        1000       1,712,141.66      11.41            0                1.9         0         0.17
+      UF125               125 - 125        538 - 538         100      16,593,148.63     110.62            0                4.3         0         0.04
+      UF150               150 - 150        645 - 645         100     107,043,051.36     713.62           18                9.1         0         0.01
+      UUF50                50 - 50         218 - 218        1000          91,667.29       0.61            0                0.8         0         1.31
+      UUF75                75 - 75         325 - 325         100         633,991.85       4.23            0                1.5         0         0.35
+      UUF100              100 - 100        430 - 430         999       5,110,190.56      34.07            0                3.2         0         0.09
+      UUF125              125 - 125        538 - 538         100      39,052,766.50     260.35            0                8.2         0         0.03
+      UUF150              150 - 150        645 - 645         100     143,538,806.50     956.93            0               21.8         0         0.02
+      QG                 343 - 2197     9685 - 148957         22      27,193,919.44     181.29            1              202.2         0         1.12
+      BMC               2810 - 13215    11683 - 65025         13       2,709,938.33      18.07            0              170.7         0         9.41
+      HOLE                42 - 110         133 - 561            5     10,474,512.25      69.83            0             1010.5         0         14.5
+      II                  66 - 1728       186 - 24792         41       1,594,420.02      10.63            0               18.0         0         1.69
+      LOGISTICS          828 - 4713      6718 - 21991           4      2,408,013.05      16.05            0               16.5         0         1.03
+      PLANNING            48 - 2958       153 - 28371           9        983,125.57       6.55            0               15.3         0         2.34
+      BATTLESHIP          28 - 1368       58 - 16308            7        348,537.25       2.32            0              27.16         0        11.71
+
+
+the latest stand-alone FPGA-based SAT solver with Tier 1 FPGA                                              TABLE III
+hardware, demonstrating tremendous solving ability. However, since                C OMPARISON OF SAT S OLVERS : V ERI SAT, SAT-H ARD , SAT-ACCEL ,
+                                                                                                            M INI S AT
+it uses HLS (High-Level Synthesis), the mapping of the algorithm to
+hardware is left to the EDA tool, making it challenging to track the             Solver              VeriSAT       SAT-Hard       SAT-Accel      MiniSat
+correspondence between the hardware and the procedural code.                     Model              XCZU9EG        XC7Z020         XCU55C       EPYC 7542
+   In summary, VeriSAT utilizes a custom FPGA architecture that                  Freq.              150 MHz        Unknown        230 MHz        2.0 GHz
+directly maps the CDCL procedural components with a simple                                            System
+                                                                                 Impl.                               Verilog         C++             C++
+and reliable hardware design, which achieves the balance between                                      Verilog
+performance and cost. It shows the potential of solving SAT problems             CDCL                   ✓              ✓              ✓               ✓
+on specific domain.                                                              2-lit Watching         ✓                             ✓               ✓
+                                                                                 Phase Saving           ✓                             ✓               ✓
+             VII. C ONCLUSION AND F UTURE W ORK                                  VSIDS                  ✓                             ✓               ✓
+                                                                                 Restart             Glucose                         Luby            Luby
+   In this work, we introduced VeriSAT, an FPGA-based SAT solver
+                                                                                 Clause Del.                                          ✓               ✓
+that takes advantage of a custom hardware-friendly memory scheme,
+                                                                                 Clause Min.                                          ✓               ✓
+concurrent propagation engine, and pipelined conflict analysis engine
+to significantly enhance performance. Through extensive benchmark-
+ing, we demonstrated that VeriSAT outperforms other FPGA-based
+CDCL SAT solvers, such as SAT-Hard and SAT-Accel, by factors                    better method for handling clause deletion to overcome the efficiency
+of 1043.97x and 17.94x respectively. The results highlight the effec-           drawbacks as the number of learned clauses grows. Second, the cur-
+tiveness of our design choices and optimizations, making VeriSAT                rent design has long critical paths that limit the operating frequency.
+a promising solution for high-performance SAT solving, particularly             We will further modularize the design and optimize the data path
+for well-structured, real-world problems with less randomness.                  to reduce these critical paths, thus increasing the clock frequency.
+   Looking ahead, there are several key areas for future improvement.           Finally, while CDCL is an effective SAT solving algorithm, it is not
+First, due to the nature of the watching list, implementing efficient           fully optimized for FPGA architectures. We will continue to explore
+clause deletion in VeriSAT remains challenging. We aim to design a              variants of the CDCL algorithm that can better exploit the fine-
+
+
+
+
+          Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+                                                                                                            TABLE IV
+                                                                                  C OMPARISON OF P ROBLEM I NSTANCES WITH V ERI SAT, SA, AND SH
+                                                                                                              T IMES
+
+                                                                                  Problem Name           Var        Cls    VS(ms)      SA(ms)         SH(ms)
+                                                                                  hole7                   56        204      10.68        125             330
+                                                                                  hole8                   72        297      62.05        691           2,270
+                                                                                  hole9                   90        415     344.11       N/A           15,290
+                                                                                  uf100-010              100        430       0.15       1.00             580
+                                                                                  uf125-01               125        538     181.06       4.00           1,160
+                                                                                  uf150-08               150        645      19.85       1.00           3,920
+                                                                                  uuf100-02              100        430      18.43       4.00           4,940
+                                                                                  uuf125-05              125        538     717.54       7.00           4,900
+                                                                                  CBS-k3-n100-           100        403       0.57       2.00           2,340
+                                                                                  m403-k3-10
+                                                                                  aim-200-3-4-           200        320        0.27        4.00         1,200
+                                                                                  yes1-4
+                                                                                  aim-200-3-4-no-        200        320        3.89        0.30           10
+                                                                                  yes1-4
+                                                                                  ii16e2                 222      1,186      10.61        4.00          5,760
+                                                                                  ii32e1                 222      1,186       1.05        0.10             20
+                                                                                  battleship-6-9          54        171       1.44      514.00              -
+                                                                                  bmc-ibm-1            9,685     55,870     134.41       54.00              -
+                                                                                  bmc-ibm-2            2,810     11,683       1.94        1.00              -
+Fig. 5. The layout of implemented VeriSAT on Xilinx Zynq UltraScale+              bmc-ibm-5            9,396     41,207      21.08        8.00              -
+ZU9EG. The Blue parts indicates the utilized hardware resource. Observed          bmc-ibm-7            8,710     39,774      86.37        8.00              -
+that most of the BRAM (the vertical bars) are utilized.
+                                                                                  qg3-08                 512     10,469       2.47           1              -
+                                                                                  qg6-10               1,000     43,956      16.01          31              -
+grained parallelism and pipelining capabilities of FPGA platforms                 qg6-12               1,728     69,311     183.22         135              -
+to further enhance VeriSAT’s performance.                                         qg7-10               1,000     43,756      19.12          29              -
+                                                                                  qg7-12               1,728     70,327     264.23         292              -
+                             R EFERENCES                                                                                  Speedup:      17.94x       1043.97x
+ [1]   Martin Davis and Hilary Putnam. “A Computing Procedure for
+       Quantification Theory”. In: J. ACM 7.3 (July 1960), pp. 201–
+       215. ISSN: 0004-5411. DOI: 10.1145/321033.321034.                         [7]   E.I. Goldberg, M.R. Prasad, and R.K. Brayton. “Using SAT for
+ [2]   Stephen A. Cook. “The complexity of theorem-proving proce-                      combinational equivalence checking”. In: Proceedings Design,
+       dures”. In: Proceedings of the Third Annual ACM Symposium                       Automation and Test in Europe. Conference and Exhibition
+       on Theory of Computing. STOC ’71. Shaker Heights, Ohio,                         2001. 2001, pp. 114–121. DOI: 10.1109/DATE.2001.915010.
+       USA: Association for Computing Machinery, 1971, pp. 151–                  [8]   Matthew W. Moskewicz et al. “Chaff: engineering an efficient
+       158. ISBN: 9781450374644. DOI: 10 . 1145 / 800157 . 805047.                     SAT solver”. In: DAC ’01. New York, NY, USA: Association
+       URL: https://doi.org/10.1145/800157.805047.                                     for Computing Machinery, June 22, 2001, pp. 530–535. ISBN:
+ [3]   P. Stephan, R.K. Brayton, and A.L. Sangiovanni-Vincentelli.                     978-1-58113-297-7. DOI: 10.1145/378239.379017. URL: https:
+       “Combinational test generation using satisfiability”. In: IEEE                  //doi.org/10.1145/378239.379017.
+       Transactions on Computer-Aided Design of Integrated Circuits              [9]   T. Suyama et al. “Solving satisfiability problems using recon-
+       and Systems 15.9 (1996), pp. 1167–1176. DOI: 10.1109/43.                        figurable computing”. en. In: IEEE Transactions on Very Large
+       536723.                                                                         Scale Integration (VLSI) Systems 9.1 (Feb. 2001), pp. 109–116.
+ [4]   Peixin Zhong et al. “Accelerating Boolean satisfiability with                   ISSN : 1063-8210, 1557-9999. DOI : 10.1109/92.920826.
+       configurable hardware”. In: Apr. 1998, pp. 186–195. DOI: 10.             [10]   S. Chaki et al. “Modular verification of software components
+       1109/FPGA.1998.707896. URL: https://ieeexplore.ieee.org/                        in C”. In: IEEE Transactions on Software Engineering 30.6
+       document/707896.                                                                (2004), pp. 388–402. DOI: 10.1109/TSE.2004.22.
+ [5]   O. Mencer and M. Plazner. “Dynamic circuit generation for                [11]   I. Skliarova and A. De Brito Ferrari. “Reconfigurable hardware
+       Boolean satisfiability in an object-oriented design environ-                    SAT solvers: a survey of systems”. en. In: IEEE Transactions
+       ment”. en. In: Maui, HI, USA: IEEE Comput. Soc, 1999, p. 8.                     on Computers 53.11 (Nov. 2004), pp. 1449–1461. ISSN: 0018-
+       ISBN : 978-0-7695-0001-0. DOI : 10.1109/HICSS.1999.772883.                      9340. DOI: 10.1109/TC.2004.102.
+       URL: http://ieeexplore.ieee.org/document/772883/.                        [12]   K. Kanazawa and T. Maruyama. “An FPGA solver for
+ [6]   Edmund Clarke et al. “Bounded Model Checking Using Sat-                         WSAT algorithms”. In: International Conference on Field
+       isfiability Solving”. en. In: Formal Methods in System Design                   Programmable Logic and Applications, 2005. 2005, pp. 83–88.
+       19.1 (July 2001), pp. 7–34. ISSN: 1572-8102. DOI: 10.1023/                      DOI : 10.1109/FPL.2005.1515703.
+       A : 1011276507260. URL: https : / / doi . org / 10 . 1023 / A :          [13]   Niklas Sörensson and Niklas Een. “Minisat v1.13-a SAT
+       1011276507260 (visited on 09/22/2024).                                          solver with conflict-clause minimization”. In: International
+
+
+
+
+          Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+       Conference on Theory and Applications of Satisfiability Testing                  of Integrated Circuits and Systems 39.10 (2020), pp. 3081–
+       (Jan. 1, 2005).                                                                  3092. DOI: 10.1109/TCAD.2019.2946254.
+[14]   Mandar Waghmode et al. “An Efficient, Scalable Hardware                   [28]   Armin Biere, Matti Järvisalo, and Benjamin Kiesl. “Prepro-
+       Engine for Boolean SATisfiability”. In: ISSN: 1063-6404. Oct.                    cessing in SAT Solving”. In: Handbook of Satisfiability. 2021.
+       2006, pp. 326–331. DOI: 10.1109/ICCD.2006.4380836. URL:                   [29]   Nils Froleyks et al. “SAT Competition 2020”. In: Artificial
+       https://ieeexplore.ieee.org/document/4380836.                                    Intelligence 301 (2021), p. 103572. ISSN: 0004-3702. DOI:
+[15]   Kenji Kanazawa and Tsutomu Maruyama. “An FPGA Solver                             https://doi.org/10.1016/j.artint.2021.103572.
+       for Very Large SAT Problems”. In: 2007 International Con-                 [30]   Junhua Huang et al. “Accelerate SAT-Based ATPG via Pre-
+       ference on Field Programmable Logic and Applications. 2007,                      processing and New Conflict Management Heuristics”. In: Pro-
+       pp. 493–496. DOI: 10.1109/FPL.2007.4380697.                                      ceedings of the 27th Asia and South Pacific Design Automation
+[16]   Kanupriya Gulati et al. “FPGA-based hardware acceleration                        Conference. ASPDAC ’22. Taipei, Taiwan: IEEE Press, 2022,
+       for Boolean satisfiability”. In: ACM Trans. Des. Autom. Elec-                    pp. 365–370. ISBN: 9781665421355.
+       tron. Syst. 14.2 (Apr. 2009). ISSN: 1084-4309. DOI: 10.1145/              [31]   Jinghui Jiang et al. “P4-DPLL: accelerating SAT solving
+       1497561 . 1497576. URL: https : / / doi . org / 10 . 1145 / 1497561 .            using switching ASICs”. In: Proceedings of the ACM SIG-
+       1497576.                                                                         COMM Workshop on Formal Foundations and Security of
+[17]   Matti Järvisalo, Marijn J. H. Heule, and Armin Biere. “Inpro-                   Programmable Network Infrastructures. FFSPIN ’22. Ams-
+       cessing Rules”. In: Automated Reasoning. Ed. by Bernhard                         terdam, Netherlands: Association for Computing Machinery,
+       Gramlich, Dale Miller, and Uli Sattler. Berlin, Heidelberg:                      2022, pp. 24–30. ISBN: 9781450393294.
+       Springer Berlin Heidelberg, 2012, pp. 355–370. ISBN: 978-                 [32]   Alexander Nadel. “Introducing Intel(R) SAT Solver”. In: 25th
+       3-642-31365-3.                                                                   International Conference on Theory and Applications of Sat-
+[18]   Jun Sakoh, Noriaki Yoshimasa, and Yoshinobu Kawabe. “Au-                         isfiability Testing (SAT 2022). Ed. by Kuldeep S. Meel and
+       tomated proof for equivalence of telephone systems”. In: 2013                    Ofer Strichman. Vol. 236. Leibniz International Proceedings
+       IEEE/ACIS 12th International Conference on Computer and                          in Informatics (LIPIcs). Dagstuhl, Germany: Schloss Dagstuhl
+       Information Science (ICIS). 2013, pp. 497–502. DOI: 10.1109/                     – Leibniz-Zentrum für Informatik, 2022, 8:1–8:23. ISBN: 978-
+       ICIS.2013.6607888.                                                               3-95977-242-6. DOI: 10.4230/LIPIcs.SAT.2022.8.
+[19]   Khadija Bousmar et al. “A new FPGA-based DPLL algorithm                   [33]   Zhihan Chen et al. “Integrating Exact Simulation into Sweep-
+       to improve SAT solvers”. In: 2015 27th International Con-                        ing for Datapath Combinational Equivalence Checking”. In:
+       ference on Microelectronics (ICM). 2015, pp. 287–290. DOI:                       2023 IEEE/ACM International Conference on Computer Aided
+       10.1109/ICM.2015.7438045.                                                        Design (ICCAD). IEEE, Oct. 2023, pp. 1–9. DOI: 10 . 1109 /
+[20]   Ali Asgar Sohanghpurwala and Peter Athanas. “An effective                        iccad57390.2023.10323876. URL: http://dx.doi.org/10.1109/
+       probability distribution SAT solver on reconfigurable hard-                      ICCAD57390.2023.10323876.
+       ware”. In: 2016 International Conference on ReConFigurable                [34]   Dominik Schreiber and Peter Sanders. “MallobSat: Scalable
+       Computing and FPGAs (ReConFig). 2016, pp. 1–6. DOI: 10.                          SAT Solving by Clause Sharing”. In: J. Artif. Int. Res. 80 (Sept.
+       1109/ReConFig.2016.7857150.                                                      2024). ISSN: 1076-9757. DOI: 10 . 1613 / jair. 1 . 15827. URL:
+[21]   Ma Kefan et al. “An FPGA SAT solver based on enhanced con-                       https://doi.org/10.1613/jair.1.15827.
+       straint”. In: May 2017, pp. 25–30. DOI: 10.1109/FPGA4GPC.                 [35]   Cai Li-Sha and Lin Er-Min. “Design of Lychee Picking Robot
+       2017 . 8008962. URL: https : / / ieeexplore . ieee . org / document /            Based on SAT Path Planning Algorithm and Fuzzy Obstacle
+       8008962.                                                                         Avoidance Strategy”. In: 2024 IEEE 4th International Con-
+[22]   Ludovic Le Frioux et al. “PaInleSS: A Framework for Parallel                     ference on Information Technology, Big Data and Artificial
+       SAT Solving”. In: Theory and Applications of Satisfiability                      Intelligence (ICIBA). Vol. 4. 2024, pp. 347–351. DOI: 10.1109/
+       Testing – SAT 2017. Ed. by Serge Gaspers and Toby Walsh.                         ICIBA62489.2024.10868311.
+       Cham: Springer International Publishing, 2017, pp. 233–250.               [36]   Michael Lo, Mau-Chung Frank Chang, and Jason Cong. “SAT-
+       ISBN : 978-3-319-66263-3.                                                        Accel: A Modern SAT Solver on a FPGA”. In: Proceedings
+[23]   Ali Asgar Sohanghpurwala, Mohamed W. Hassan, and Peter                           of the 2025 ACM/SIGDA International Symposium on Field
+       Athanas. “Hardware accelerated SAT solvers—A survey”. In:                        Programmable Gate Arrays. FPGA ’25. Monterey, CA, USA:
+       Journal of Parallel and Distributed Computing 106 (Aug. 1,                       Association for Computing Machinery, 2025, pp. 234–246.
+       2017), pp. 170–184. ISSN: 0743-7315. DOI: 10.1016/j.jpdc.                        ISBN : 9798400713965. DOI : 10.1145/3706628.3708869. URL :
+       2016.12.014.                                                                     https://doi.org/10.1145/3706628.3708869.
+[24]   Gilles Audemard and Laurent Simon. “On the Glucose SAT
+       Solver”. In: International Journal on Artificial Intelligence
+       Tools 27.01 (2018), p. 1840001.
+[25]   Aye Myint Myat, Khine Khine Htwe, and Nobuo Funabiki.
+       “Fill-a-Pix Puzzle as a SAT Problem”. In: 2019 International
+       Conference on Advanced Information Technologies (ICAIT).
+       2019, pp. 244–249. DOI: 10.1109/AITC.2019.8920898.
+[26]   Buse Ustaoglu et al. “SAT-Hard: A Learning-Based Hardware
+       SAT-Solver”. In: Aug. 2019, pp. 74–81. DOI: 10.1109/DSD.
+       2019.00021.
+[27]   Vinicius N. Possani et al. “Parallel Combinational Equivalence
+       Checking”. In: IEEE Transactions on Computer-Aided Design
+
+
+
+
+           Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+

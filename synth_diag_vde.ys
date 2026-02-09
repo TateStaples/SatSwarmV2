@@ -1,0 +1,11 @@
+# Diagnose VDE synthesis time
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/utils/sfifo.sv
+read_verilog -sv src/Mega/vde_heap_yosys.sv
+read_verilog -sv src/Mega/vde.sv
+chparam -set MAX_VARS 256 vde
+hierarchy -check -top vde
+proc
+opt
+stat

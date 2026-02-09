@@ -1,0 +1,15 @@
+# PSE with tiny params - find where proc blocks
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/utils/sfifo.sv
+read_verilog -sv src/Mega/pse.sv
+chparam -set MAX_VARS 32 pse
+chparam -set MAX_CLAUSES 32 pse
+chparam -set MAX_LITS 64 pse
+hierarchy -check -top pse
+log *** HIERARCHY DONE ***
+proc
+log *** PROC DONE ***
+opt
+log *** OPT DONE ***
+stat

@@ -8,7 +8,7 @@ TEST_COUNT=""
 DRY_RUN=0
 # Quiet by default: only print failures and final summary
 QUIET=1
-RESULT_LOG="sim/scripts/regression_results.log"
+RESULT_LOG="logs/regression_results.log"
 
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 # Go to repo root

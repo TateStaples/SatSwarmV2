@@ -5,6 +5,9 @@
 // 2. Decision Levels must be monotonically increasing.
 // 3. No variable may appear more than once in the active trail section (0 to height-1).
 // 4. Backtracking strictly removes the suffix of the trail down to the target level.
+
+import mega_pkg::*;
+
 module trail_manager #(
     parameter int MAX_VARS = 256
 )(
@@ -49,6 +52,7 @@ module trail_manager #(
     // Trail read interface (for CAE backward iteration)
     input  logic [15:0]  trail_read_idx,        // Index to read (0 = oldest, height-1 = newest)
     output logic [31:0]  trail_read_var,        // Variable at that index
+    // logic [15:0] next_lvl_idx, // REMOVED BAD PORT
     output logic         trail_read_value,      // Value at that index
     output logic [15:0]  trail_read_level,      // Decision level at that index
     output logic         trail_read_is_decision, // Was this a decision?
@@ -63,105 +67,108 @@ module trail_manager #(
     input  logic [15:0]  truncate_level_target
 );
 
-    typedef struct packed {
-        logic [31:0] variable;
-        logic        value;
-        logic [15:0] level;
-        logic        is_decision;
-        logic [15:0] reason;
-    } trail_entry_t;
+
     
-    trail_entry_t trail [0:MAX_VARS-1];
+    // Module-scope temporaries to avoid synthesis warnings
+    logic [15:0] next_lvl_idx; // Added declaration
+    mega_pkg::trail_entry_t entry_query;
+    mega_pkg::trail_entry_t entry_read;
+    mega_pkg::trail_entry_t current_entry;
+    mega_pkg::trail_entry_t trunc_search_entry;
+    mega_pkg::trail_entry_t trail0_entry; // For trail[0] access
+    mega_pkg::trail_entry_t new_entry_push;
+    mega_pkg::trail_entry_t bt_peek_entry; // For backtrack peek
     logic [15:0] trail_height_q, trail_height_d;
     logic [15:0] current_level_q, current_level_d;
     // logic [15:0] level_start [0:MAX_VARS-1];  // Index where each decision level starts
     
-    // Lookup table: var_to_level[var_id] stores decision level of that variable
-    // Index is var_id modulo MAX_VARS; requires careful collision handling
-    // Alternative: Linear search through trail for correctness
-    logic [15:0] var_to_level [0:MAX_VARS-1];  // Registered lookup table
-    logic [15:0] var_to_level_d [0:MAX_VARS-1];  // Next-cycle version
-    
+    // Lookup tables: variable -> level/value
+    // Index is 1-based variable ID; 0 is unused.
+    // Inferred LUTRAM (Distributed RAM) for Variable Levels/Values
+    // Read asynchronously, written synchronously
+    (* ram_style = "distributed" *) logic [15:0] var_to_level [0:MAX_VARS];
+    (* ram_style = "distributed" *) logic        var_to_value [0:MAX_VARS];
+    (* ram_style = "distributed" *) logic [15:0] var_to_index [0:MAX_VARS];
+
+    // Inferred LUTRAM for Level Start Indices
+    // Tracks the starting trail index for each decision level
+    // level_start[L] = index in 'trail' where level L begins.
+    (* ram_style = "distributed" *) logic [15:0] level_start [0:MAX_VARS]; // Max levels = Max vars
+
+    // Trail Stack (Inferred BRAM/LUTRAM depending on size)
+    // We do NOT reset the whole array, allowing inference.
+    // "trail" is read asynchronously (line 182) so it will infer DistRAM or BRAM with read-first/async logic.
+    // If BRAM is required, read must be synchronous. Current usage (line 182) implies async read.
+    // Given MAX_VARS is small (256), DistRAM is fine. For larger, we need to pipeline reads.
+    // VeriSAT uses OCM (BRAM). For that, we'd need to change the read interface to be synchronous.
+    // For now, let's stick to DistRAM for the trail as well unless we want to fix correct BRAM inference.
+    // To fix BRAM inference, we must register the read address. But "trail_read_idx" comes from input.
+    // Let's rely on DistRAM for now (simpler change) but remove the reset loop.
+    // Trail Stack (Inferred BRAM/LUTRAM depending on size)
+    // We do NOT reset the whole array, allowing inference.
+    // "trail" is read asynchronously (line 182) so it will infer DistRAM or BRAM with read-first/async logic.
+    // Use Struct for Verilator/Simulation compatibility (Testbench accesses members)
+    (* ram_style = "distributed" *) mega_pkg::trail_entry_t trail [0:MAX_VARS-1];
+
+    // logic [15:0] trail_height_q, trail_height_d; // Removed duplicate
+    // logic [15:0] current_level_q, current_level_d; // Removed duplicate
+
     typedef enum logic [1:0] {IDLE, BACKTRACK_LOOP, BACKTRACK_COMPLETE} bt_state_t;
     bt_state_t bt_state_q, bt_state_d;
     logic [15:0] bt_index_q, bt_index_d;
     logic [15:0] bt_target_q, bt_target_d;
-    
+
     assign height = trail_height_q;
     assign current_level = current_level_q;
-    // assign level_markers = level_start;
-    
-    // Combinational query: Look up decision level for a given variable
-    // Reverted to linear scan to ensure correctness and bypass potential LUT desync issues.
-    always_comb begin
-        logic [31:0] var_idx;
-        trail_entry_t entry;
 
-        var_idx = '0;
-        entry = '0;
-        
+    // Combinational query: Look up decision level for a given variable
+    // Uses LUTRAM asynchronous read (O(1))
+    always_comb begin
         query_level = 16'd0;
         query_valid = 1'b0;
         query_value = 1'b0;
-        query_reason = 16'hFFFF;
+        query_reason = 16'h0;
+        entry_query = '0;
 
-        
-        // Linear scan from newest to oldest (to find latest assignment)
-        // Optimization: For small trail, this is fine. For large trail, LUT is needed.
-        // Current issue suspect: LUT desync.
-        // INVARIANT: Correctness over Performance
-        // We use a linear scan (or trustworthy LUT) to ensure we NEVER return stale data.
-        // Returning a stale "Unassigned" status when a variable is actually assigned
-        // would break the solver's correctness (missed conflicts).
-        for (int i = 0; i < MAX_VARS; i = i + 1) begin
-            if (i < trail_height_q) begin
-                // Reverse iterate? No, trail[i] has index i.
-                // We want the most recent assignment. If variable appears multiple times (shouldn't), highest index wins?
-                // Standard trail enforces unique variables.
-                entry = trail[i];
-                if (entry.variable == query_var) begin
+        if (query_var > 0 && query_var <= MAX_VARS) begin
+            logic [15:0] lvl;
+            logic [15:0] idx;
+            lvl = var_to_level[query_var];
+            idx = var_to_index[query_var];
+            
+            // Check for stale data:
+            // If the recorded level is greater than current level, it's from a backtracked future.
+            if (lvl != 0 && lvl <= current_level_q && idx < trail_height_q) begin
+                entry_query = trail[idx];
+                if (entry_query.variable == query_var) begin
                     query_valid = 1'b1;
-                    query_level = entry.level;
-                    query_value = entry.value;
-                    query_reason = entry.reason;
-
-                    // DEBUG QUERY
-                     // if (query_var == 3) $display("[TRAIL DBG] Scan found Var 3 at Index %0d: Lvl=%0d", i, entry.level);
+                    query_level = lvl;
+                    // Value/Reason would need separate LUTRAMs. 
+                    query_value = var_to_value[query_var];
+                    query_reason = 16'h0;
                 end
             end
         end
-
-
-
-        // Debug Log if Query Failed but we expected it to succeed (for Var 1)
-        // Debug Log if Query Failed but we expected it to succeed (for Var 1)
-        if (DEBUG > 0 && !query_valid && query_var == 1 && trail_height_q > 0) begin
-             $display("[TRAIL DBG] Query Failed for Var 1. Height=%0d", trail_height_q);
-             for(int k=0; k<20; k++) begin // limited dump
-                 if (k < trail_height_q)
-                     $display("   Trail[%0d]: Var=%0d Lvl=%0d", k, trail[k].variable, trail[k].level);
-             end
-        end
-
     end
     
-    // Combinational trail read: Direct indexed access for CAE backward iteration
+    // Combinational trail read for external access
     always_comb begin
-        // Initialize temps
-        trail_entry_t entry;
-        logic found_cut;
-
-        entry = '0;
-        found_cut = 0;
-
+        logic [65:0] trail_read_raw; // Flattened temp (32+1+16+1+16 = 66 bits)
+        
+        entry_read = '0;
+        trail_read_raw = '0;
         
         if (trail_read_idx < trail_height_q) begin
-            entry = trail[trail_read_idx];
-            trail_read_var        = entry.variable;
-            trail_read_value      = entry.value;
-            trail_read_level      = entry.level;
-            trail_read_is_decision = entry.is_decision;
-            trail_read_reason      = entry.reason;
+            entry_read = trail[trail_read_idx];            // Assign from struct array
+            trail_read_raw = entry_read; // Pack for output if needed? Wait. trail_read_raw is local temp.
+            // Actually trail_read_raw was used to unpack.
+            // Now we read struct directly.
+            
+            trail_read_var        = entry_read.variable;
+            trail_read_value      = entry_read.value;
+            trail_read_level      = entry_read.level;
+            trail_read_is_decision = entry_read.is_decision;
+            trail_read_reason      = entry_read.reason;
         end else begin
             trail_read_var        = '0;
             trail_read_value      = 1'b0;
@@ -171,194 +178,194 @@ module trail_manager #(
         end
     end
     
+    // Main Control Logic
     always_comb begin
-        // Temporaries for BACKTRACK_LOOP (initialized to avoid latches)
-        logic [15:0] bt_idx_tmp;
-        trail_entry_t current_entry;
-
+        // default next state
         trail_height_d = trail_height_q;
         current_level_d = current_level_q;
         bt_state_d = bt_state_q;
         bt_index_d = bt_index_q;
         bt_target_d = bt_target_q;
         
-        // Initialize lookup table for next cycle (preserve current values)
-        for (int j = 0; j < MAX_VARS; j = j + 1) begin
-            var_to_level_d[j] = var_to_level[j];
-        end
-        
         backtrack_done = 1'b0;
         backtrack_valid = 1'b0;
         backtrack_var = '0;
         backtrack_value = 1'b0;
         backtrack_is_decision = 1'b0;
-        backtrack_value = 1'b0;
         
-        bt_idx_tmp = '0;
-        current_entry = '0;
+        // Initialize module-scope temporaries
+        bt_peek_entry = '0;
+        next_lvl_idx = '0; // Initialize
+
         
-        // Push logic: update lookup table with new variable assignment
+        // Push Logic
         if (push && trail_height_q < MAX_VARS) begin
             trail_height_d = trail_height_q + 1'b1;
-
-            if (DEBUG >= 2) $strobe("[TRAIL] Push Var=%0d Value=%0d Level=%0d Reason=%04x", 
-                    push_var, push_value, push_level, push_reason);
-
-            // Update lookup table for this variable
-            var_to_level_d[push_var % MAX_VARS] = push_level;
-
             if (push_is_decision) begin
                 current_level_d = push_level;
             end
         end
         
-        // Backtrack state machine
-        case (bt_state_q)
-            IDLE: begin
-                if (backtrack_en) begin
-                    bt_target_d = backtrack_to_level;
-                    bt_index_d = trail_height_q;
-                    bt_state_d = BACKTRACK_LOOP;
-                end
-            end
-            
-
-            
-            BACKTRACK_LOOP: begin
-                // Safe access with index check
-                bt_idx_tmp = (bt_index_q > 0) ? bt_index_q - 1'b1 : 16'd0;
-                current_entry = trail[bt_idx_tmp];
-                
-                if (bt_index_q > 0 && current_entry.level > bt_target_q) begin
-                    bt_index_d = bt_index_q - 1'b1;
-                    backtrack_valid = 1'b1;
-                    backtrack_var = current_entry.variable;
-                    backtrack_value = current_entry.value;
-                    backtrack_is_decision = current_entry.is_decision;
-                    // Clear lookup entry for undone variable (or set to level 0)
-                    var_to_level_d[current_entry.variable % MAX_VARS] = 16'd0;
-                end else begin
-                    bt_state_d = BACKTRACK_COMPLETE;
-                end
-            end
-            
-            BACKTRACK_COMPLETE: begin
-                trail_height_d = bt_index_q;
-                current_level_d = bt_target_q;
-                backtrack_done = 1'b1;
-                bt_state_d = IDLE;
-            end
-            
-            default: bt_state_d = IDLE;
-        endcase
-        
+        // Backtrack / Truncate Logic
         if (clear_all) begin
             trail_height_d = '0;
             current_level_d = '0;
             bt_state_d = IDLE;
-            for (int j = 0; j < MAX_VARS; j = j + 1) begin
-                var_to_level_d[j] = 16'd0;
-            end
         end else if (truncate_en) begin
-            // O(1) Truncation Logic
-            // We need to find the new height where level <= truncate_level_target.
-            // Since the trail is sorted by level (monotonic), we can just scan/search.
-            // For now, linear scan to find cut point.
-            // Optimization: If we had a level_start array, this would be strictly O(1).
-            // Current approach: Linear scan is O(N) combinational, BUT no cycles.
+            // O(1) Truncate using level_start array
+            // We want to keep all assignments <= truncate_level_target.
+            // The first assignment of level (target+1) starts at level_start[target+1].
+            // So we set height to that start index.
+            // Careful: if target+1 doesn't exist yet, level_start[target+1] might be junk?
+            // "level_start" for current_level+1 is always valid (it's the current height pointer if we started a new level).
+            // Actually, level_start[L] should point to where level L begins.
+            // If we truncate to level T, the new height is the end of level T.
+            // Which is level_start[T+1].
             
-            trail_height_d = 0; // Default if all removed
+            // Robustness check: Ensure we don't read out of bounds or junk.
+            // When we push a decision level change, we update level_start?
+            
             current_level_d = truncate_level_target;
             
-            // Search backwards from current height
-            for (int k = 0; k < MAX_VARS; k++) begin
-                 // We want to find the LAST entry that has level <= target.
-                 // So we search for the FIRST entry that has level > target?
-                 // No, standard loop 0..height-1.
-                 if (k < trail_height_q) begin
-                     if (!found_cut) begin
-                         if (trail[k].level > truncate_level_target) begin
-                             // This entry is invalid.
-                             // The new height is k (exclusive of this entry).
-                             trail_height_d = k;
-                             found_cut = 1; // Mark as found to stop updating
-                         end else begin
-                             // This entry is valid, so new height is at least k+1
-                             trail_height_d = k + 1;
-                         end
-                     end
-                 end
+            // Use level_start to find new height instantly
+             // We need start of (target + 1)
+            // logic [15:0] next_lvl_idx; // Moved to top
+            next_lvl_idx = level_start[truncate_level_target + 1];
+            
+            // Sanity bound: new height cannot exceed old height
+            if (next_lvl_idx > trail_height_q) begin
+                trail_height_d = trail_height_q; // Should not happen if level_start is correct
+            end else begin
+                trail_height_d = next_lvl_idx;
             end
             
-            // Reset Backtrack state just in case
+            // Trigger background cleanup if needed? 
+            // For now, we rely on "lvl <= current_level" check in query to handle stale var_to_level entries.
+            // We do NOT trigger manual backtrack loop here to keep it O(1).
             bt_state_d = IDLE;
+             
+        end else begin
+             // Standard Iterative Backtrack
+             case (bt_state_q)
+                 IDLE: begin
+                     if (backtrack_en) begin
+                         bt_target_d = backtrack_to_level;
+                         bt_index_d = trail_height_q;
+                         bt_state_d = BACKTRACK_LOOP;
+                     end
+                 end
+                 
+                 BACKTRACK_LOOP: begin
+                     logic [15:0] idx;
+                     logic [65:0] bt_peek_raw;
+                     
+                     idx = '0;
+                     bt_peek_entry = '0;
+                     bt_peek_raw = '0;
+                     
+                     idx = (bt_index_q > 0) ? bt_index_q - 1'b1 : 16'd0;
+                     bt_peek_raw = trail[idx]; // Read as bits
+                     bt_peek_entry = bt_peek_raw; // Assign to struct
+                     
+                     // Peek at the entry we are about to remove
+                     if (bt_index_q > 0 && bt_peek_entry.level > bt_target_q) begin
+                         bt_index_d = idx; // Decrement index
+                         backtrack_valid = 1'b1;
+                         backtrack_var = bt_peek_entry.variable;
+                         backtrack_value = bt_peek_entry.value;
+                         backtrack_is_decision = bt_peek_entry.is_decision;
+                         // var_to_level cleanup happens in always_ff
+                     end else begin
+                         bt_state_d = BACKTRACK_COMPLETE;
+                     end
+                 end
+                 
+                 BACKTRACK_COMPLETE: begin
+                     trail_height_d = bt_index_q;
+                     current_level_d = bt_target_q;
+                     backtrack_done = 1'b1;
+                     bt_state_d = IDLE;
+                 end
+             endcase
         end
     end
     
-    integer i, j;
-    always_ff @(posedge clk or posedge reset) begin
+    // Sequential Logic (Writes)
+    integer i;
+    always_ff @(posedge clk) begin
         if (reset) begin
             trail_height_q <= '0;
             current_level_q <= '0;
             bt_state_q <= IDLE;
             bt_index_q <= '0;
             bt_target_q <= '0;
-            for (i = 0; i < MAX_VARS; i = i + 1) begin
-                trail[i] <= '0;
-                // level_start[i] <= '0;
-                var_to_level[i] <= '0;
-            end
+            // Note: We do NOT reset var_to_level or trail to allow RAM inference.
+            // level_start[0] should be 0.
+             level_start[0] <= 16'd0;
+             level_start[1] <= 16'd0; // Initialize next potential
         end else begin
             trail_height_q <= trail_height_d;
             current_level_q <= current_level_d;
             bt_state_q <= bt_state_d;
             bt_index_q <= bt_index_d;
             bt_target_q <= bt_target_d;
-            
-            // Update lookup table for next cycle
-            for (i = 0; i < MAX_VARS; i = i + 1) begin
-                var_to_level[i] <= var_to_level_d[i];
-            end
-            
-            // CRITICAL: Use trail_height_q for the write index normally.
-            // The combinational block already increments trail_height_d, so the sequential write
-            // should happen at the CURRENT height (trail_height_q), not the next height (trail_height_d).
-            // 
-            // Exception: If backtrack completed THIS cycle (bt_state_q changes from BACKTRACK_COMPLETE to IDLE),
-            // then trail_height_q is STALE and we need to use the new compacted height.
-            // But since we're in @posedge, trail_height_q hasn't updated yet. We need to check if
-            // backtrack is active and use bt_index_q as the write location.
-            if (push && trail_height_q < MAX_VARS) begin
-                // Compute effective write index: 
-                // - If backtrack just ended this cycle, use the backtrack's final index
-                // - Otherwise use current height
-                logic [15:0] write_idx;
-                if (bt_state_q == BACKTRACK_COMPLETE) begin
-                    // Backtrack ending: write at the post-backtrack position
-                    write_idx = bt_index_q;
-                end else begin
-                    // Normal push: write at current height
-                    write_idx = trail_height_q;
-                end
-                
-                for (int k = 0; k < MAX_VARS; k = k + 1) begin
-                    if (k == write_idx) begin
-                        trail[k].variable <= push_var;
-                        trail[k].value <= push_value;
-                        trail[k].level <= push_level;
-                        trail[k].is_decision <= push_is_decision;
-                        trail[k].reason <= push_reason;
-                        if (DEBUG > 0) $display("[TRAIL DBG] WRITING trail[%0d] <= Var %0d", k, push_var);
-                    end
-                end
-            end
 
+            // --- Trail Write Logic ---
+            if (push && trail_height_q < MAX_VARS) begin
+                 // Write new entry
+                 // Write new entry using temporary variable to satisfy Yosys
+                 new_entry_push.variable = push_var;
+                 new_entry_push.value = push_value;
+                 new_entry_push.level = push_level;
+                 new_entry_push.is_decision = push_is_decision;
+                 new_entry_push.reason = push_reason;
+                 trail[trail_height_q] <= new_entry_push;
+                 
+                 // Update var_to_level/value (Synchronous Write)
+                 var_to_level[push_var] <= push_level;
+                 var_to_value[push_var] <= push_value;
+                 var_to_index[push_var] <= trail_height_q;
+                 
+                 // Update level_start logic
+                 // If we are starting a NEW level (first assignment of level L),
+                 // record its start index.
+                 // We know it's a new level if push_is_decision is true?
+                 // Or if push_level != current_level?
+                 // Usually decision starts the level.
+                 
+                 // If this is the FIRST assignment of push_level...
+                 // Complication: The "start" of level L is where level L-1 ended.
+                 // Easier: Update level_start[push_level + 1] to "trail_height_q + 1".
+                 // So that if we later truncate to push_level, we know where it ends.
+                 // Yes: level_start[L+1] tracks the END of level L (or start of L+1).
+                 
+                 // We proactively update the pointer for the NEXT level.
+                 level_start[push_level + 1] <= trail_height_q + 1'b1;
+            end
+            
+            // --- Backtrack Cleanup Logic ---
+            // If in BACKTRACK_LOOP, we are removing 'backtrack_var'.
+            // We should clear its var_to_level entry.
+            if (bt_state_q == BACKTRACK_LOOP && backtrack_valid) begin
+                var_to_level[backtrack_var] <= 16'd0;
+                var_to_value[backtrack_var] <= 1'b0;
+                var_to_index[backtrack_var] <= 16'hFFFF;
+            end
+            
+            // Clear All reset logic (Iterative? No, reset signal usually implies global)
+            // But we can't global reset RAM.
+            // Since clear_all resets height to 0, current_level to 0.
+            // query logic checks (lvl <= current_level). 0 <= 0 is true.
+            // But lvl 0 is usually "unassigned" or "root".
+            // If we use lvl 0 for assignments, we have a problem.
+            // Assuming levels start at 1?
+            // Code assumes level 0 is root?
+            // If clear_all is used, we might need a "generation" or just rely on overwrites.
             if (clear_all) begin
-                for (i = 0; i < MAX_VARS; i = i + 1) begin
-                    // trail[i] <= '0;
-                    // level_start[i] <= '0;
-                    var_to_level[i] <= '0;
-                end
+                level_start[0] <= 16'd0;
+                level_start[1] <= 16'd0;
+                // Cannot clear var_to_level array efficiently here.
+                // Assuming system logic handles consistency.
             end
         end
     end

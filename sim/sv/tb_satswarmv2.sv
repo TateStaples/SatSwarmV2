@@ -185,18 +185,15 @@ module tb_satswarmv2;
     // So distinct path is dut.cols[y].rows[x].
     if (dut.cols[0].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=0; end
 `ifdef MULTICORE
-    if (dut.cols[0].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=0; end // y=0, x=1 ??
-    // loops: for y... : cols; for x... : rows
-    // so cols[y].rows[x]
-    
-    // Core 0: y=0, x=0 -> cols[0].rows[0]
-    // Core 1: y=0, x=1 -> cols[0].rows[1]
-    // Core 2: y=1, x=0 -> cols[1].rows[0]
-    // Core 3: y=1, x=1 -> cols[1].rows[1]
-    
-    if (dut.cols[0].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=0; end
-    if (dut.cols[1].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=1; end
-    if (dut.cols[1].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=1; end
+    if (GRID_X >= 2) begin
+      if (dut.cols[0].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=0; end
+    end
+    if (GRID_Y >= 2) begin
+      if (dut.cols[1].rows[0].u_core.is_sat) begin winning_core_x=0; winning_core_y=1; end
+    end
+    if (GRID_X >= 2 && GRID_Y >= 2) begin
+      if (dut.cols[1].rows[1].u_core.is_sat) begin winning_core_x=1; winning_core_y=1; end
+    end
 `endif
 
     if (winning_core_x == -1) begin
@@ -224,17 +221,29 @@ module tb_satswarmv2;
                 // Get trail height for winning core
                 if (winning_core_x == 0 && winning_core_y == 0) trail_h = dut.cols[0].rows[0].u_core.u_trail.trail_height_q;
 `ifdef MULTICORE
-                if (winning_core_x == 1 && winning_core_y == 0) trail_h = dut.cols[0].rows[1].u_core.u_trail.trail_height_q;
-                if (winning_core_x == 0 && winning_core_y == 1) trail_h = dut.cols[1].rows[0].u_core.u_trail.trail_height_q;
-                if (winning_core_x == 1 && winning_core_y == 1) trail_h = dut.cols[1].rows[1].u_core.u_trail.trail_height_q;
+                if (GRID_X >= 2) begin
+                  if (winning_core_x == 1 && winning_core_y == 0) trail_h = dut.cols[0].rows[1].u_core.u_trail.trail_height_q;
+                end
+                if (GRID_Y >= 2) begin
+                  if (winning_core_x == 0 && winning_core_y == 1) trail_h = dut.cols[1].rows[0].u_core.u_trail.trail_height_q;
+                end
+                if (GRID_X >= 2 && GRID_Y >= 2) begin
+                  if (winning_core_x == 1 && winning_core_y == 1) trail_h = dut.cols[1].rows[1].u_core.u_trail.trail_height_q;
+                end
 `endif
                 
                 for (int i=0; i < trail_h && i < MAX_VARS_PER_CORE; i++) begin
                     if (winning_core_x == 0 && winning_core_y == 0) begin tv = dut.cols[0].rows[0].u_core.u_trail.trail[i].variable; val = dut.cols[0].rows[0].u_core.u_trail.trail[i].value; end
 `ifdef MULTICORE
-                    if (winning_core_x == 1 && winning_core_y == 0) begin tv = dut.cols[0].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[0].rows[1].u_core.u_trail.trail[i].value; end
-                    if (winning_core_x == 0 && winning_core_y == 1) begin tv = dut.cols[1].rows[0].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[0].u_core.u_trail.trail[i].value; end
-                    if (winning_core_x == 1 && winning_core_y == 1) begin tv = dut.cols[1].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[1].u_core.u_trail.trail[i].value; end
+                    if (GRID_X >= 2) begin
+                      if (winning_core_x == 1 && winning_core_y == 0) begin tv = dut.cols[0].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[0].rows[1].u_core.u_trail.trail[i].value; end
+                    end
+                    if (GRID_Y >= 2) begin
+                      if (winning_core_x == 0 && winning_core_y == 1) begin tv = dut.cols[1].rows[0].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[0].u_core.u_trail.trail[i].value; end
+                    end
+                    if (GRID_X >= 2 && GRID_Y >= 2) begin
+                      if (winning_core_x == 1 && winning_core_y == 1) begin tv = dut.cols[1].rows[1].u_core.u_trail.trail[i].variable; val = dut.cols[1].rows[1].u_core.u_trail.trail[i].value; end
+                    end
 `endif
                     
                     if (tv == var_idx) begin
@@ -307,7 +316,14 @@ module tb_satswarmv2;
           end
         end else if (debug_level >= 1) begin
           if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 100 == 0) begin
-            $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d", cycle_count, host_done, host_sat, host_unsat);
+            $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d state=%0d dlvl=%0d height=%0d pse_state=%0d pse_done=%0d pse_conflict=%0d", 
+                     cycle_count, host_done, host_sat, host_unsat,
+                     dut.cols[0].rows[0].u_core.state_q,
+                     dut.cols[0].rows[0].u_core.decision_level_q,
+                     dut.cols[0].rows[0].u_core.trail_height,
+                     dut.cols[0].rows[0].u_core.u_pse.state_q,
+                     dut.cols[0].rows[0].u_core.u_pse.done,
+                     dut.cols[0].rows[0].u_core.u_pse.conflict_detected);
           end
         end
       end
@@ -374,6 +390,8 @@ module tb_satswarmv2;
 
     // Read DEBUG from plusargs (default 0)
     if (!$value$plusargs("DEBUG=%d", debug_level)) debug_level = 0;
+    $display("[TB] RUNTIME DEBUG LEVEL: %0d", debug_level);
+    
     // Read MAXCYCLES from plusargs (default 5,000,000)
     if (!$value$plusargs("MAXCYCLES=%d", max_cycles_cfg)) max_cycles_cfg = 5000000;
 

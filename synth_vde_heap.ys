@@ -1,0 +1,24 @@
+
+# Read sources
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/vde_heap.sv
+
+# Setup hierarchy
+hierarchy -check -top vde_heap
+
+# Set parameters
+chparam -set MAX_VARS 256 vde_heap
+
+# General synthesis steps
+proc
+opt
+memory_collect
+memory_map
+opt
+
+# Synthesize for Xilinx 7-series
+synth_xilinx -family xc7 -top vde_heap
+
+# Print statistics
+stat

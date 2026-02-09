@@ -2,6 +2,7 @@
 .DS_Store
 
 # Large log files
+logs/
 *.log
 sim/sv_trace.log
 
@@ -17,12 +18,14 @@ ENV/
 *.vcd
 *.fsdb
 work/
-obj_dir/
+obj_dir*/
 csrc/
 simv*
 ucli.key
 vc_hdrs.h
 DVEfiles/
+.build_*_stamp
 
 # Local results
 ladder_results.txt
+benchmark_results.txt

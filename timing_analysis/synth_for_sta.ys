@@ -1,0 +1,37 @@
+# =============================================================================
+# Yosys Synthesis Script for OpenSTA Timing Analysis (Simplified)
+# Generates a gate-level Verilog netlist for static timing analysis
+# Uses a minimal subset of modules to avoid SystemVerilog compatibility issues
+# =============================================================================
+
+# Read a subset of RTL sources that Yosys handles well
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/utils/sfifo.sv
+read_verilog -sv src/Mega/utils/stack.sv
+read_verilog -sv src/Mega/interface_unit.sv
+read_verilog -sv src/Mega/trail_manager.sv
+read_verilog -sv src/Mega/stats_manager.sv
+
+# Set top module to interface_unit (simpler module for demo)
+hierarchy -check -top interface_unit
+
+# Generic synthesis flow
+proc
+opt
+memory_collect  
+memory_map
+opt
+
+# Technology mapping to generic cells
+techmap
+opt
+
+# ABC for logic optimization with Nangate45
+abc -liberty timing_analysis/nangate45_typ.lib
+
+# Write out gate-level netlist for OpenSTA
+opt_clean
+write_verilog timing_analysis/interface_unit_netlist.v
+
+# Print statistics
+stat

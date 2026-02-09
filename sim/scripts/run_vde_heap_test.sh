@@ -3,6 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SIM_DIR="$SCRIPT_DIR/.."
+LOGS_DIR="$SIM_DIR/../logs"
 SRC_DIR="$SIM_DIR/../src/Mega"
 
 # Helper function to run a test
@@ -55,29 +56,29 @@ EOF
         "$SIM_DIR/cpp/sim_${TB_NAME}.cpp" \
         "$SRC_DIR/satswarmv2_pkg.sv" \
         "${SRC_FILES[@]}" \
-        --build -j 4 > "$SIM_DIR/logs/${TB_NAME}_compile.log" 2>&1; then
+        --build -j 4 > "$LOGS_DIR/${TB_NAME}_compile.log" 2>&1; then
         echo "COMPILATION FAILED"
-        cat "$SIM_DIR/logs/${TB_NAME}_compile.log"
+        cat "$LOGS_DIR/${TB_NAME}_compile.log"
         return 1
     fi
 
     # Run simulation
-    if ! "$SIM_DIR/obj_dir/${TB_NAME}_dir/${TB_NAME}" > "$SIM_DIR/logs/$TB_NAME.log"; then
+    if ! "$SIM_DIR/obj_dir/${TB_NAME}_dir/${TB_NAME}" > "$LOGS_DIR/$TB_NAME.log"; then
         echo "SIMULATION FAILED (Runtime Error)"
         return 1
     fi
     
     # Check output
-    if grep -q "ERROR" "$SIM_DIR/logs/$TB_NAME.log" || grep -q "Failed" "$SIM_DIR/logs/$TB_NAME.log" || grep -q "Error" "$SIM_DIR/logs/$TB_NAME.log" || grep -q "TIMEOUT" "$SIM_DIR/logs/$TB_NAME.log"; then
+    if grep -q "ERROR" "$LOGS_DIR/$TB_NAME.log" || grep -q "Failed" "$LOGS_DIR/$TB_NAME.log" || grep -q "Error" "$LOGS_DIR/$TB_NAME.log" || grep -q "TIMEOUT" "$LOGS_DIR/$TB_NAME.log"; then
         echo "FAIL"
-        cat "$SIM_DIR/logs/$TB_NAME.log"
+        cat "$LOGS_DIR/$TB_NAME.log"
         return 1
     else
         echo "PASS"
     fi
 }
 
-mkdir -p "$SIM_DIR/logs"
+mkdir -p "$LOGS_DIR"
 mkdir -p "$SIM_DIR/cpp"
 
 # Run tests with specific dependencies

@@ -1,0 +1,9 @@
+# Diagnose trail_manager synthesis time
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/trail_manager.sv
+chparam -set MAX_VARS 256 trail_manager
+hierarchy -check -top trail_manager
+proc
+opt
+stat

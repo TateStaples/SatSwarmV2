@@ -9,8 +9,8 @@ TESTS_DIR="$SIM_DIR/tests/small_tests"
 # Enable logging
 if [ -z "$VERISAT_LOGGING" ]; then
     export VERISAT_LOGGING=1
-    mkdir -p "$SIM_DIR/logs"
-    LOG_FILE="$SIM_DIR/logs/$(basename "$0" .sh)_$(date +%Y%m%d_%H%M%S).log"
+    mkdir -p "$SIM_DIR/../logs"
+    LOG_FILE="$SIM_DIR/../logs/$(basename "$0" .sh)_$(date +%Y%m%d_%H%M%S).log"
     exec > >(tee -a "$LOG_FILE") 2>&1
 fi
 

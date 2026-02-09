@@ -1,0 +1,14 @@
+# PSE synthesis test: MAX_VARS=256, moderate clause/lit counts
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/mega_pkg.sv
+read_verilog -sv src/Mega/utils/sfifo.sv
+read_verilog -sv src/Mega/pse.sv
+chparam -set MAX_VARS 256 pse
+chparam -set MAX_CLAUSES 128 pse
+chparam -set MAX_LITS 512 pse
+hierarchy -check -top pse
+proc
+opt
+memory -nomap
+opt
+stat

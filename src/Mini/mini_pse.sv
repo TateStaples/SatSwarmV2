@@ -48,7 +48,7 @@ module mini_pse #(
     } state_e;
 
     // Assignment encoding: 2'b00 = unassigned, 2'b01 = false, 2'b10 = true
-    (* ram_style = "block" *) logic [1:0] assign_state [0:MAX_VARS-1];
+    logic [1:0] assign_state [0:MAX_VARS-1];
 
     // Clause Store
     (* ram_style = "block" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];

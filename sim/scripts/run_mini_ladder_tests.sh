@@ -10,8 +10,8 @@ TESTS_DIR="$SIM_DIR/tests/small_tests"
 # Enable logging
 if [ -z "$MINI_LOGGING" ]; then
     export MINI_LOGGING=1
-    mkdir -p "$SIM_DIR/logs"
-    LOG_FILE="$SIM_DIR/logs/mini_sv_ladder_$(date +%Y%m%d_%H%M%S).log"
+    mkdir -p "$SIM_DIR/../logs"
+    LOG_FILE="$SIM_DIR/../logs/mini_sv_ladder_$(date +%Y%m%d_%H%M%S).log"
     exec > >(tee -a "$LOG_FILE") 2>&1
 fi
 

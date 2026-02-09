@@ -59,6 +59,20 @@ module satswarm_top #(
     logic [31:0] core_write_data [0:NUM_CORES-1];
     logic        core_write_grant [0:NUM_CORES-1];
 
+    // Shared Clause Memory Signals
+    logic [NUM_CORES-1:0] shared_write_req;
+    satswarmv2_pkg::shared_packet_t shared_write_payload [NUM_CORES-1:0];
+    logic [NUM_CORES-1:0] shared_write_grant;
+    
+    logic        shared_bcast_valid;
+    satswarmv2_pkg::shared_packet_t shared_bcast_payload;
+
+    // Global Allocator signals (for DDR learned clause region)
+    logic [NUM_CORES-1:0]       alloc_req;
+    logic [15:0]                alloc_size [NUM_CORES-1:0];
+    logic [NUM_CORES-1:0]       alloc_grant;
+    logic [31:0]                alloc_addr;
+
     // Per-core signals
     logic solve_done_core [0:NUM_CORES-1];
     logic is_sat_core [0:NUM_CORES-1];
@@ -108,6 +122,35 @@ module satswarm_top #(
         .ddr_write_grant(ddr_write_grant)
     );
 
+
+    // Shared Clause Memory
+    shared_clause_buffer #(
+        .NUM_CORES(NUM_CORES),
+        .DEPTH(4096)
+    ) u_shared_mem (
+        .clk(clk),
+        .rst_n(rst_n),
+        .write_req(shared_write_req),
+        .write_payload(shared_write_payload),
+        .write_grant(shared_write_grant),
+        .bcast_valid(shared_bcast_valid),
+        .bcast_payload(shared_bcast_payload)
+    );
+
+    // Global Allocator for DDR Learned Clause Region
+    global_allocator #(
+        .NUM_CORES(NUM_CORES),
+        .ADDR_WIDTH(32),
+        .BASE_ADDR(32'h4000_0000)  // Learned clauses start after original CNF
+    ) u_allocator (
+        .clk(clk),
+        .rst_n(rst_n),
+        .alloc_req(alloc_req),
+        .alloc_size(alloc_size),
+        .alloc_grant(alloc_grant),
+        .alloc_addr(alloc_addr),
+        .current_ptr()  // Debug output, unused
+    );
     // Solver Core Grid
     genvar y, x;
     generate
@@ -116,10 +159,10 @@ module satswarm_top #(
                 localparam int CORE_IDX = y * GRID_X + x;
                 
                 // Local arrays for each core's 4-neighbor ports
-                satswarmv2_pkg::noc_packet_t u_core_rx_pkt [3:0];
+                satswarmv2_pkg::noc_packet_t u_core_rx_pkt [3:0]; // Keep unpacked (internal fixup later)
                 logic u_core_rx_valid [3:0];
                 logic u_core_rx_ready [3:0];
-                satswarmv2_pkg::noc_packet_t u_core_tx_pkt [3:0];
+                satswarmv2_pkg::noc_packet_t u_core_tx_pkt [3:0]; // Keep unpacked
                 logic u_core_tx_valid [3:0];
                 logic u_core_tx_ready [3:0];
 

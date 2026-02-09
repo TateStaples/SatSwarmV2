@@ -1,0 +1,52 @@
+# =============================================================================
+# Yosys Synthesis Script for Full VeriSAT Timing Analysis
+# Synthesizes core modules (PSE, CAE, Trail Manager, etc.)
+# Note: VDE Heap excluded due to SystemVerilog compatibility issues
+# =============================================================================
+
+# Read RTL sources (order matters for dependencies)
+read_verilog -sv src/Mega/satswarmv2_pkg.sv
+read_verilog -sv src/Mega/utils/sfifo.sv
+read_verilog -sv src/Mega/utils/stack.sv
+read_verilog -sv src/Mega/interface_unit.sv
+read_verilog -sv src/Mega/trail_manager.sv
+read_verilog -sv src/Mega/stats_manager.sv
+read_verilog -sv src/Mega/resync_controller.sv
+
+# Read PSE (Propagation and Search Engine)
+read_verilog -sv src/Mega/pse.sv
+
+# Read CAE (Conflict Analysis Engine)  
+read_verilog -sv src/Mega/cae.sv
+
+# Set top module to PSE for critical path analysis
+hierarchy -check -top pse
+
+# Set parameters for reduced problem size
+chparam -set MAX_VARS 16 pse
+chparam -set MAX_CLAUSES 32 pse
+chparam -set MAX_LITS 128 pse
+
+# CAUTION: Yosys will report warnings about unresolved dependencies
+# This is expected since we're not including all modules
+
+# Generic synthesis flow
+proc
+opt
+memory_collect
+memory_map
+opt
+
+# Technology mapping
+techmap
+opt
+
+# ABC for logic optimization
+abc -liberty timing_analysis/nangate45_typ.lib
+
+# Write out gate-level netlist
+opt_clean
+write_verilog timing_analysis/pse_netlist.v
+
+# Print statistics
+stat
