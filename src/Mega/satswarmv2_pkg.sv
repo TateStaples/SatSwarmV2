@@ -9,7 +9,7 @@ package satswarmv2_pkg;
   parameter int PTR_W          = 32;
   parameter int ACT_W          = 32;
   parameter int HEAP_W         = 16;
-  parameter real DECAY_FACTOR  = 0.95; // VSIDS activity decay
+  // parameter real DECAY_FACTOR  = 0.95; // Non-synthesizable, unused in RTL
 
   // Swarm architecture parameters
   parameter int GRID_X         = 2;    // 2x2 grid default

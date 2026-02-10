@@ -1,39 +1,58 @@
+# SatSwarmV2 Synthesis + OpenSTA flow
+# Target: Nangate 45nm (gate-level timing analysis)
+# Uses SYNTHESIS define to strip $display calls
 
-# Read sources
-read_verilog -sv src/Mega/satswarmv2_pkg.sv
-read_verilog -sv src/Mega/utils/sfifo.sv
-read_verilog -sv src/Mega/utils/stack.sv
-read_verilog -sv src/Mega/interface_unit.sv
-read_verilog -sv src/Mega/mega_pkg.sv
-read_verilog -sv src/Mega/trail_manager.sv
-read_verilog -sv src/Mega/vde_heap.sv
-read_verilog -sv src/Mega/vde.sv
-read_verilog -sv src/Mega/stats_manager.sv
-read_verilog -sv src/Mega/resync_controller.sv
-read_verilog -sv src/Mega/pse.sv
-read_verilog -sv src/Mega/cae.sv
-read_verilog -sv src/Mega/solver_core.sv
+# Read sources with SYNTHESIS define
+read_verilog -sv -DSYNTHESIS src/Mega/satswarmv2_pkg.sv
+read_verilog -sv -DSYNTHESIS src/Mega/utils/sfifo.sv
+read_verilog -sv -DSYNTHESIS src/Mega/utils/stack.sv
+read_verilog -sv -DSYNTHESIS src/Mega/interface_unit.sv
+read_verilog -sv -DSYNTHESIS src/Mega/mega_pkg.sv
+read_verilog -sv -DSYNTHESIS src/Mega/trail_manager.sv
+read_verilog -sv -DSYNTHESIS src/Mega/vde_heap.sv
+read_verilog -sv -DSYNTHESIS src/Mega/vde.sv
+read_verilog -sv -DSYNTHESIS src/Mega/stats_manager.sv
+read_verilog -sv -DSYNTHESIS src/Mega/resync_controller.sv
+read_verilog -sv -DSYNTHESIS src/Mega/pse.sv
+read_verilog -sv -DSYNTHESIS src/Mega/cae.sv
+read_verilog -sv -DSYNTHESIS src/Mega/solver_core.sv
 
+# Set parameters for reduced scale synthesis
+chparam -set MAX_VARS 16 -set MAX_CLAUSES 16 -set MAX_LITS 64 solver_core
 
-# Set parameters for reduced scale synthesis (Verify flow without OOM)
-chparam -set MAX_VARS 16 -set MAX_CLAUSES 16 solver_core
-
+# Elaborate hierarchy (no flatten — keep modules separate for faster synth)
 hierarchy -check -top solver_core
 
-# General synthesis steps
+# Process always blocks
 proc
-opt
+
+# Single optimization pass (not iterative)
+opt_expr
+opt_clean
+opt_merge
+
+# Memory: explicit pipeline (collect -> dff -> map)
 memory_collect
+memory_dff
 memory_map
-opt
+opt_clean
 
-# Synthesize to generic gates
-synth
+# Technology mapping
+techmap
+opt_expr
+opt_clean
 
-# Map to Nangate 45nm library
+# Map FFs to Nangate 45nm
 dfflibmap -liberty timing_analysis/nangate45_typ.lib
-abc -liberty timing_analysis/nangate45_typ.lib
 
+# Map combinational logic to Nangate 45nm
+# -D 10000 = 10ns target (100 MHz), -fast to limit runtime
+abc -liberty timing_analysis/nangate45_typ.lib -D 10000 -fast
+
+# Final cleanup
+opt_clean -purge
+
+# Report statistics
 stat -liberty timing_analysis/nangate45_typ.lib
 
 # Write output Verilog

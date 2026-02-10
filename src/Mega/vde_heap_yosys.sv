@@ -42,7 +42,7 @@ module vde_heap #(
     // Status
     output logic         busy,
     
-    input  int           DEBUG
+    input  logic [31:0]    DEBUG
 );
 
     // =========================================================================
@@ -170,7 +170,9 @@ module vde_heap #(
                     pending_var_d = bump_vars[0];
                     state_d = BUMP_READ;
                 end else if (request) begin
+`ifndef SYNTHESIS
                     if (heap_size_q == 0) $strobe("VDE_DBG: Request received but heap_size=0. all_assigned will be high next cycle.");
+`endif
                     state_d = DECIDE;
                 end else if (decay) begin
                     bump_increment_d = bump_increment_q + (bump_increment_q >> 4);
@@ -476,10 +478,14 @@ module vde_heap #(
             state_q <= IDLE;
             if (max_var > 0 && max_var <= MAX_VARS) begin
                 heap_size_q <= max_var[IDX_W-1:0];
+`ifndef SYNTHESIS
                 if (DEBUG > 0) $strobe("[VDE HEAP] Unassign/Clear: max_var=%0d -> heap_size=%0d", max_var, max_var[IDX_W-1:0]);
+`endif
             end else begin
                 heap_size_q <= '0;  // Empty heap until max_var is known
+`ifndef SYNTHESIS
                 if (DEBUG > 0) $strobe("[VDE HEAP] Unassign/Clear ERROR: max_var=%0d is INVALID. Setting heap_size=0", max_var);
+`endif
             end
             idx_q <= '0;
             pending_var_q <= '0;
@@ -498,10 +504,14 @@ module vde_heap #(
                 
                 if (max_var > 0 && max_var <= MAX_VARS) begin
                     heap_size_q <= max_var[IDX_W-1:0];
+`ifndef SYNTHESIS
                     if (DEBUG > 0) $strobe("[VDE HEAP] Unassign/Clear: max_var=%0d -> heap_size=%0d. Starting INIT_LOOP.", max_var, max_var[IDX_W-1:0]);
+`endif
                 end else begin
                     heap_size_q <= '0;
+`ifndef SYNTHESIS
                     if (DEBUG > 0) $strobe("[VDE HEAP] Unassign/Clear ERROR: max_var=%0d invalid. Clearing.", max_var);
+`endif
                 end
                 
                 bump_increment_q <= INITIAL_BUMP;

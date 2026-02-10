@@ -11,7 +11,7 @@ import mega_pkg::*;
 module trail_manager #(
     parameter int MAX_VARS = 256
 )(
-    input  int           DEBUG,
+    input  logic [31:0]    DEBUG,
     input  logic         clk,
     input  logic         reset,
     
@@ -84,16 +84,15 @@ module trail_manager #(
     
     // Lookup tables: variable -> level/value
     // Index is 1-based variable ID; 0 is unused.
-    // Inferred LUTRAM (Distributed RAM) for Variable Levels/Values
-    // Read asynchronously, written synchronously
-    (* ram_style = "distributed" *) logic [15:0] var_to_level [0:MAX_VARS];
-    (* ram_style = "distributed" *) logic        var_to_value [0:MAX_VARS];
-    (* ram_style = "distributed" *) logic [15:0] var_to_index [0:MAX_VARS];
+    // Small arrays — inferred as registers at synthesis scale, LUTRAM at full scale
+    logic [15:0] var_to_level [0:MAX_VARS];
+    logic        var_to_value [0:MAX_VARS];
+    logic [15:0] var_to_index [0:MAX_VARS];
 
     // Inferred LUTRAM for Level Start Indices
     // Tracks the starting trail index for each decision level
     // level_start[L] = index in 'trail' where level L begins.
-    (* ram_style = "distributed" *) logic [15:0] level_start [0:MAX_VARS]; // Max levels = Max vars
+    logic [15:0] level_start [0:MAX_VARS]; // Max levels = Max vars
 
     // Trail Stack (Inferred BRAM/LUTRAM depending on size)
     // We do NOT reset the whole array, allowing inference.
@@ -108,7 +107,7 @@ module trail_manager #(
     // We do NOT reset the whole array, allowing inference.
     // "trail" is read asynchronously (line 182) so it will infer DistRAM or BRAM with read-first/async logic.
     // Use Struct for Verilator/Simulation compatibility (Testbench accesses members)
-    (* ram_style = "distributed" *) mega_pkg::trail_entry_t trail [0:MAX_VARS-1];
+    mega_pkg::trail_entry_t trail [0:MAX_VARS-1];
 
     // logic [15:0] trail_height_q, trail_height_d; // Removed duplicate
     // logic [15:0] current_level_q, current_level_d; // Removed duplicate
@@ -138,7 +137,14 @@ module trail_manager #(
             
             // Check for stale data:
             // If the recorded level is greater than current level, it's from a backtracked future.
-            if (lvl != 0 && lvl <= current_level_q && idx < trail_height_q) begin
+            // NOTE: Do NOT check `lvl != 0` here — variables assigned at decision level 0
+            // (e.g. unit propagations after learning) are valid and must return query_valid=1.
+            // Stale/unassigned entries are already caught by:
+            //   - idx >= trail_height_q (truncated or never-assigned garbage index)
+            //   - lvl > current_level_q (from a backtracked future level)
+            //   - trail[idx].variable != query_var (cross-check against actual trail contents)
+            //   - Iterative backtrack sets var_to_index to 16'hFFFF (always >= trail_height)
+            if (lvl <= current_level_q && idx < trail_height_q) begin
                 entry_query = trail[idx];
                 if (entry_query.variable == query_var) begin
                     query_valid = 1'b1;
@@ -147,7 +153,19 @@ module trail_manager #(
                     query_value = var_to_value[query_var];
                     query_reason = 16'h0;
                 end
+`ifndef SYNTHESIS
+                else if (DEBUG >= 3) begin
+                    $display("[TRAIL QUERY] var=%0d FAIL trail_crosscheck: trail[%0d].variable=%0d != %0d (lvl=%0d cur_lvl=%0d height=%0d)", 
+                        query_var, idx, entry_query.variable, query_var, lvl, current_level_q, trail_height_q);
+                end
+`endif
             end
+`ifndef SYNTHESIS
+            else if (DEBUG >= 3 && query_var > 0) begin
+                $display("[TRAIL QUERY] var=%0d FAIL bounds: lvl=%0d cur_lvl=%0d idx=%0d height=%0d (lvl_ok=%b idx_ok=%b)", 
+                    query_var, lvl, current_level_q, idx, trail_height_q, (lvl <= current_level_q), (idx < trail_height_q));
+            end
+`endif
         end
     end
     
@@ -375,12 +393,22 @@ module trail_manager #(
         if (reset) begin
             // Reset for logging-specific signals if any
         end else begin
-            if (push && trail_height_q < MAX_VARS) begin
-
+`ifndef SYNTHESIS
+            if (DEBUG >= 3 && query_var > 0 && query_var <= 3) begin
+                $display("[TRAIL FF] t=%0t query_var=%0d -> valid=%b level=%0d | var_to_level=%0d var_to_index=%0d cur_lvl=%0d height=%0d trail[idx].var=%0d",
+                    $time, query_var, query_valid, query_level,
+                    var_to_level[query_var], var_to_index[query_var], current_level_q, trail_height_q,
+                    (var_to_index[query_var] < trail_height_q) ? trail[var_to_index[query_var]].variable : 32'hDEAD);
             end
-            // if (bt_state_q == BACKTRACK_LOOP && bt_index_q > 0 && trail[bt_index_q-1].level > bt_target_q) begin
-            //      $display("[TRAIL DBG] Clearing Idx=%0d Var=%0d Lvl=%0d", bt_index_q - 1, trail[bt_index_q-1].variable, trail[bt_index_q-1].level);
-            // end
+            if (DEBUG >= 3 && push && trail_height_q < MAX_VARS) begin
+                $display("[TRAIL FF PUSH] t=%0t var=%0d val=%b level=%0d idx=%0d is_dec=%b", 
+                    $time, push_var, push_value, push_level, trail_height_q, push_is_decision);
+            end
+            if (DEBUG >= 3 && truncate_en) begin
+                $display("[TRAIL FF TRUNC] t=%0t to_level=%0d level_start[%0d]=%0d new_height=%0d old_height=%0d",
+                    $time, truncate_level_target, truncate_level_target+1, level_start[truncate_level_target+1], trail_height_d, trail_height_q);
+            end
+`endif
         end
     end
 

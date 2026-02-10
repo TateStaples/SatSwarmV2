@@ -1,0 +1,113 @@
+backtracks non-chronologically to the First UIP. By backtracking
+to the appropriate level and enforcing the learned clause (which
+typically negates the UIP), CDCL guarantees that the solver
+does not revisit the same conflict based on the current partial
+assignment.
+• Variable Decision (decide): If no conflict occurs, a new
+decision is made by selecting a variable and assigning a value to
+it. Typically, heuristics are used to prioritize variables, improving
+search efficiency by guiding the solver toward likely solutions.
+CDCL can be viewed as a process of consecutive refutation: each
+time unit propagation uncovers a conflict, the solver locates the
+--
+of the search space.
+• Phase Saving: Phase saving retains the most recent variable
+assignments from previous search attempts, which can be reused
+in future decisions. This minimizes the impact of unsuccessful
+searches and guides the solver toward a solution.
+• Variable Decision Heuristics: These heuristics guide the
+decision-making process in choosing which variables to assign.
+By dynamically adjusting the decision strategy based on the
+search history, heuristics help prioritize variables that are more
+likely to lead to a solution.
+Besides, what is not shown in the algorithm list is the data structure
+--
+I/O Manager
+
+State
+Registers
+
+Variable Decision
+Engine
+
+Fig. 1. The Overall architecture of VeriSAT
+
+A. Early Works
+--
+be organized as three principal modules, each corresponding to a core
+step of the CDCL framework:
+• Propagation Search Engine (PSE): Implements Boolean Constraint Propagation (BCP). PSE scans watched clauses to detect
+conflicts or unit clauses. Upon encountering a conflict, it invokes
+the Conflict Analysis Engine; if no conflict and no further unit
+clauses remain, it hands control to the Variable Decision Engine.
+• Conflict Analysis Engine (CAE): Performs conflict analysis
+when PSE reports a conflict. CAE analyzes the implication
+graph to derive a learned clause and compute the backtracking
+level. If the backtracking level is negative, the solver concludes
+UNSAT. Otherwise, CAE appends the learned clause to the
+clause database, backjumps to the computed decision level, and
+returns the control to PSE.
+• Variable Decision Engine (VDE): Responsible for branching
+decisions. VDE applies a dynamic variable selection heuristic
+to pick an unassigned variable and assigns it a truth value. If
+all variables are assigned without conflict, the solver concludes
+SAT. Otherwise, VDE updates the heuristic data structures and
+invokes PSE to continue propagation.
+It should be noted that, based on the foundation of the current
+CDCL algorithm, all three main modules must run alternately to
+maintain the correctness and completeness of the algorithm. Unlike
+other hardware pipelining schemes that require multiple modules to
+--
+signal to all other cursors and forwards the conflicting clause
+to the Conflict Analysis Engine.
+4) Completion. If no conflict arises, the dispatcher continues to
+assign the remaining unscanned literals to idle cursors. Once
+all newly enqueued literals have been processed and no further
+propagation is possible, control returns to the Variable Decision
+Engine.
+2) Maintaining Read-Write Consistency: The concurrent execution of cursors may cause data hazard, we implement a lightweight
+arbitration mechanism to maintain the read-write consistency:
+Read-Write Arbitration: Before each read or write, every
+cursor broadcasts its target address to a comparison network.
+--
+retrieved 3 cycles ago, and henceforth a valid literal data. Similar
+procedure is applied to retrieving the decision level and visited mark
+data.
+With this simple pipeline design, the efficiency of conflict analysis
+in VeriSAT is dramatically improved.
+E. Variable Decision Engine
+The Variable Decision Engine (VDE) is invoked after unit propagation when no conflicts are detected. It selects the next branching
+variable using the Variable State Independent Decay Sum (VSIDS)
+heuristic. The VDE maintains an activity score table for each variable,
+which is initialized to 0 and updated during conflict analysis. The
+decay factor of 0.9275 is calculated as x − (x ≫ 16), avoiding
+floating-point operations to minimize the hardware complexity.
+
+Authorized licensed use limited to: Duke University. Downloaded on January 03,2026 at 03:22:39 UTC from IEEE Xplore. Restrictions apply.
+--
+Visited Mark
+Arrived
+Fig. 4. The Pipeline optimization. The cells on horizontal direction indicates
+the cycles used
+
+The VDE uses a min-heap to efficiently select the variable with the
+least activity score in O(log n) time. The maintenance of the min-heap
+is non-blocking; updates to the variable scores and decision-making
+logic will check if the heap is busy and wait until maintenance is
+completed.
+Additionally, phase saving ensures the variable phase is stored
+before a restart and restored afterward, reducing redundant searches
+and improving solver efficiency.
+V. I MPLEMENTATION OF V ERI SAT
+--
+Freq.
+Impl.
+CDCL
+2-lit Watching
+Phase Saving
+VSIDS
+Restart
+Clause Del.
+Clause Min.
+
+VeriSAT

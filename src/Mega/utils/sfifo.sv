@@ -5,6 +5,11 @@
  * A standard circular buffer FIFO with synchronous read/write.
  * Provides FWFT-like behavior where 'pop_data' is valid whenever 'empty' is low.
  * 
+ * MEMORY INFERENCE NOTE:
+ * The async read (pop_data = mem[rd_ptr]) prevents Block RAM inference.
+ * For FIFOs of this size (<=2048 entries), distributed RAM is acceptable.
+ * BRAM inference should be prioritized for larger arrays in PSE/trail modules.
+ * 
  * PRE-CONDITIONS:
  * - Clock and Reset (rst_n) must be provided.
  * - Width and Depth should be positive integers.
@@ -17,7 +22,7 @@
  * 
  * INVARIANTS:
  * - Simultaneous push and pop on a full FIFO results in a pop followed by a push,
- *   maintaining the 'full' state. (Optional: Check overflow/underflow protection).
+ *   maintaining the 'full' state.
  * - Flush clears all internal pointers and count in a single cycle.
  */
 module sfifo #(
@@ -46,7 +51,7 @@ module sfifo #(
 
     localparam ADDR_W = $clog2(DEPTH);
     
-    (* ram_style = "block" *) logic [WIDTH-1:0] mem [0:DEPTH-1];
+    logic [WIDTH-1:0] mem [0:DEPTH-1];
     logic [ADDR_W-1:0] wr_ptr;
     logic [ADDR_W-1:0] rd_ptr;
     logic [ADDR_W:0]   cnt;

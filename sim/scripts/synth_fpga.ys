@@ -1,0 +1,35 @@
+# SatSwarmV2 FPGA Synthesis
+# Target: Xilinx UltraScale+ (ZU9EG)
+# Uses synth_xilinx for FPGA-native mapping (LUTs, FFs, BRAM, DSP)
+
+# Read sources with SYNTHESIS define
+read_verilog -sv -DSYNTHESIS src/Mega/satswarmv2_pkg.sv
+read_verilog -sv -DSYNTHESIS src/Mega/utils/sfifo.sv
+read_verilog -sv -DSYNTHESIS src/Mega/utils/stack.sv
+read_verilog -sv -DSYNTHESIS src/Mega/interface_unit.sv
+read_verilog -sv -DSYNTHESIS src/Mega/mega_pkg.sv
+read_verilog -sv -DSYNTHESIS src/Mega/trail_manager.sv
+read_verilog -sv -DSYNTHESIS src/Mega/vde_heap.sv
+read_verilog -sv -DSYNTHESIS src/Mega/vde.sv
+read_verilog -sv -DSYNTHESIS src/Mega/stats_manager.sv
+read_verilog -sv -DSYNTHESIS src/Mega/resync_controller.sv
+read_verilog -sv -DSYNTHESIS src/Mega/pse.sv
+read_verilog -sv -DSYNTHESIS src/Mega/cae.sv
+read_verilog -sv -DSYNTHESIS src/Mega/solver_core.sv
+
+# Set parameters for reduced-scale synthesis
+chparam -set MAX_VARS 16 -set MAX_CLAUSES 16 -set MAX_LITS 64 solver_core
+
+# Full Xilinx synthesis flow:
+#   -top solver_core  : top module
+#   -family xcup      : UltraScale+ family (ZU9EG)
+#   -abc9             : use ABC9 mapper (better quality for Xilinx LUT mapping)
+#   -run :check       : stop before strict check (skip check -noinit which errors
+#                       on constant-connected ports in single-core mode)
+synth_xilinx -top solver_core -family xcup -abc9 -run :check
+
+# Report FPGA resource statistics
+stat
+
+# Write Verilog netlist (can be imported into Vivado for P&R)
+write_verilog -noattr synth_fpga.v

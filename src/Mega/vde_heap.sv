@@ -42,7 +42,7 @@ module vde_heap #(
     // Status
     output logic         busy,
     
-    input  int           DEBUG
+    input  logic [31:0]    DEBUG
 );
 
     // =========================================================================
@@ -78,8 +78,8 @@ module vde_heap #(
     // Memory Arrays
     // =========================================================================
     localparam int ENTRY_W = ACT_W + IDX_W;
-    (* ram_style = "block" *) logic [ENTRY_W-1:0] heap_mem [0:MAX_VARS-1];
-    (* ram_style = "block" *) logic [IDX_W-1:0] pos_mem [0:MAX_VARS-1];  // var_id (1-indexed) -> heap_index
+    logic [ENTRY_W-1:0] heap_mem [0:MAX_VARS-1];
+    logic [IDX_W-1:0] pos_mem [0:MAX_VARS-1];  // var_id (1-indexed) -> heap_index
     logic phase_hint [0:MAX_VARS-1];
     
     // BRAM Control Signals

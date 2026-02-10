@@ -18,7 +18,7 @@ module pse #(
     parameter int CORE_ID     = 0,
     parameter int PROP_QUEUE_DEPTH = MAX_LITS
 )(
-    input  int                 DEBUG,
+    input  logic [31:0]          DEBUG,
     input  logic               clk,
     input  logic               reset,
 
@@ -87,21 +87,21 @@ module pse #(
 
     // Assignment encoding: 2'b00 = unassigned, 2'b01 = false, 2'b10 = true
     // Assignments and Reasons
-    (* ram_style = "block" *) logic [1:0]  assign_state [0:MAX_VARS-1];
-    (* ram_style = "block" *) logic [15:0] reason_clause [0:MAX_VARS-1];
+    logic [1:0]  assign_state [0:MAX_VARS-1];
+    logic [15:0] reason_clause [0:MAX_VARS-1];
 
     // Clause Store (Local Arrays)
-    (* ram_style = "block" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
+    logic [15:0] clause_len    [0:MAX_CLAUSES-1];
+    logic [15:0] clause_start  [0:MAX_CLAUSES-1];
+    logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists (Local Arrays)
-    (* ram_style = "block" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
-    (* ram_style = "block" *) logic [15:0] watch_head1   [0:2*MAX_VARS-1];
-    (* ram_style = "block" *) logic [15:0] watch_head2   [0:2*MAX_VARS-1];
+    logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
+    logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
+    logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
+    logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
+    logic [15:0] watch_head1   [0:2*MAX_VARS-1];
+    logic [15:0] watch_head2   [0:2*MAX_VARS-1];
 
     // Propagation queue
     logic prop_fifo_empty, prop_fifo_full;
@@ -177,6 +177,7 @@ module pse #(
     logic signed [31:0] scan_lit_other_q, scan_lit_other_d;
     logic [1:0]        scan_other_truth_q, scan_other_truth_d;
     logic [15:0]       scan_idx_q, scan_idx_d;
+    logic [15:0]       scan_steps_q, scan_steps_d; // Safety counter to detect circular watch lists
 
     // Local assignment write request
     logic        assign_wr_en;
@@ -327,6 +328,7 @@ module pse #(
         scan_lit_other_d   = scan_lit_other_q;
         scan_other_truth_d = scan_other_truth_q;
         scan_idx_d         = scan_idx_q;
+        scan_steps_d       = scan_steps_q;
 
         hold_d             = clear_assignments ? 1'b1 : (start ? 1'b0 : hold_q);
         conflict_detected_d = start ? 1'b0 : conflict_detected_q;
@@ -492,6 +494,7 @@ module pse #(
                     neg_lit = -prop_fifo_out;
                     scan_clause_d   = watch_head1[safe_lit_idx(neg_lit)];
                     scan_prev_d     = 16'hFFFF;
+                    scan_steps_d    = 16'd0;
                     state_d = SCAN_WATCH;
                 end
             end
@@ -511,9 +514,26 @@ module pse #(
                     end
                 end else if (scan_clause_q >= MAX_CLAUSES) begin
                     state_d = COMPLETE;
+                end else if (scan_steps_q > clause_count_q) begin
+                    // Safety valve: visited more clauses than exist — circular list detected
+`ifndef SYNTHESIS
+                    $display("[PSE WARN] Circular watch list detected for lit %0d (steps=%0d > clauses=%0d). Breaking.",
+                             cur_prop_lit_q, scan_steps_q, clause_count_q);
+`endif
+                    if (scan_list_sel_q == 1'b0) begin
+                        scan_list_sel_d = 1'b1;
+                        neg_lit = -cur_prop_lit_q;
+                        scan_clause_d   = watch_head2[safe_lit_idx(neg_lit)];
+                        scan_prev_d     = 16'hFFFF;
+                        scan_steps_d    = 16'd0;
+                    end else begin
+                        state_d = DEQ_PROP;
+                    end
                 end else begin
 
                     
+                    scan_steps_d = scan_steps_q + 16'd1;
+
                     w1 = watched_lit1[scan_clause_q];
                     w2 = watched_lit2[scan_clause_q];
                     cstart = clause_start[scan_clause_q];
@@ -568,7 +588,9 @@ module pse #(
                             watch_wr_new_idx   = safe_lit_idx(l);
                             watch_wr_prev_id   = scan_prev_q;
 
-                            scan_prev_d   = scan_clause_q;
+                            // FIX: clause is being REMOVED from this list (watch_wr_en=1),
+                            // so it must NOT become the new 'prev'. Keep prev unchanged.
+                            scan_prev_d   = scan_prev_q;
                             next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
                             if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
                                 scan_clause_d = 16'hFFFF;
@@ -588,7 +610,9 @@ module pse #(
                         propagated_valid  = 1'b1;
                         propagated_var    = scan_lit_other_q;
                         propagated_reason = scan_clause_q;
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $display("[PSE TRACE] Unit %0d from Clause %0d (State SCAN_REPL)", scan_lit_other_q, scan_clause_q);
+`endif
 
                         // Debug Trap for Var 0
                         `ifndef SYNTHESIS
@@ -707,6 +731,7 @@ module pse #(
             scan_lit_other_q  <= '0;
             scan_other_truth_q<= '0;
             scan_idx_q        <= '0;
+            scan_steps_q      <= '0;
             for (i = 0; i < MAX_VARS; i = i + 1) begin
                 assign_state[i] <= 2'b00;
                 reason_clause[i] <= 16'hFFFF;
@@ -725,11 +750,7 @@ module pse #(
             cur_clause_len_q <= cur_clause_len_d;
             init_clause_idx_q<= init_clause_idx_d;
             reset_idx_q      <= reset_idx_d;
-            
-            // TRACE MONITOR
-            if ($time % 10000 == 0) begin
-            end
-            
+
             max_var_seen_q   <= max_var_seen_d;
             scan_list_sel_q  <= scan_list_sel_d;
             scan_clause_q    <= scan_clause_d;
@@ -746,6 +767,7 @@ module pse #(
             scan_lit_other_q  <= scan_lit_other_d;
             scan_other_truth_q<= scan_other_truth_d;
             scan_idx_q        <= scan_idx_d;
+            scan_steps_q      <= scan_steps_d;
             conflict_detected_q <= conflict_detected_d;
             conflict_clause_len_q <= conflict_clause_len_d;
             conflict_clause_q <= conflict_clause_d;
@@ -755,7 +777,9 @@ module pse #(
                 if (load_clause_end) begin
                     clause_start[clause_count_q] <= lit_count_q - cur_clause_len_q;
                     clause_len[clause_count_q]   <= cur_clause_len_q + 1'b1;
+`ifndef SYNTHESIS
                     if (DEBUG >= 2) $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
+`endif
                 end
             end
 
@@ -796,14 +820,18 @@ module pse #(
                 watch_next2[c]  <= watch_head2[idx2];
                 watch_head2[idx2] <= c;
 
+`ifndef SYNTHESIS
                 if (DEBUG >= 2) $display("[MEM] Adding Watch List for %0d and %0d to clause %0d", lit_mem[w1], lit_mem[w2], c);
+`endif
             end
 
 
             
             if (watch_wr_en) begin
                 if (watch_wr_list_sel == 1'b0) begin
+`ifndef SYNTHESIS
                     if (DEBUG >= 2) $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit1[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
+`endif
                     watched_lit1[watch_wr_clause_id] <= watch_wr_new_w;
 
                     if (watch_wr_prev_id == 16'hFFFF)
@@ -814,7 +842,9 @@ module pse #(
                     watch_next1[watch_wr_clause_id] <= watch_head1[watch_wr_new_idx];
                     watch_head1[watch_wr_new_idx] <= watch_wr_clause_id;
                 end else begin
+`ifndef SYNTHESIS
                     if (DEBUG >= 2) $display("[hw_trace] [PSE] Replaced watcher %0d with %0d for clause %0d", lit_mem[watched_lit2[watch_wr_clause_id]], lit_mem[watch_wr_new_w], watch_wr_clause_id);
+`endif
                     watched_lit2[watch_wr_clause_id] <= watch_wr_new_w;
                     if (watch_wr_prev_id == 16'hFFFF)
                         watch_head2[watch_wr_old_idx] <= watch_next2[watch_wr_clause_id];
@@ -864,12 +894,14 @@ module pse #(
             propagated_valid_r_q  <= 1'b0;
             reason_query_var_r_q  <= '0;
         end else begin
+`ifndef SYNTHESIS
             if (propagated_valid && !propagated_valid_r_q)
                 if (DEBUG >= 1) $display("[hw_trace] [PSE] Propagating Unit %0d from Clause %0d", propagated_var, scan_clause_q);
             if (conflict_detected_q && !conflict_detected_r_q)
                 if (DEBUG >= 1) $display("[hw_trace] [PSE] Conflict detected in Clause %0d: [%0d, %0d, ...]", scan_clause_q, conflict_clause_q[0], conflict_clause_q[1]);
             if (reason_query_var != 0 && reason_query_var != reason_query_var_r_q)
                  if (DEBUG >= 2) $display("[PSE QUERY] Var=%0d -> Reason=%h Valid=%b", reason_query_var, reason_query_clause, reason_query_valid);
+`endif
             conflict_detected_r_q <= conflict_detected_q;
             propagated_valid_r_q  <= propagated_valid;
             reason_query_var_r_q  <= reason_query_var;

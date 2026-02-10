@@ -2,7 +2,7 @@ module vde #(
     parameter int MAX_VARS = 256,
     parameter int ACT_W    = 32
 )(
-    input  int           DEBUG,
+    input  logic [31:0]    DEBUG,
     input  logic         clk,
     input  logic         reset,
 

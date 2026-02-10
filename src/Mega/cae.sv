@@ -12,9 +12,10 @@
 
 module cae #(
     parameter int MAX_LITS = 16,
-    parameter int LEVEL_W  = 16
+    parameter int LEVEL_W  = 16,
+    parameter int MAX_VARS = MAX_LITS
 )(
-    input  int                      DEBUG,
+    input  logic [31:0]               DEBUG,
     input  logic                    clk,
     input  logic                    reset,
 
@@ -82,17 +83,24 @@ module cae #(
     // Use a slightly larger buffer for resolution intermediate steps if needed,
     // but ultimately valid clauses must fit in MAX_LITS
     localparam int MAX_BUFFER = 2 * MAX_LITS;
+    localparam int BUF_COUNT_W = $clog2(MAX_BUFFER + 1);
+    localparam int LEN_W = $clog2(MAX_LITS + 1);
     logic signed [31:0] buf_lits   [0:MAX_BUFFER-1];
     logic [LEVEL_W-1:0] buf_levels [0:MAX_BUFFER-1];
-    logic [4:0]         buf_count_q, buf_count_d;
+    logic [BUF_COUNT_W-1:0] buf_count_q, buf_count_d;
     
     // Intermediate combinatorial wire for backtrack level
     logic [LEVEL_W-1:0] backtrack_level_comb;
     
-    // Seen mask (naive hash map using LSBs of variable index)
-    // For production, a full bit array or better hash sets would be used.
-    // Given MAX_LITS=16, collisions are possible but we can check existence linearly too.
-    // Let's use linear scan for existence check to be perfectly safe with small N.
+    // Seen bit-vector: one bit per variable for O(1) exists-check
+    localparam int VAR_W = $clog2(MAX_VARS + 1);
+    logic [MAX_VARS:0] seen_q;
+    
+    // Buffer valid bits: replaces shift-compaction with invalidation
+    logic [MAX_BUFFER-1:0] buf_valid_q;
+    
+    // Valid entry count (separate from buf_count_q which is now a high-water mark)
+    logic [BUF_COUNT_W-1:0] valid_count_q, valid_count_d;
     
     // Resolution state
     logic [15:0] trail_scan_idx_q, trail_scan_idx_d;
@@ -107,7 +115,7 @@ module cae #(
     logic [LEVEL_W-1:0] backtrack_d, backtrack_q;
     logic               unsat_d, unsat_q;
     logic               learned_valid_d, learned_valid_q;
-    logic [4:0]         final_learned_len_q, final_learned_len_d;
+    logic [LEN_W-1:0]   final_learned_len_q, final_learned_len_d;
     logic signed [31:0] output_clause_q [0:MAX_LITS-1];
     logic signed [31:0] output_clause_d [0:MAX_LITS-1];
     
@@ -142,6 +150,7 @@ module cae #(
 
         state_d          = state_q;
         buf_count_d      = buf_count_q;
+        valid_count_d    = valid_count_q;
         trail_scan_idx_d = trail_scan_idx_q;
         init_idx_d       = init_idx_q;
         reason_lit_idx_d = reason_lit_idx_q;
@@ -175,7 +184,7 @@ module cae #(
         // Default constraints
         done             = 1'b0;
         learned_valid    = learned_valid_q;
-        learned_len      = buf_count_q; // Approximate, finalized in DONE
+        learned_len      = final_learned_len_q; // Use finalized length (stable after DONE)
         unsat            = unsat_q;
         backtrack_level_comb = backtrack_d;
         // $display("[CAE OUTPUT] backtrack_level_comb=%0d, backtrack_d=%0d, backtrack_q=%0d, state_q=%0d", backtrack_level_comb, backtrack_d, backtrack_q, state_q);
@@ -203,6 +212,7 @@ module cae #(
             IDLE: begin
                 if (start) begin
                     buf_count_d = 0;
+                    valid_count_d = 0;
                     init_idx_d = 0;
                     unsat_d = 0;
                     learned_valid_d = 0;
@@ -230,7 +240,9 @@ module cae #(
                     state_d = FINALIZE;
                 end else begin
                     buf_count_d = conflict_len;
+`ifndef SYNTHESIS
                     if (DEBUG >= 2) $display("[CAE DBG] INIT_CLAUSE: Len=%0d Lits={%0d, %0d, %0d, ...} Levels={%0d, %0d, %0d, ...} DecLvl=%0d", conflict_len, conflict_lits[0], conflict_lits[1], conflict_lits[2], conflict_levels[0], conflict_levels[1], conflict_levels[2], decision_level);
+`endif
                     // Logic to set buf_lits moved to always_ff to avoid mixed drivers
                     state_d = COUNT_AT_LEVEL;
                 end
@@ -243,15 +255,17 @@ module cae #(
                 // Count how many literals in buf are at current decision_level
                 count = 0;
                 for (int k = 0; k < MAX_BUFFER; k++) begin
-                    if (k < buf_count_q && buf_levels[k] == decision_level) begin
+                    if (k < buf_count_q && buf_valid_q[k] && buf_levels[k] == decision_level) begin
                         count++;
                     end
                 end
                 
+`ifndef SYNTHESIS
                 if (DEBUG >= 2) $display("[CAE DBG] COUNT: count=%0d dec_lvl=%0d buf_count=%0d", count, decision_level, buf_count_q);
                 for (int k=0; k<MAX_BUFFER; k++) begin
-                    if (k < buf_count_q) if (DEBUG >= 2) $display("  [CAE DBG]   buf[%0d]: lit=%0d lvl=%0d", k, buf_lits[k], buf_levels[k]);
+                    if (k < buf_count_q && buf_valid_q[k]) if (DEBUG >= 2) $display("  [CAE DBG]   buf[%0d]: lit=%0d lvl=%0d", k, buf_lits[k], buf_levels[k]);
                 end
+`endif
 
     //            $display("[CAE DEBUG] count_at_level: count=%0d, dec_lvl=%0d, buf_count=%0d", count, decision_level, buf_count_q);
     /*
@@ -277,7 +291,7 @@ module cae #(
                 found = 1'b0;
 
                 for (int k = 0; k < MAX_BUFFER; k++) begin
-                    if (k < buf_count_q && 
+                    if (k < buf_count_q && buf_valid_q[k] &&
                         abs_lit(buf_lits[k]) == t_var && 
                         buf_levels[k] == decision_level) begin
                         found = 1'b1;
@@ -345,26 +359,24 @@ module cae #(
                     r_var = abs_lit(r_lit);
 
                     // Ignore the resolved variable itself
-                    if (r_var != resolve_var_q) begin
-                        // Check if already in buffer
-                        exists = 1'b0;
-                        for (int k = 0; k < MAX_BUFFER; k++) begin
-                            if (k < buf_count_q && abs_lit(buf_lits[k]) == r_var)
-                                exists = 1'b1;
-                        end
+                    if (r_var != resolve_var_q && r_var != 0) begin
+                        // O(1) exists check via seen bit-vector
+                        exists = (r_var <= MAX_VARS) ? seen_q[r_var[VAR_W-1:0]] : 1'b0;
 
                         if (!exists) begin
                             if (buf_count_q < MAX_BUFFER) begin
                                 // Add to buffer
-                                // buf_lits update moved to always_ff
-                                // buf_levels update moved to always_ff
+                                // buf_lits/buf_levels/seen_q/buf_valid_q updates in always_ff
                                 
                                 buf_count_d = buf_count_q + 1;
+                                valid_count_d = valid_count_q + 1;
                             end else begin
                                 // Buffer overflow: literal dropped
                                 buf_overflow_d = 1'b1;
                                 dropped_lits_d = dropped_lits_q + 1;
+`ifndef SYNTHESIS
                                 $display("[CAE WARNING] Buffer overflow at cycle %0t: Dropped literal %0d. Total dropped: %0d", $time, r_var, dropped_lits_d);
+`endif
                             end
                         end
                     end
@@ -374,20 +386,10 @@ module cae #(
                     // clause_read_lit_idx follows this next cycle
                 end else begin
                     // Done merging reason literals.
-                    // Now REMOVE the resolved literal from the conflict buffer.
-                    // The actual array shift happens in the sequential block.
-                    // We need to calculate the new size for the next state logic.
-                    // Count how many will remain (deduplication)
-                    // int next_count; // MOVED TO TOP
-                    next_count = 0;
-                    for (int k = 0; k < MAX_BUFFER; k++) begin
-                        if (k < buf_count_q && abs_lit(buf_lits[k]) != resolve_var_q) begin
-                            next_count++;
-                        end
-                    end
+                    // Invalidation of resolved variable handled in always_ff.
+                    // buf_count_q stays as high-water mark (no compaction).
                     
                     state_d = COUNT_AT_LEVEL;
-                    buf_count_d = next_count;
                     
                     // IMPORTANT: Advance trail scan pointer so we don't try to resolve 
                     // the same variable again (even though it's gone from the buffer, 
@@ -404,20 +406,20 @@ module cae #(
                 sec_max_lvl = 0;
                 
                 // UNSAT condition: when we can't backtrack further and still have a conflict
-                // - Empty clause (buf_count_q == 0)
+                // - Empty clause (valid_count_q == 0)
                 // - OR Decision Level is 0 (Root Level Conflict). Any conflict at root is UNSAT.
-                unsat_d = (buf_count_q == 0) || (decision_level == 16'd0);
+                unsat_d = (valid_count_q == 0) || (decision_level == 16'd0);
 
                 // First pass: find max level (should be decision_level)
                 for (int k = 0; k < MAX_BUFFER; k++) begin
-                    if (k < buf_count_q) begin
+                    if (k < buf_count_q && buf_valid_q[k]) begin
                        if (buf_levels[k] > max_lvl) max_lvl = buf_levels[k];
                     end
                 end
 
                 // Second pass: find second max level (backtrack target)
                 for (int k = 0; k < MAX_BUFFER; k++) begin
-                    if (k < buf_count_q) begin
+                    if (k < buf_count_q && buf_valid_q[k]) begin
                         if (buf_levels[k] != max_lvl && buf_levels[k] > sec_max_lvl)
                             sec_max_lvl = buf_levels[k];
                     end
@@ -426,7 +428,7 @@ module cae #(
                 // Debug: Print buffer contents during FINALIZE
                 // $strobe("[CAE DEBUG FINALIZE] buf_count_q=%0d, max_lvl=%0d, sec_max_lvl=%0d", buf_count_q, max_lvl, sec_max_lvl);
                 for (int k = 0; k < 8; k++) begin
-                    if (k < buf_count_q) begin
+                    if (k < buf_count_q && buf_valid_q[k]) begin
                         // $strobe("[CAE DEBUG FINALIZE]   buf[%0d]: lit=%0d lvl=%0d", k, buf_lits[k], buf_levels[k]);
                     end
                 end
@@ -445,7 +447,7 @@ module cae #(
                     for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
                     
                     for (int k = 0; k < MAX_BUFFER; k++) begin
-                        if (k < buf_count_q) begin
+                        if (k < buf_count_q && buf_valid_q[k]) begin
                             // GUARD: Skip Var 0 (should never appear)
                             if (abs_lit(buf_lits[k]) != 0) begin
                                 if (!found_uip && buf_levels[k] == max_lvl) begin
@@ -474,17 +476,19 @@ module cae #(
                 backtrack_d = sec_max_lvl;
                 // $strobe("[CAE DEBUG FINALIZE] Setting backtrack_d = %0d", sec_max_lvl);
                 // UNSAT condition: Empty clause OR Conflict at Level 0
-                // If we have a conflict (buf_count > 0) but we are at decision_level 0,
+                // If we have a conflict (valid entries > 0) but we are at decision_level 0,
                 // it implies the conflict relies only on Level 0 assignments (facts).
                 // This means the formula is UNSAT.
-                unsat_d = (buf_count_q == 0) || (decision_level == 0);
+                unsat_d = (valid_count_q == 0) || (decision_level == 0);
                 
                 // [DEBUG] Detailed Conflict Info matching software format
+`ifndef SYNTHESIS
                 if (DEBUG >= 1 && learned_valid_d) begin
                      $display("[hw_trace] [CAE] Learned Clause: [%0d, %0d, ...] Backtrack to: %0d Trail Height: %0d", 
                               ((out_idx > 0) ? output_clause_d[0] : 0), ((out_idx > 1) ? output_clause_d[1] : 0), 
                               sec_max_lvl, trail_height);
                 end
+`endif
                 // Note: Trail Length not directly available in CAE, using decision_level as proxy for depth context
                 // $strobe("[CONFLICT_DEBUG] Conflict Clause: (resolved buf) | Learned UIP: %0d | Asserting Level: %0d | Current Level: %0d", 
                          // ((buf_count_q > 0) ? output_clause_d[0] : 0), sec_max_lvl, decision_level);
@@ -513,6 +517,9 @@ module cae #(
         if (reset) begin
             state_q <= IDLE;
             buf_count_q <= 0;
+            seen_q <= '0;
+            buf_valid_q <= '0;
+            valid_count_q <= 0;
             trail_scan_idx_q <= 0;
             init_idx_q <= 0;
             reason_lit_idx_q <= 0;
@@ -532,6 +539,7 @@ module cae #(
         end else begin
             state_q <= state_d;
             buf_count_q <= buf_count_d;
+            valid_count_q <= valid_count_d;
             trail_scan_idx_q <= trail_scan_idx_d;
             init_idx_q <= init_idx_d;
             reason_lit_idx_q <= reason_lit_idx_d;
@@ -555,26 +563,29 @@ module cae #(
             
                 if (state_q == INIT_CLAUSE && conflict_len > 0) begin
                      int idx;
+                     logic [MAX_VARS:0] seen_local;
+                     logic [MAX_BUFFER-1:0] valid_local;
+                     seen_local = '0;
+                     valid_local = '0;
                      idx = 0;
                      for (int k = 0; k < MAX_BUFFER; k++) begin
-                         if (k < conflict_len) begin
-                            // Check for duplicates against INPUT LIST (not stale buffer)
-                            logic is_dup;
-                            is_dup = 0;
-                            // Check previous input elements for valid deduplication
-                            for (int j = 0; j < MAX_BUFFER; j++) begin
-                                if (j < k && conflict_lits[j] == conflict_lits[k]) is_dup = 1;
-                            end
-                            
-                            if (!is_dup && idx < MAX_BUFFER && conflict_lits[k] != 0) begin
+                         if (k < conflict_len && conflict_lits[k] != 0) begin
+                            logic [31:0] v;
+                            v = abs_lit(conflict_lits[k]);
+                            // O(1) dedup via seen_local bit-vector
+                            if (v <= MAX_VARS && v != 0 && !seen_local[v[VAR_W-1:0]]) begin
                                 buf_lits[idx] <= conflict_lits[k];
                                 buf_levels[idx] <= conflict_levels[k];
+                                valid_local[idx] = 1'b1;
+                                seen_local[v[VAR_W-1:0]] = 1'b1;
                                 idx++;
                             end
                          end
                      end
-                     buf_count_q <= idx; // Update sequential count
-                     // $display("[CAE SEQ] INIT_CLAUSE: Setting buf_count_q = %0d", idx);
+                     seen_q <= seen_local;
+                     buf_valid_q <= valid_local;
+                     buf_count_q <= idx;
+                     valid_count_q <= idx;
                 end else if (state_q == RESOLUTION) begin
                      if (reason_lit_idx_q < reason_len_q) begin
                          // Merge Logic
@@ -586,45 +597,41 @@ module cae #(
                          r_var_local = abs_lit(r_lit_local);
                          
                          if (r_var_local != resolve_var_q && r_var_local != 0) begin
-                            exists_local = 1'b0;
-                            for (int k = 0; k < MAX_BUFFER; k++) 
-                                if (k < buf_count_q && abs_lit(buf_lits[k]) == r_var_local) exists_local = 1'b1;
+                            // O(1) exists check via seen bit-vector
+                            exists_local = (r_var_local <= MAX_VARS) ? seen_q[r_var_local[VAR_W-1:0]] : 1'b0;
                             
                             if (!exists_local) begin
                                 if (buf_count_q < MAX_BUFFER) begin
                                     buf_lits[buf_count_q] <= r_lit_local;
                                     buf_levels[buf_count_q] <= level_query_levels;
-                                    // Note: count update handled in always_comb
+                                    buf_valid_q[buf_count_q] <= 1'b1;
+                                    seen_q[r_var_local[VAR_W-1:0]] <= 1'b1;
+                                    // Note: count updates handled in always_comb
                                 end else begin
                                     // Buffer overflow detected
-                                    buf_overflow_d <= 1'b1;
-                                    dropped_lits_d <= dropped_lits_q + 1;
-                                    $display("[CAE WARNING] Buffer overflow at cycle %0t: Dropped literal %0d. Total dropped: %0d", $time, r_var_local, dropped_lits_d);
+                                    buf_overflow_q <= 1'b1;
+                                    dropped_lits_q <= dropped_lits_q + 1;
+`ifndef SYNTHESIS
+                                    $display("[CAE WARNING] Buffer overflow at cycle %0t: Dropped literal %0d. Total dropped: %0d", $time, r_var_local, dropped_lits_q + 1);
+`endif
                                 end
                             end
                             // $display("[CAE SEQ] RESOLUTION merge: Adding lit=%0d at idx=%0d, level=%0d", r_lit_local, buf_count_q, level_query_levels);
                         end
                      end else begin
-                         // CRITICAL: Remove the resolved literal from buffer when going to COUNT_AT_LEVEL
-                         // Must match exact transition condition from always_comb: reason_lit_idx_q >= reason_len_q
-                         // Compact buffer: Remove ALL instances of resolved variable
-                         int w_idx;
-                         w_idx = 0;
+                         // Invalidate entries matching resolved variable (replaces shift-compaction)
                          for (int k = 0; k < MAX_BUFFER; k++) begin
-                             if (k < buf_count_q) begin
-                                 if (abs_lit(buf_lits[k]) != resolve_var_q) begin
-                                     // Shift down
-                                     buf_lits[w_idx] <= buf_lits[k];
-                                     buf_levels[w_idx] <= buf_levels[k];
-                                     w_idx++;
-                                 end else begin
-                                     // $display("[CAE SEQ] Removing resolved var=%0d (lit=%0d) from buffer", resolve_var_q, buf_lits[k]);
-                                 end
+                             if (k < buf_count_q && buf_valid_q[k] && abs_lit(buf_lits[k]) == resolve_var_q) begin
+                                 buf_valid_q[k] <= 1'b0;
                              end
                          end
-                         // Update count to reflect compacted size
-                         buf_count_q <= w_idx;
-                         // $display("[CAE SEQ] After compaction: buf_count_q = %0d (was %0d), removed var=%0d", w_idx, buf_count_q, resolve_var_q);
+                         // Clear seen bit for resolved variable
+                         if (resolve_var_q <= MAX_VARS && resolve_var_q != 0)
+                             seen_q[resolve_var_q[VAR_W-1:0]] <= 1'b0;
+                         // Decrement valid count (resolved var appears exactly once due to dedup)
+                         if (valid_count_q > 0)
+                             valid_count_q <= valid_count_q - 1;
+                         // buf_count_q unchanged (high-water mark)
                      end
                 end
         end
@@ -641,7 +648,9 @@ module cae #(
             
             if (state_q == FINALIZE && state_q != state_d) begin
                 if (buf_overflow_q) begin
+`ifndef SYNTHESIS
                     $display("[CAE WARNING] Learned clause may be INCOMPLETE due to buffer overflow. Dropped %0d literals!", dropped_lits_q);
+`endif
                 end
             end
         end

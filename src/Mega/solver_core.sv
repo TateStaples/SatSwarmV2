@@ -8,7 +8,7 @@ module solver_core #(
     parameter int GRID_X = 1,
     parameter int GRID_Y = 1
 )(
-    input  int   DEBUG, 
+    input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
     input  logic rst_n,  // TODO: document what this is 
     input  logic [3:0] vde_phase_offset,// TODO: document what this is 
@@ -512,9 +512,11 @@ module solver_core #(
              // In vde.sv: output [31:0] decision_var (unsigned index).
              // output decision_phase.
              // We can reconstruct the literal.
+`ifndef SYNTHESIS
              int lit;
              lit = vde_decision_phase ? int'(vde_decision_var) : -int'(vde_decision_var);
              $display("[hw_trace] [VDE] Decided: %0d at Level %0d", lit, trail_current_level + 1); 
+`endif
              // +1 because decision pushes to next level?
              // mega_sim.py says: len(self.mem.trail_lim) + 1.
         end
@@ -622,7 +624,8 @@ module solver_core #(
     logic [15:0] cae_backtrack_level; // Explicit declaration to fix implicit warning
     cae #(
         .MAX_LITS(MAX_CLAUSE_LEN),
-        .LEVEL_W(16)
+        .LEVEL_W(16),
+        .MAX_VARS(MAX_VARS)
     ) u_cae (
         .DEBUG(DEBUG),
         .clk(clk),
@@ -946,7 +949,9 @@ module solver_core #(
                     vde_clear_all = 1'b1;
                     pse_clear_assignments = 1'b1;
                     resync_append_learned_d = 1'b0;
+`ifndef SYNTHESIS
                     $strobe("[CORE %0d] Starting Solve. max_var=%0d, clauses=%0d", CORE_ID, vde_max_var, pse_clause_count);
+`endif
                     verify_mode_d = 1'b0;
                 end
             end
@@ -1065,7 +1070,9 @@ module solver_core #(
                         vde_repeat_count_d = '0;
                         vde_repeat_var_d   = '0;
                         // Nothing left to decide; run final verification
+`ifndef SYNTHESIS
                         $strobe("[CORE %0d] VDE_PHASE: All assigned, max_var=%0d", CORE_ID, vde_max_var);
+`endif
                         state_d = FINAL_VERIFY;
                     end else begin
                         // Wait for VDE to issue a decision
@@ -1134,10 +1141,12 @@ module solver_core #(
             PSE_PHASE: begin
                 // CRITICAL FIX: Only check pse_conflict if we've started PSE in this round
                 // This prevents checking stale conflict_detected from prior propagation rounds
+`ifndef SYNTHESIS
                 if (state_q == FINAL_VERIFY || state_q == RESYNC_PSE_SETTLE) begin
                     $strobe("[CORE %0d] PSE_PHASE from %s, pse_done=%b, pse_conflict=%b", 
                              CORE_ID, (state_q == FINAL_VERIFY ? "FINAL_VERIFY" : "RESYNC_PSE_SETTLE"), pse_done, pse_conflict);
                 end
+`endif
                 if (pse_started_q && pse_conflict) begin
 //                    $strobe("[CORE %0d Cycle %0d] Conflict from PSE detected! Len=%0d Lits={%0d, %0d, %0d, ...}", 
 //                             CORE_ID, cycle_count_q, pse_conflict_clause_len, 
@@ -1193,7 +1202,9 @@ module solver_core #(
                         trail_push_level = decision_level_q;
                         trail_push_is_decision = 1'b0;
                         trail_push_reason = fifo_reason; // Use reason from PSE
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] Pushing Prop %0d (Var %0d) @ Level %0d. DecLvlQ=%0d", CORE_ID, fifo_lit, prop_var, trail_push_level, decision_level_q);
+`endif
 
 
                         // IMPORTANT: We do NOT broadcast back to PSE here.
@@ -1241,10 +1252,12 @@ module solver_core #(
                 // If PSE is done or timeout, check if we need to continue propagating
                 // UPDATED: Wait for FIFO to be empty as well!
                 if ((pse_done && prop_fifo_empty) || cycle_count_q > 1000000) begin
+`ifndef SYNTHESIS
                     if (state_q == FINAL_VERIFY || state_q == RESYNC_PSE_SETTLE) begin
                          $strobe("[CORE %0d Cycle %0d] PSE_PHASE exit: pse_done=%b, fifo_empty=%b, vde_all_assigned=%b, conflict=%b", 
                                   CORE_ID, cycle_count_q, pse_done, prop_fifo_empty, vde_all_assigned, pse_conflict);
                     end
+`endif
                     
                     // Multi-core: Check if any neighbor sent us a clause during propagation
                     if (iface_clause_rx_valid) begin
@@ -1296,15 +1309,19 @@ module solver_core #(
                     // Capture Result
                     if (trail_query_valid) begin
                         conflict_levels_d[query_index_q] = trail_query_level;
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> Level=%0d", 
                                 CORE_ID, q_lit, q_var, trail_query_level);
+`endif
                         // Advance
                         query_index_d = query_index_q + 4'd1;
                     end else begin
                         // If not found in trail, assume current level (should not happen for valid conflict)
                         // Or if 0, implies unassigned?
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> INVALID (Using DecLvl=%0d)", 
                                 CORE_ID, q_lit, q_var, decision_level_q);
+`endif
                         conflict_levels_d[query_index_q] = decision_level_q;
                         query_index_d = query_index_q + 4'd1;
                     end
@@ -1323,13 +1340,15 @@ module solver_core #(
                 // Removed buggy vde_all_assigned block. Backtracking is required.
                 begin
                 // Start CAE to analyze conflict with populated conflict_levels_q from queries
-                // Log moved to always_ff
-/*
-                for (int k = 0; k < 8; k++) begin
-                    if (k < conflict_clause_len_q)
-                        $strobe("[CORE %0d]   Lit[%0d]=%0d level=%0d", CORE_ID, k, conflict_clause_q[k], conflict_levels_q[k]);
+`ifndef SYNTHESIS
+                if (DEBUG > 0) begin
+                    $display("[CORE %0d] CONFLICT_ANALYSIS: Sending to CAE. Len=%0d DecLvl=%0d", CORE_ID, conflict_clause_len_q, decision_level_q);
+                    for (int k = 0; k < 8; k++) begin
+                        if (k < conflict_clause_len_q)
+                            $display("[CORE %0d]   Lit[%0d]=%0d level_q=%0d level_d=%0d", CORE_ID, k, conflict_clause_q[k], conflict_levels_q[k], conflict_levels_d[k]);
+                    end
                 end
-*/
+`endif
                 
                 cae_start = 1'b1;
                 stats_inc_conflict = 1'b1; // Fix: Increment conflict counter
@@ -1384,7 +1403,9 @@ module solver_core #(
 
             // Stream learned clause into PSE via internal load interface (append-only)
             APPEND_LEARNED: begin
+`ifndef SYNTHESIS
                 if (DEBUG > 0) $strobe("[CORE %0d] Entering APPEND_LEARNED. Len=%0d Idx=%0d", CORE_ID, cae_learned_len, learn_idx_q);
+`endif
                 if (learn_idx_q < cae_learned_len) begin
                     // Respect PSE load_ready before sending next literal
                     if (load_ready) begin
@@ -1392,9 +1413,13 @@ module solver_core #(
                         learn_load_literal    = cae_learned_lits[learn_idx_q];
                         learn_load_clause_end = (learn_idx_q == (cae_learned_len - 4'd1));
                         learn_idx_d           = learn_idx_q + 4'd1;
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED[%0d/%0d]: lit=%0d end=%0d ready=%0d mux=%0d", CORE_ID, learn_idx_q, cae_learned_len, cae_learned_lits[learn_idx_q], learn_load_clause_end, load_ready, load_valid_mux);
+`endif
                     end else begin
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED waiting for load_ready (idx=%0d len=%0d)", CORE_ID, learn_idx_q, cae_learned_len);
+`endif
                     end
                     state_d = APPEND_LEARNED;
                 end else begin : append_complete_block
@@ -1403,7 +1428,9 @@ module solver_core #(
                     // logic skip_broadcast;
                     
                     final_assert_lit = (cae_learned_len > 0) ? cae_learned_lits[0] : decision_lit_q;
+`ifndef SYNTHESIS
                     if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC: Len=%0d Lit0=%0d DecLit=%0d", CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
+`endif
                     assert_var = (final_assert_lit < 0) ? $unsigned(-final_assert_lit) : $unsigned(final_assert_lit);
                     
                     // Skip broadcast for 1x1 grid (no neighbors to receive)
@@ -1426,8 +1453,10 @@ module solver_core #(
                              // Latch inputs now to decouple from combinational glitches
                              decision_lit_d = final_assert_lit;
                              
+`ifndef SYNTHESIS
                              if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Broadcast): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
                                      CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
+`endif
                              
                              state_d = APPEND_PUSH;
                              cycle_count_d = '0; 
@@ -1437,8 +1466,10 @@ module solver_core #(
                         // No Broadcast needed. Proceed to PUSH state.
                         decision_lit_d = final_assert_lit;
                         
+`ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Local): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
                                 CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
+`endif
 
                         state_d = APPEND_PUSH;
                         cycle_count_d = '0; 
@@ -1461,7 +1492,9 @@ module solver_core #(
                  // GUARD: Only execute push ONCE (when cycle_count is 0)
                  // This prevents duplicate pushes if the FSM stalls or executes twice.
                  if (cycle_count_q == 0) begin
+`ifndef SYNTHESIS
                      if (DEBUG > 0) $strobe("[CORE %0d] APPEND_PUSH: Executing Push with Stable Lit %0d (Var %0d)", CORE_ID, decision_lit_q, stable_var);
+`endif
                      
                      // 1. Start PSE for BCP
                      state_d = PSE_PHASE;
@@ -1487,7 +1520,9 @@ module solver_core #(
                          pse_assign_broadcast_value = stable_val;
                      end else begin
                          // EmerGen/Abort if var is 0 (Unexpected, but safe)
+`ifndef SYNTHESIS
                          $display("[CORE %0d] ERROR: APPEND_PUSH derived Var 0 from Lit %0d", CORE_ID, decision_lit_q);
+`endif
                      end
                      
                      // Increment cycle count so we don't push again if we stay in this state
@@ -1732,14 +1767,18 @@ module solver_core #(
             if (pse_propagated_valid) begin
                  if (pse_propagated_var == 0) begin
                      // Still keep a small alert if 0 is about to be pushed (it shouldn't due to guard)
+`ifndef SYNTHESIS
                      $display("[CORE %0d] ERROR: PSE triggered Var 0 propagation!", CORE_ID);
+`endif
                  end
             end
             
             // FIFO Flush logging
+`ifndef SYNTHESIS
             if ((state_q == IDLE && start_solve) || prop_flush) begin
                  if (prop_flush && DEBUG > 0) $display("[CORE %0d] FIFO FLUSHED.", CORE_ID);
             end
+`endif
         end
     end
 
@@ -1776,6 +1815,7 @@ module solver_core #(
             // Reset for logging-specific signals if any (none currently)
         end else begin
             // State Transition Logs
+`ifndef SYNTHESIS
             if (state_q != state_r_q) begin
                 if (state_q == FINAL_VERIFY) $display("[CORE %0d] STATE: FINAL_VERIFY - Running final PSE verification", CORE_ID);
                 if (state_q == FINISH_SAT)   $display("[SYS] Result: SAT");
@@ -1795,6 +1835,7 @@ module solver_core #(
                     $display("[CORE %0d Cycle %0d] *** UNSAT: Conflict at level 1, backtrack to 0 (no valid assignment)", CORE_ID, cycle_count_q);
 
             end
+`endif
 
             // Backtrack logging
             // Backtrack logging removed

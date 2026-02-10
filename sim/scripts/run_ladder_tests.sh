@@ -1,6 +1,7 @@
 #!/bin/bash
 # Runs tests in tests/small_tests grouped by variable count, ascending.
 # Stops on first failure to encourage debugging on smallest identifiable case.
+# Good test when you expect failures (easy to debug), but takes long time to run all tests. For quick feedback, use run_bigger_ladder.sh
 
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 SIM_DIR=$(dirname "$SCRIPT_DIR")
