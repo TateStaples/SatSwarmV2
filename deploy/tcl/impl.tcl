@@ -13,7 +13,7 @@ set CONSTRAINT_DIR "$SCRIPT_DIR/../constraints"
 set OUTPUT_DIR "$SCRIPT_DIR/../output/impl"
 
 # Top module name
-set TOP_MODULE "solver_core"
+set TOP_MODULE "satswarm_top"
 
 # Get synthesis checkpoint from command line or find latest
 if {$argc > 0 && [lindex $argv 0] ne "--check-only"} {

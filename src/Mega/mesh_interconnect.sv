@@ -25,17 +25,19 @@ module mesh_interconnect #(
         for (y = 0; y < GRID_Y; y = y + 1) begin
             for (x = 0; x < GRID_X; x = x + 1) begin
                 always_comb begin
-                    integer ii;
-                    // Default: no rx
-                    for (ii = 0; ii < 4; ii = ii + 1) begin
-                        core_rx_valid[y][x][ii] = 1'b0;
-                        core_tx_ready[y][x][ii] = 1'b0;
-                        core_rx[y][x][ii].msg_type = satswarmv2_pkg::MSG_STATUS;
-                        core_rx[y][x][ii].payload = '0;
-                        core_rx[y][x][ii].quality_metric = '0;
-                        core_rx[y][x][ii].src_id = '0;
-                        core_rx[y][x][ii].virtual_channel = '0;
-                    end
+                    // Default: no rx (use struct literal to avoid Vivado LHS pattern error)
+                    core_rx[y][x][0] = '{msg_type: satswarmv2_pkg::MSG_STATUS, payload: '0, quality_metric: '0, src_id: '0, virtual_channel: '0};
+                    core_rx[y][x][1] = '{msg_type: satswarmv2_pkg::MSG_STATUS, payload: '0, quality_metric: '0, src_id: '0, virtual_channel: '0};
+                    core_rx[y][x][2] = '{msg_type: satswarmv2_pkg::MSG_STATUS, payload: '0, quality_metric: '0, src_id: '0, virtual_channel: '0};
+                    core_rx[y][x][3] = '{msg_type: satswarmv2_pkg::MSG_STATUS, payload: '0, quality_metric: '0, src_id: '0, virtual_channel: '0};
+                    core_rx_valid[y][x][0] = 1'b0;
+                    core_rx_valid[y][x][1] = 1'b0;
+                    core_rx_valid[y][x][2] = 1'b0;
+                    core_rx_valid[y][x][3] = 1'b0;
+                    core_tx_ready[y][x][0] = 1'b0;
+                    core_tx_ready[y][x][1] = 1'b0;
+                    core_tx_ready[y][x][2] = 1'b0;
+                    core_tx_ready[y][x][3] = 1'b0;
 
                     // Route North neighbor's North output to this core's South input
                     if (y > 0 && core_tx_valid[y-1][x][3]) begin

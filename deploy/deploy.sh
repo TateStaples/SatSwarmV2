@@ -73,12 +73,18 @@ show_usage() {
     echo ""
     echo "Usage: $0 <command>"
     echo ""
-    echo "Commands:"
+    echo "Zynq Commands (ZU9EG):"
     echo "  synth     Run synthesis only"
     echo "  impl      Run full implementation (synth + place + route)"
     echo "  bitstream Generate bitstream (runs impl if needed)"
     echo "  program   Program FPGA with latest bitstream"
     echo "  all       Complete flow: synth → impl → program"
+    echo ""
+    echo "AWS F1 Commands (VU9P):"
+    echo "  aws-synth       Run AWS F1 synthesis (produces DCP)"
+    echo "  aws-create-afi  Create AFI from DCP (requires AWS CLI)"
+    echo ""
+    echo "General:"
     echo "  clean     Remove all generated outputs"
     echo "  status    Show output directories and files"
     echo ""
@@ -86,9 +92,9 @@ show_usage() {
     echo "  SATSWARMV2_PART   Target FPGA part (default: xczu9eg-ffvb1156-2-e)"
     echo ""
     echo "Examples:"
-    echo "  $0 synth                    # Run synthesis"
-    echo "  SATSWARMV2_PART=xczu7ev... $0 synth  # Use different part"
-    echo "  $0 all                      # Complete flow"
+    echo "  $0 synth                    # Zynq synthesis"
+    echo "  $0 aws-synth                # AWS F1 synthesis"
+    echo "  $0 all                      # Zynq complete flow"
 }
 
 # -----------------------------------------------------------------------------
@@ -219,6 +225,97 @@ do_clean() {
     fi
 }
 
+# -----------------------------------------------------------------------------
+# AWS F1 Commands
+# -----------------------------------------------------------------------------
+do_aws_synth() {
+    print_header "SatSwarmv2 AWS F1 Synthesis"
+    print_status "Target: Xilinx VU9P (xcvu9p-flgb2104-2-i)"
+    
+    check_vivado
+    
+    mkdir -p "$OUTPUT_DIR/aws_synth"
+    
+    print_status "Running AWS synthesis..."
+    vivado -mode batch -nojournal -log "$OUTPUT_DIR/aws_synth/vivado_aws_synth.log" \
+           -source "$TCL_DIR/synth_aws.tcl"
+    
+    if [ $? -eq 0 ]; then
+        print_success "AWS synthesis completed successfully"
+        
+        LATEST_DCP=$(find "$OUTPUT_DIR/aws_synth" -name "*_synth.dcp" -type f | sort -r | head -1)
+        if [ -n "$LATEST_DCP" ]; then
+            echo ""
+            echo "Checkpoint: $LATEST_DCP"
+            echo ""
+            echo "Next steps:"
+            echo "  1. Upload DCP to S3"
+            echo "  2. Run: aws ec2 create-fpga-image --input-storage-location ..."
+            echo "  3. Wait for AFI to be available"
+            echo "  4. Load AFI on F1 instance"
+        fi
+    else
+        print_error "AWS synthesis failed"
+        exit 1
+    fi
+}
+
+do_aws_create_afi() {
+    print_header "SatSwarmv2 Create AWS AFI"
+    
+    # Find latest AWS synthesis DCP
+    LATEST_DCP=$(find "$OUTPUT_DIR/aws_synth" -name "*_synth.dcp" -type f | sort -r | head -1)
+    if [ -z "$LATEST_DCP" ]; then
+        print_error "No AWS synthesis checkpoint found. Run 'aws-synth' first."
+        exit 1
+    fi
+    
+    print_status "Using DCP: $LATEST_DCP"
+    
+    # Check AWS CLI is available
+    if ! command -v aws &> /dev/null; then
+        print_error "AWS CLI not found. Install and configure it first."
+        exit 1
+    fi
+    
+    # Check required S3 bucket
+    if [ -z "$SATSWARM_S3_BUCKET" ]; then
+        print_error "Set SATSWARM_S3_BUCKET environment variable"
+        echo "  export SATSWARM_S3_BUCKET=my-fpga-bucket"
+        exit 1
+    fi
+    
+    local S3_KEY="satswarm/$(basename $LATEST_DCP)"
+    
+    print_status "Uploading DCP to s3://$SATSWARM_S3_BUCKET/$S3_KEY ..."
+    aws s3 cp "$LATEST_DCP" "s3://$SATSWARM_S3_BUCKET/$S3_KEY"
+    
+    if [ $? -eq 0 ]; then
+        print_success "DCP uploaded"
+        
+        print_status "Creating AFI..."
+        aws ec2 create-fpga-image \
+            --name "SatSwarm-$(date +%Y%m%d)" \
+            --description "SatSwarm SAT Solver FPGA Image" \
+            --input-storage-location "Bucket=$SATSWARM_S3_BUCKET,Key=$S3_KEY" \
+            --logs-storage-location "Bucket=$SATSWARM_S3_BUCKET,Key=satswarm/logs/" \
+            | tee "$OUTPUT_DIR/aws_synth/create_afi_result.json"
+        
+        if [ $? -eq 0 ]; then
+            print_success "AFI creation initiated"
+            echo ""
+            echo "Check status with:"
+            echo "  aws ec2 describe-fpga-images --fpga-image-ids <afi-id>"
+        else
+            print_error "AFI creation failed"
+            exit 1
+        fi
+    else
+        print_error "S3 upload failed"
+        exit 1
+    fi
+}
+
 do_status() {
     print_header "Deployment Status"
     
@@ -270,6 +367,12 @@ case "${1:-}" in
         ;;
     status)
         do_status
+        ;;
+    aws-synth)
+        do_aws_synth
+        ;;
+    aws-create-afi)
+        do_aws_create_afi
         ;;
     -h|--help|help)
         show_usage

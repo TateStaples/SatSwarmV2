@@ -27,7 +27,7 @@ module solver_core #(
      output logic        load_ready,
 
         // NoC Interface (4 directions: N, S, E, W)
-    `ifdef SYNTHESIS
+    `ifdef YOSYS
         input  satswarmv2_pkg::noc_packet_t rx_pkt_0,
         input  satswarmv2_pkg::noc_packet_t rx_pkt_1,
         input  satswarmv2_pkg::noc_packet_t rx_pkt_2,
@@ -77,7 +77,7 @@ module solver_core #(
     input  logic        global_write_grant
 );
 
-`ifdef SYNTHESIS
+`ifdef YOSYS
     // Rebuild 4-port arrays for internal logic under Yosys
     satswarmv2_pkg::noc_packet_t rx_pkt [3:0];
     logic rx_valid [3:0];

@@ -81,6 +81,38 @@ alias verisat-status="$VERISAT_DEPLOY/deploy.sh status"
 # -----------------------------------------------------------------------------
 # Summary
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# AWS F1 Configuration
+# -----------------------------------------------------------------------------
+# Detect if running on an F1 instance
+export IS_AWS_F1=false
+if curl -s --connect-timeout 1 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null | grep -q "f1\."; then
+    export IS_AWS_F1=true
+    echo "  Detected: AWS F1 instance"
+fi
+
+# AWS FPGA repository paths
+if [[ -d "/home/centos/src/project_data/aws-fpga" ]]; then
+    export AWS_FPGA_REPO_DIR="${AWS_FPGA_REPO_DIR:-/home/centos/src/project_data/aws-fpga}"
+elif [[ -d "$VERISAT_ROOT/src/aws-fpga" ]]; then
+    export AWS_FPGA_REPO_DIR="${AWS_FPGA_REPO_DIR:-$VERISAT_ROOT/src/aws-fpga}"
+fi
+
+if [[ -n "$AWS_FPGA_REPO_DIR" ]]; then
+    export HDK_DIR="$AWS_FPGA_REPO_DIR/hdk"
+    export SDK_DIR="$AWS_FPGA_REPO_DIR/sdk"
+fi
+
+# S3 bucket for AFI creation (user must set this)
+# export SATSWARM_S3_BUCKET=my-fpga-bucket
+
+# Aliases for AWS operations
+alias satswarm-aws-synth="$VERISAT_DEPLOY/deploy.sh aws-synth"
+alias satswarm-aws-afi="$VERISAT_DEPLOY/deploy.sh aws-create-afi"
+
+# -----------------------------------------------------------------------------
+# Summary
+# -----------------------------------------------------------------------------
 echo ""
 echo "VeriSAT Deployment Environment Configured"
 echo "=========================================="
@@ -99,10 +131,19 @@ else
     echo "    source $SCRIPT_DIR/env.sh"
 fi
 
+if [[ -n "$AWS_FPGA_REPO_DIR" ]]; then
+    echo "  AWS FPGA SDK:   $AWS_FPGA_REPO_DIR"
+fi
+if [[ "$IS_AWS_F1" == "true" ]]; then
+    echo "  AWS F1:         YES"
+fi
+
 echo ""
 echo "Available commands:"
-echo "  ./deploy.sh synth    - Run synthesis"
-echo "  ./deploy.sh impl     - Run implementation"
-echo "  ./deploy.sh program  - Program FPGA"
-echo "  ./deploy.sh all      - Complete flow"
+echo "  ./deploy.sh synth         - Zynq synthesis"
+echo "  ./deploy.sh impl          - Zynq implementation"
+echo "  ./deploy.sh program       - Program Zynq FPGA"
+echo "  ./deploy.sh all           - Zynq complete flow"
+echo "  ./deploy.sh aws-synth     - AWS F1 synthesis"
+echo "  ./deploy.sh aws-create-afi - Create AWS AFI"
 echo ""
