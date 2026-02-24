@@ -46,7 +46,7 @@ module shared_clause_buffer #(
             idx = (rr_ptr + i) % NUM_CORES;
             if (write_req[idx]) begin
                 write_grant[idx] = 1'b1;
-                grant_idx = idx[$clog2(NUM_CORES)-1:0];
+                grant_idx = idx;
                 any_grant = 1'b1;
                 break; // Found one
             end

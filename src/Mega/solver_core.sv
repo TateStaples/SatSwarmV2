@@ -168,6 +168,12 @@ module solver_core #(
     logic prop_flush; // Flush signal from FSM
     logic signed [47:0] prop_fifo_out; // Output from sfifo (48-bit: 16-bit reason + 32-bit lit)
     logic prop_fifo_full;
+
+    // Forward declarations for signals used in sfifo and PSE below
+    logic        pse_propagated_valid;
+    logic signed [31:0] pse_propagated_var;
+    logic [15:0] pse_propagated_reason;
+    logic [15:0] pse_clause_count;
     logic [FIFO_WIDTH:0] prop_fifo_count;
 
     sfifo #(
@@ -310,8 +316,7 @@ module solver_core #(
     logic        pse_start;
     logic        pse_done;
     logic        pse_conflict;
-    logic        pse_propagated_valid;
-    logic signed [31:0] pse_propagated_var;
+    // pse_propagated_valid, pse_propagated_var declared above (forward decl for sfifo)
     logic [31:0] pse_max_var;
     logic        pse_clear_assignments;
     logic        pse_clear_valid;
@@ -617,8 +622,7 @@ module solver_core #(
         .current_clause_count(pse_clause_count)      // Connect exposed clause count
     );
 
-    logic [15:0] pse_propagated_reason; // NEW wire for reason
-    logic [15:0] pse_clause_count; // Signal from PSE
+    // pse_propagated_reason, pse_clause_count declared above (forward decl for sfifo/PSE)
     logic cae_learned_valid;
     logic cae_done_actual;
     logic [15:0] cae_backtrack_level; // Explicit declaration to fix implicit warning
