@@ -13,7 +13,7 @@
 module pse #(
     parameter int MAX_VARS    = 256,
     parameter int MAX_CLAUSES = 256,
-    parameter int MAX_LITS    = 2048,
+    parameter int MAX_LITS    = 4096,
     parameter int MAX_CLAUSE_LEN = 32,
     parameter int CORE_ID     = 0,
     parameter int PROP_QUEUE_DEPTH = MAX_LITS

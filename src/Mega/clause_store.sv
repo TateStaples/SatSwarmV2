@@ -1,6 +1,6 @@
 module clause_store #(
     parameter int MAX_CLAUSES = 256,
-    parameter int MAX_LITS = 2048
+    parameter int MAX_LITS = 4096
 )(
     input  logic               clk,
     input  logic               rst_n,

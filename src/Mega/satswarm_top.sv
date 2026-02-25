@@ -4,7 +4,7 @@ module satswarm_top #(
     parameter int GRID_Y = 1,
     parameter int MAX_VARS_PER_CORE = 256,
     parameter int MAX_CLAUSES_PER_CORE = 256,
-    parameter int MAX_LITS = 2048,
+    parameter int MAX_LITS = 4096,
     parameter int NUM_CORES = GRID_X * GRID_Y
 )(
     input  logic [31:0]  DEBUG, // Runtime Debug Level

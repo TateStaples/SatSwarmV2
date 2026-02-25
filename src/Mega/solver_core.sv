@@ -3,7 +3,7 @@ module solver_core #(
     parameter int CORE_ID = 0,
     parameter int MAX_VARS = 256,
     parameter int MAX_CLAUSES = 256,
-    parameter int MAX_LITS = 2048,
+    parameter int MAX_LITS = 4096,
     parameter int MAX_CLAUSE_LEN = 32,
     parameter int GRID_X = 1,
     parameter int GRID_Y = 1
