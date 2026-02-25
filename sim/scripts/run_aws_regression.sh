@@ -45,7 +45,7 @@ export CL_DIR="$(realpath "$AWS_FPGA_SIM_DIR/../..")"
 
 # Precompile the regression testbench once (saves ~40s per test)
 echo "Precompiling regression testbench..."
-if ! make TEST=test_satswarm_regression compile_only > /tmp/aws_regression_compile.log 2>&1; then
+if ! make TEST=test_satswarm_regression compile > /tmp/aws_regression_compile.log 2>&1; then
     echo "Error: Precompilation failed! See /tmp/aws_regression_compile.log"
     exit 1
 fi
