@@ -147,6 +147,10 @@ shell's expected port list)
 (accessible via symlink from within the HDK tree) and generated verif scripts.
 - HDK v2.3.0 officially supports Vivado 2025.2; the `sh_ddr` encrypted modules work correctly
 when synthesized as a submodule within the CL (not standalone).
+- On a **fresh machine**, after cloning both `aws-fpga` and `SatSwarmV2`, you **must** copy or symlink
+  `src/aws-fpga/hdk/cl/examples/cl_satswarm` from this repo into `$HDK_DIR/cl/examples/cl_satswarm`
+  before running any AWS synthesis or XSim flows. All `CL_DIR` paths in this document assume that
+  directory exists inside the HDK tree.
 - Don't edit the HDK repo when you face issues, this project is way more likely to be the problem.
 
 ### SatSwarm RTL (`src/Mega/`)
@@ -796,4 +800,4 @@ See §3 "Synthesis Attempt History" and §5 "Complete Synthesis" for details and
 
 ---
 
-*Last updated: 2026-03-02 UTC (Attempt 7 OOM-killed in Technology Mapping; 30 GB instance confirmed too small even with DDR disabled; next step is ≥64 GB instance for Attempt 8)*
+*Last updated: 2026-03-03 UTC (Attempt 10 OOM-killed in Technology Mapping; 30 GB instance + 40 GB swap confirmed insufficient; ≥64 GB instance or RTL complexity reduction required for Technology Mapping)*
