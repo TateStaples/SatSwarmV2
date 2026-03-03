@@ -81,9 +81,13 @@ module tb_regression_single;
   string test_name;
   real start_time;
   real end_time;
-  int clause_store[$][];  // dynamic array of clauses (each clause is dynamic array of ints)
+  localparam int MAX_TB_CLAUSES = 4096;
+  localparam int MAX_TB_CLAUSE_LEN = 32;
+  int clause_flat [0:MAX_TB_CLAUSES-1][0:MAX_TB_CLAUSE_LEN-1];
+  int clause_lens_tb [0:MAX_TB_CLAUSES-1];
+  int total_lits_loaded;
 
-  task push_literal(input int lit, input bit clause_end);
+  task automatic push_literal(input int lit, input bit clause_end);
     begin
       //$display("[%0t] Pushing literal %0d (clause_end=%0d)", $time, lit, clause_end);
       @(posedge clk);
@@ -105,7 +109,6 @@ module tb_regression_single;
     int scan_result;
     int num_vars, num_clauses;
     int literals[$];
-    int clause_copy[];
     begin
       $display("[%0t] Loading CNF file: %s", $time, filename);
       fd = $fopen(filename, "r");
@@ -115,9 +118,8 @@ module tb_regression_single;
       end
 
       clause_count = 0;
-      clause_store.delete();
       var_count = 0;
-      clause_store.delete();
+      total_lits_loaded = 0;
 
       while (!$feof(fd)) begin
         if ($fgets(line, fd)) begin
@@ -147,8 +149,12 @@ module tb_regression_single;
                     push_literal(literals[i], (i == literals.size()-1));
                   end
                   // Save a copy for brute-force verification
-                  clause_copy = literals;
-                  clause_store.push_back(clause_copy);
+                  if (clause_count < MAX_TB_CLAUSES) begin
+                    clause_lens_tb[clause_count] = literals.size();
+                    foreach (literals[li])
+                      if (li < MAX_TB_CLAUSE_LEN) clause_flat[clause_count][li] = literals[li];
+                    total_lits_loaded += literals.size();
+                  end
                   clause_count++;
                   break;
                 end else begin
@@ -182,21 +188,10 @@ module tb_regression_single;
          $finish;
       end
       
-      // We need to count total literals to check MAX_LITS
-      // Re-scanning clause_store to count lits
-      begin
-          int total_lits = 0;
-          foreach (clause_store[i]) begin
-              total_lits += clause_store[i].size();
-          end
-          // Note: Each clause needs 4 words in memory? No, MAX_LITS is the literal memory size.
-          // In clause_store.sv, lit_mem is [0:MAX_LITS-1].
-          // HW stores literals packed.
-          if (total_lits > MAX_LITS) begin
-             $display("\n[ERROR] CNF Literals (%0d) exceed MAX_LITS (%0d)!", total_lits, MAX_LITS);
-             $display("[ERROR] Please increase MAX_LITS in Makefile.");
-             $finish;
-          end
+      if (total_lits_loaded > MAX_LITS) begin
+         $display("\n[ERROR] CNF Literals (%0d) exceed MAX_LITS (%0d)!", total_lits_loaded, MAX_LITS);
+         $display("[ERROR] Please increase MAX_LITS in Makefile.");
+         $finish;
       end
     end
   endtask
@@ -223,10 +218,10 @@ module tb_regression_single;
 
     $display("  Verifying model from Core %0d (Grid Index %0d)...", winning_core_idx, winning_core_idx);
 
-    foreach (clause_store[c]) begin
+    for (int c = 0; c < clause_count && c < MAX_TB_CLAUSES; c++) begin
         clause_sat = 0;
-        foreach (clause_store[c][l]) begin
-            int lit = clause_store[c][l];
+        for (int l = 0; l < clause_lens_tb[c] && l < MAX_TB_CLAUSE_LEN; l++) begin
+            int lit = clause_flat[c][l];
             int var_idx = (lit < 0) ? -lit : lit;
             
             // Read model from CORE TRAIL (source of truth)
@@ -283,7 +278,7 @@ module tb_regression_single;
     end
   endtask
 
-  task run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
+  task automatic run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
     bit model_valid;
     begin
       model_valid = 1'b1; // Default valid
@@ -467,7 +462,7 @@ module tb_regression_single;
 
   // Timeout watchdog
   initial begin
-    #900000000000; // ~15 minutes sim time budget
+    #(900_000_000); // ~15 sec sim time budget
     $display("\n*** GLOBAL TIMEOUT - ABORTING ***");
     $finish;
   end

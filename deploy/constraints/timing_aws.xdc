@@ -1,6 +1,6 @@
 # =============================================================================
-# SatSwarm AWS F1 Timing Constraints
-# Target: Xilinx Virtex UltraScale+ VU9P (AWS F1)
+# SatSwarm AWS F2 Timing Constraints
+# Target: Xilinx Virtex UltraScale+ VU47P (AWS F2)
 # Clock: 250 MHz clk_main_a0 provided by AWS Shell
 # =============================================================================
 #

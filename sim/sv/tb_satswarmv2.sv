@@ -79,11 +79,15 @@ module tb_satswarmv2;
   string test_name;
   real start_time;
   real end_time;
-  int clause_store[$][];  // dynamic array of clauses (each clause is dynamic array of ints)
+  int flat_clause_store[MAX_LITS];
+  int clause_starts[MAX_CLAUSES_PER_CORE * 4];
+  int clause_lengths[MAX_CLAUSES_PER_CORE * 4];
+  int _clause_store_idx = 0;
+  int _clause_count_idx = 0;
   int debug_level = 0;  // 0=heartbeat+final, 1=architectural, 2=full microarch
   longint unsigned max_cycles_cfg = 5000000;  // default timeout cycles
 
-  task push_literal(input int lit, input bit clause_end);
+  task automatic push_literal(input int lit, input bit clause_end);
     begin
       if (debug_level >= 2) $display("[%0t] Pushing literal %0d (clause_end=%0d)", $time, lit, clause_end);
       @(posedge clk);
@@ -98,14 +102,14 @@ module tb_satswarmv2;
     end
   endtask
 
-  task load_cnf_file(input string filename);
+  task automatic load_cnf_file(input string filename);
     int fd;
     string line;
     int lit;
     int scan_result;
     int num_vars, num_clauses;
     int literals[$];
-    int clause_copy[];
+    int clause_copy[$];
     begin
       if (debug_level >= 1) $display("[%0t] Loading CNF file: %s", $time, filename);
       fd = $fopen(filename, "r");
@@ -115,9 +119,9 @@ module tb_satswarmv2;
       end
 
       clause_count = 0;
-      clause_store.delete();
+      _clause_store_idx = 0; _clause_count_idx = 0;
       var_count = 0;
-      clause_store.delete();
+      _clause_store_idx = 0; _clause_count_idx = 0;
 
       while (!$feof(fd)) begin
         if ($fgets(line, fd)) begin
@@ -147,8 +151,13 @@ module tb_satswarmv2;
                     push_literal(literals[i], (i == literals.size()-1));
                   end
                   // Save a copy for brute-force verification
-                  clause_copy = literals;
-                  clause_store.push_back(clause_copy);
+                  clause_starts[_clause_count_idx] = _clause_store_idx;
+                  clause_lengths[_clause_count_idx] = literals.size();
+                  for (int j = 0; j < literals.size(); j++) begin
+                      flat_clause_store[_clause_store_idx] = literals[j];
+                      _clause_store_idx++;
+                  end
+                  _clause_count_idx++;
                   clause_count++;
                   break;
                 end else begin
@@ -172,7 +181,7 @@ module tb_satswarmv2;
   endtask
 
   // Model Verification Task (checks if the solver's internal state actually satisfies the CNF)
-  task verify_model();
+  task automatic verify_model();
     int unsat_clauses = 0;
     logic [1:0] state;
     bit clause_sat;
@@ -204,10 +213,14 @@ module tb_satswarmv2;
 
     if (debug_level >= 2) $display("  Verifying model from Core [%0d,%0d]...", winning_core_x, winning_core_y);
 
-    foreach (clause_store[c]) begin
+    for (int c = 0; c < _clause_count_idx; c++) begin
+        int start_idx = clause_starts[c];
+        int len = clause_lengths[c];
         clause_sat = 0;
-        foreach (clause_store[c][l]) begin
-            int lit = clause_store[c][l];
+        
+            for (int l = 0; l < len; l++) begin
+                int __idx = start_idx + l;
+                int lit = flat_clause_store[__idx];
             int var_idx = (lit < 0) ? -lit : lit;
             
             // Read model from CORE TRAIL (source of truth)
@@ -272,7 +285,7 @@ module tb_satswarmv2;
 
   endtask
 
-  task run_test(input string name, input string cnf_file, input bit expected_sat);
+  task automatic run_test(input string name, input string cnf_file, input bit expected_sat);
     begin
       test_name = name;
       if (debug_level >= 1) begin
@@ -448,7 +461,7 @@ module tb_satswarmv2;
 
   // Timeout watchdog
   initial begin
-    #900000000000; // ~15 minutes sim time budget
+    #(64'd900_000_000_000); // ~15 minutes sim time budget
     $display("\n*** GLOBAL TIMEOUT - ABORTING ***");
     $finish;
   end

@@ -3,6 +3,15 @@
 # SatSwarmv2 FPGA Deployment Script
 # Master script for synthesis, implementation, and programming
 # Usage: ./deploy.sh [synth|impl|bitstream|program|all]
+#
+# *** LEGACY SCRIPT — NOT THE CORRECT BUILD PATH FOR AWS F2 DEPLOYMENT ***
+#
+# This script targets xczu9eg (Zynq UltraScale+ ZU9EG), which was the early
+# non-AWS board target. It calls synth_aws.tcl which has been deleted.
+#
+# For AWS F2 (VU47P) synthesis, use:
+#   deploy/run_synthesis.sh
+# For full build (synthesis + implementation + AFI), see HANDOFF.md §4.
 # =============================================================================
 
 set -e
@@ -80,8 +89,8 @@ show_usage() {
     echo "  program   Program FPGA with latest bitstream"
     echo "  all       Complete flow: synth → impl → program"
     echo ""
-    echo "AWS F1 Commands (VU9P):"
-    echo "  aws-synth       Run AWS F1 synthesis (produces DCP)"
+    echo "AWS F2 Commands (VU47P):"
+    echo "  aws-synth       Run AWS synthesis (produces DCP)"
     echo "  aws-create-afi  Create AFI from DCP (requires AWS CLI)"
     echo ""
     echo "General:"
@@ -93,7 +102,7 @@ show_usage() {
     echo ""
     echo "Examples:"
     echo "  $0 synth                    # Zynq synthesis"
-    echo "  $0 aws-synth                # AWS F1 synthesis"
+    echo "  $0 aws-synth                # AWS synthesis"
     echo "  $0 all                      # Zynq complete flow"
 }
 
@@ -226,11 +235,11 @@ do_clean() {
 }
 
 # -----------------------------------------------------------------------------
-# AWS F1 Commands
+# AWS Commands
 # -----------------------------------------------------------------------------
 do_aws_synth() {
-    print_header "SatSwarmv2 AWS F1 Synthesis"
-    print_status "Target: Xilinx VU9P (xcvu9p-flgb2104-2-i)"
+    print_header "SatSwarmv2 AWS Synthesis"
+    print_status "Target: Xilinx VU47P (xcvu47p-fsvh2892-2-e)"
     
     check_vivado
     
@@ -252,7 +261,7 @@ do_aws_synth() {
             echo "  1. Upload DCP to S3"
             echo "  2. Run: aws ec2 create-fpga-image --input-storage-location ..."
             echo "  3. Wait for AFI to be available"
-            echo "  4. Load AFI on F1 instance"
+            echo "  4. Load AFI on F2 instance"
         fi
     else
         print_error "AWS synthesis failed"

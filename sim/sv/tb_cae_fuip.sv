@@ -30,6 +30,7 @@ module tb_cae_fuip;
     logic        trail_read_value;
     logic [15:0] trail_read_level;
     logic        trail_read_is_decision;
+    logic [15:0] trail_read_reason;
     logic [15:0] trail_height;
 
     logic [31:0] reason_query_var;
@@ -55,8 +56,10 @@ module tb_cae_fuip;
     // DUT Instantiation
     cae #(
         .MAX_LITS(MAX_LITS),
-        .LEVEL_W(LEVEL_W)
+        .LEVEL_W(LEVEL_W),
+        .MAX_VARS(MAX_VARS)
     ) dut (
+        .DEBUG(32'd0),
         .clk(clk),
         .reset(reset),
         .start(start),
@@ -76,6 +79,7 @@ module tb_cae_fuip;
         .trail_read_value(trail_read_value),
         .trail_read_level(trail_read_level),
         .trail_read_is_decision(trail_read_is_decision),
+        .trail_read_reason(trail_read_reason),
         .trail_height(trail_height),
         .reason_query_var(reason_query_var),
         .reason_query_clause(reason_query_clause),
@@ -94,13 +98,15 @@ module tb_cae_fuip;
         if (trail_read_idx < trail_height) begin
             trail_read_var = trail_vars[trail_read_idx];
             trail_read_level = trail_levels_list[trail_read_idx];
-            trail_read_value = 0; // Value not critical for resolution search usually?
+            trail_read_value = 0;
             trail_read_is_decision = (reason_map[trail_read_var] == 16'hFFFF);
+            trail_read_reason = reason_map[trail_read_var];
         end else begin
             trail_read_var = 0;
             trail_read_level = 0;
             trail_read_value = 0;
             trail_read_is_decision = 0;
+            trail_read_reason = 16'hFFFF;
         end
 
         // Reason Query

@@ -29,3 +29,8 @@ DVEfiles/
 # Local results
 ladder_results.txt
 benchmark_results.txt
+
+# Ignore synthesized outputs and Vivado logs
+deploy/output/
+*.jou
+.Xil/

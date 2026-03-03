@@ -51,7 +51,11 @@ module sfifo #(
 
     localparam ADDR_W = $clog2(DEPTH);
     
-    logic [WIDTH-1:0] mem [0:DEPTH-1];
+    // ram_style="distributed": async read (pop_data = mem[rd_ptr]) targets LUTRAM.
+    // The mem write is in a SEPARATE always_ff @(posedge clk) with no async-reset
+    // sensitivity.  Vivado requires this split: including negedge rst_n in the write
+    // process causes LUTRAM inference to fail even when mem is not reset.
+    (* ram_style = "distributed" *) logic [WIDTH-1:0] mem [0:DEPTH-1];
     logic [ADDR_W-1:0] wr_ptr;
     logic [ADDR_W-1:0] rd_ptr;
     logic [ADDR_W:0]   cnt;
@@ -62,6 +66,14 @@ module sfifo #(
     
     assign pop_data = mem[rd_ptr];
 
+    // LUTRAM Write Port — posedge clk ONLY (no async-reset sensitivity)
+    always_ff @(posedge clk) begin
+        if (push && !full) begin
+            mem[wr_ptr] <= push_data;
+        end
+    end
+
+    // Control signals — separate block with async reset (does NOT touch mem)
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             wr_ptr <= '0;
@@ -72,15 +84,12 @@ module sfifo #(
             rd_ptr <= '0;
             cnt    <= '0;
         end else begin
-            // Simultaneous push and pop
             if (push && !full && pop && !empty) begin
-                mem[wr_ptr] <= push_data;
                 wr_ptr <= (wr_ptr == DEPTH-1) ? '0 : wr_ptr + 1'b1;
                 rd_ptr <= (rd_ptr == DEPTH-1) ? '0 : rd_ptr + 1'b1;
-                // Count remains unchanged
+                // cnt unchanged
             end else begin
                 if (push && !full) begin
-                    mem[wr_ptr] <= push_data;
                     wr_ptr <= (wr_ptr == DEPTH-1) ? '0 : wr_ptr + 1'b1;
                     cnt <= cnt + 1'b1;
                 end

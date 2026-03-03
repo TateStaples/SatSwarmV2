@@ -80,11 +80,15 @@ module tb_single_core_only;
   string test_name;
   real start_time;
   real end_time;
-  int clause_store[$][];
+  int flat_clause_store[MAX_LITS];
+  int clause_starts[MAX_CLAUSES_PER_CORE * 4];
+  int clause_lengths[MAX_CLAUSES_PER_CORE * 4];
+  int _clause_store_idx = 0;
+  int _clause_count_idx = 0;
   int passed_tests = 0;
   int failed_tests = 0;
 
-  task push_literal(input int lit, input bit clause_end);
+  task automatic push_literal(input int lit, input bit clause_end);
     begin
       @(posedge clk);
       while (!host_load_ready) @(posedge clk);
@@ -98,14 +102,14 @@ module tb_single_core_only;
     end
   endtask
 
-  task load_cnf_file(input string filename);
+  task automatic load_cnf_file(input string filename);
     int fd;
     string line;
     int lit;
     int scan_result;
     int num_vars, num_clauses;
     int literals[$];
-    int clause_copy[];
+    int clause_copy[$];
     begin
       $display("[%0t] Loading CNF file: %s", $time, filename);
       fd = $fopen(filename, "r");
@@ -115,7 +119,7 @@ module tb_single_core_only;
       end
 
       clause_count = 0;
-      clause_store.delete();
+      _clause_store_idx = 0; _clause_count_idx = 0;
       var_count = 0;
 
       while (!$feof(fd)) begin
@@ -187,9 +191,9 @@ module tb_single_core_only;
     end
     */
     
-    foreach (clause_store[c]) begin
+    for (int c = 0; c < clause_store.size(); c++) begin
       clause_sat = 0;
-      foreach (clause_store[c][l]) begin
+      for (int l = 0; l < clause_store[c].size(); l++) begin
         int lit = clause_store[c][l];
         int var_idx = (lit < 0) ? -lit : lit;
         
@@ -210,7 +214,7 @@ module tb_single_core_only;
         unsat_clauses++;
         if (unsat_clauses <= 5) begin
           $display("    Failed Clause %0d: {", c);
-          foreach (clause_store[c][l]) begin
+          for (int l = 0; l < clause_store[c].size(); l++) begin
             $display("      lit=%0d", clause_store[c][l]);
           end
           $display("    }");
@@ -227,7 +231,7 @@ module tb_single_core_only;
     end
   endtask
 
-  task run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
+  task automatic run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
     bit model_valid;
     begin
       model_valid = 1'b1;
@@ -350,7 +354,7 @@ module tb_single_core_only;
 
   // Timeout watchdog
   initial begin
-    #900000000000; // ~15 minutes sim time budget
+    #(64'd900_000_000_000); // ~15 minutes sim time budget
     $display("\n*** GLOBAL TIMEOUT - ABORTING ***");
     $finish;
   end

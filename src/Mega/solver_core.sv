@@ -122,8 +122,9 @@ module solver_core #(
     //    - CAE analyzes conflicts (if any) and computes backtrack level.
     // 2. Trail Integrity: The Trail is the single source of truth for assignments.
     //    PSE and VDE must stay synchronized with the Trail.
-    // 3. Resync Safety: If PSE's internal state diverges from the Trail (e.g., due to
-    //    a race condition or stale cache), a full RESYNC_PSE is triggered to restore consistency.
+    // 3. Rescan Safety: If PSE produces a conflicting propagation against the Trail,
+    //    rescan_required_q is set and PSE is restarted (no full resync needed —
+    //    PSE shadow state is still valid). RESYNC_PSE was removed as dead code.
     // =========================================================================
 
     // Core FSM
@@ -132,23 +133,18 @@ module solver_core #(
         // INVARIANT: VDE runs only when PSE is done and no conflict exists.
         VDE_PHASE,              // Renamed from PROPAGATE: Request decision from VDE
         VDE_FALLBACK,           // Fallback scan for unassigned variable
+        VDE_TRAIL_CHECK,        // FIX5: 1-cycle wait — read registered trail query for VDE decision guard
+        PSE_PROP_CHECK,         // FIX5: 1-cycle wait — read registered trail query for propagation guard
         // INVARIANT: PSE runs to completion. Logic must handle "Redundant" vs "Conflicting" props.
         PSE_PHASE,              // Renamed from ACCUMULATE_PROPS: Wait for PSE propagation
-        QUERY_CONFLICT_LEVELS,  // NEW: Query decision levels for conflict clause (one per cycle)
         // INVARIANT: CAE runs only after a conflict is confirmed and levels are queried.
         CONFLICT_ANALYSIS,
-        BUMP_LEARNED_VARS,      // NEW: Bump activity for all variables in learned clause
-        // INVARIANT: Learned clauses are appended to the clause database and immediately used for Resync.
-        APPEND_LEARNED,
-        APPEND_PUSH,            // NEW: Stable push state to decouple calculation from trail updates
         BACKTRACK_PHASE,
-        RESYNC_PSE,
-        RESYNC_PSE_SETTLE,
+        BACKTRACK_UNDO,         // Wait for incremental unassign, then: append + push + start PSE (single cycle)
         FINAL_VERIFY,
         SAT_CHECK,
         FINISH_SAT,
         FINISH_UNSAT,
-        PSE_START_AFTER_LEARN,
         INJECT_RX_CLAUSE
     } core_state_t;
 
@@ -194,14 +190,15 @@ module solver_core #(
     
     logic [3:0]  prop_count_q, prop_count_d;
     logic        conflict_seen_q, conflict_seen_d;
-    // Resync iterator for rebuilding PSE assign_state from trail
-    logic [31:0] resync_idx_q, resync_idx_d;
-    logic        resync_started_q, resync_started_d;
-    logic        resync_append_learned_q, resync_append_learned_d;
-    
     // Track whether we've started PSE in this propagation round
     // to avoid checking stale conflict_detected from prior rounds
     logic        pse_started_q, pse_started_d;
+
+    // Registered capture of incoming NoC clause literals.
+    // Sampled in PSE_PHASE exit when iface_clause_rx_valid fires (one-cycle pulse);
+    // held stable across the INJECT_RX_CLAUSE state so cae_direct_append can read them.
+    logic signed [31:0] rx_clause_lit1_q, rx_clause_lit1_d;
+    logic signed [31:0] rx_clause_lit2_q, rx_clause_lit2_d;
     
     // Track if we're currently in final SAT verification
     logic        final_verify_mode_q, final_verify_mode_d;
@@ -225,7 +222,7 @@ module solver_core #(
     logic        restart_pending_q, restart_pending_d;
 
     // Simple conflict-triggered restart threshold (tunable)
-    localparam int RESTART_CONFLICT_THRESHOLD = 16'd64; // Enable restarts for long SAT runs
+    localparam int RESTART_CONFLICT_THRESHOLD = 16'd65535; // DISABLED: Set to max to test without restarts
     
     // Loop counter for QUERY_CONFLICT_LEVELS state
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  query_index_q, query_index_d;
@@ -276,10 +273,20 @@ module solver_core #(
     logic        trail_query_value;
     logic        trail_clear_all;
     logic [15:0] trail_query_reason; // NEW
-    
-    // Muxing logic for trail read index (Shared by CAE and RESYNC logic)
-    logic [15:0] muxed_trail_read_idx;
-    
+
+    // FIX5: Registered (pipelined) trail query outputs — break critical LUTRAM→BRAM chain
+    logic        trail_query_valid_r;
+    logic [15:0] trail_query_level_r;
+    logic        trail_query_value_r;
+    logic [15:0] trail_query_reason_r;
+
+    // FIX5: Saved FIFO item across 1-cycle PSE_PROP_CHECK wait
+    logic signed [31:0] prop_fifo_lit_q,    prop_fifo_lit_d;
+    logic [15:0]        prop_fifo_reason_q, prop_fifo_reason_d;
+    // Saved VDE decision var across VDE_TRAIL_CHECK wait
+    logic [31:0] vde_check_var_q, vde_check_var_d;
+    logic        vde_check_phase_q, vde_check_phase_d;
+
     // logic [31:0] cae_trail_read_var; // Moved below
     // logic        cae_trail_read_value;
     // logic [15:0] cae_trail_read_level;
@@ -347,6 +354,9 @@ module solver_core #(
     // Rescan flag for handling conflicting propagations
     logic        rescan_required_q, rescan_required_d;
 
+    // Restart mode flag: backtrack to level 0 without learned clause
+    logic        restart_mode_q, restart_mode_d;
+
     // VDE repeat-decision guard (avoid livelock on already-assigned vars)
     logic [5:0]  vde_repeat_count_q, vde_repeat_count_d;
     logic [31:0] vde_repeat_var_q, vde_repeat_var_d;
@@ -355,14 +365,18 @@ module solver_core #(
     logic [31:0] fallback_idx_q, fallback_idx_d;
 
 
-    // Learned clause append iterator and muxed host/learned load to PSE
-    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  learn_idx_q, learn_idx_d;
+    // Muxed host load to PSE
     logic        learn_load_valid;
     logic signed [31:0] learn_load_literal;
     logic        learn_load_clause_end;
     logic        load_valid_mux;
     logic signed [31:0] load_literal_mux;
     logic        load_clause_end_mux;
+
+    // Direct-append signals: CAE learned clause written to PSE in one cycle
+    logic                                       cae_direct_append_en;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]        cae_direct_append_len;
+    logic signed [MAX_CLAUSE_LEN-1:0][31:0]     cae_direct_append_lits;
 
     // CAE module signals
     logic        cae_start;
@@ -405,14 +419,17 @@ module solver_core #(
     // VDE signals
     logic        vde_bump_valid;
     logic [31:0] vde_bump_var;
-    logic [4:0]  vde_bump_count;
-    logic [15:0][31:0] vde_bump_vars;
+    logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  vde_bump_count;
+    logic [MAX_CLAUSE_LEN-1:0][31:0] vde_bump_vars;
     logic        vde_decay;
     logic        vde_busy;
     logic        vde_pending_ops;
 
     // Current decision literal (signed, includes phase)
     logic signed [31:0] decision_lit_q, decision_lit_d;
+
+    // Asserting literal captured from CAE in BACKTRACK_PHASE (stable register, avoids delta-cycle issue)
+    logic signed [31:0] assert_lit_q, assert_lit_d;
 
     // Bind PSE-observed max variable index into VDE search window
     // This ensures VDE only considers variables that appear in the formula
@@ -449,33 +466,10 @@ module solver_core #(
         .level0_conflict_count(level0_conflict_count)
     );
 
-    // Resync Controller Controls
-    logic        resync_start, resync_done;
-    logic [15:0] resync_trail_rd_idx;
-    logic        resync_clear_shadows, resync_fifo_flush;
-    logic        resync_valid;
-    logic [31:0] resync_var;
-    logic        resync_value;
-
-    resync_controller u_resync (
-        .clk(clk),
-        .rst_n(rst_n),
-        .start(resync_start),
-        .trail_height(trail_height),
-        .done(resync_done),
-        .trail_rd_idx(resync_trail_rd_idx),
-        .trail_rd_var(cae_trail_read_var),
-        .trail_rd_value(cae_trail_read_value),
-        .clear_shadows(resync_clear_shadows),
-        .fifo_flush(resync_fifo_flush),
-        .resync_valid(resync_valid),
-        .resync_var(resync_var),
-        .resync_value(resync_value)
-    );
-
     // VDE instantiation
     vde #(
-        .MAX_VARS(MAX_VARS)
+        .MAX_VARS(MAX_VARS),
+        .BUMP_Q_SIZE(MAX_CLAUSE_LEN)
     ) u_vde (
         .DEBUG(DEBUG),
         .clk(clk),
@@ -533,11 +527,6 @@ module solver_core #(
     assign muxed_trail_query_var = (state_q == BACKTRACK_PHASE || state_q == CONFLICT_ANALYSIS) ? cae_level_query_var : trail_query_var;
     assign cae_level_query_levels = trail_query_level; // Fanout result to CAE
     
-    // MUX Trail Read Index
-    // During RESYNC_PSE, the FSM drives the read index via u_resync.
-    // Otherwise (IDLE/CONFLICT), CAE drives it.
-    assign muxed_trail_read_idx = (state_q == RESYNC_PSE) ? resync_idx_q[15:0] : cae_trail_read_idx;
-
     // Trail Manager instantiation
     trail_manager #(
         .MAX_VARS(MAX_VARS)
@@ -565,7 +554,11 @@ module solver_core #(
         .query_valid(trail_query_valid),
         .query_value(trail_query_value),
         .query_reason(trail_query_reason), // Connect new reason
-        .trail_read_idx(muxed_trail_read_idx),        // UPDATED: Muxed source
+        .query_valid_r(trail_query_valid_r),   // FIX5: registered outputs
+        .query_level_r(trail_query_level_r),
+        .query_value_r(trail_query_value_r),
+        .query_reason_r(trail_query_reason_r),
+        .trail_read_idx(cae_trail_read_idx),
         .trail_read_var(cae_trail_read_var),
         .trail_read_value(cae_trail_read_value),
         .trail_read_level(cae_trail_read_level),
@@ -619,7 +612,10 @@ module solver_core #(
         .clause_read_lit_idx(cae_clause_read_idx),
         .clause_read_literal(cae_clause_read_lit),
         .clause_read_len(cae_clause_read_len),
-        .current_clause_count(pse_clause_count)      // Connect exposed clause count
+        .current_clause_count(pse_clause_count),     // Connect exposed clause count
+        .cae_direct_append_en(cae_direct_append_en),
+        .cae_direct_append_len(cae_direct_append_len),
+        .cae_direct_append_lits(cae_direct_append_lits)
     );
 
     // pse_propagated_reason, pse_clause_count declared above (forward decl for sfifo/PSE)
@@ -638,7 +634,6 @@ module solver_core #(
         .decision_level(decision_level_q),
         .conflict_len(conflict_clause_len_q),
         .conflict_lits(conflict_clause_q),
-        .conflict_levels(conflict_levels_q),
         .learned_valid(cae_learned_valid),
         .learned_len(cae_learned_len),
         .learned_clause(cae_learned_lits),
@@ -752,6 +747,7 @@ module solver_core #(
         prop_count_d     = prop_count_q;
         conflict_seen_d  = conflict_seen_q;
         decision_lit_d   = decision_lit_q;
+        assert_lit_d     = assert_lit_q;
         pse_started_d    = pse_started_q;
         last_decision_var_d = last_decision_var_q;
         last_decision_phase_d = last_decision_phase_q;
@@ -761,9 +757,6 @@ module solver_core #(
         
         // Fix Latches by assigning defaults
         cycle_count_d           = cycle_count_q;
-        resync_started_d        = resync_started_q;
-        resync_append_learned_d = resync_append_learned_q;
-        resync_idx_d            = resync_idx_q;
         restart_pending_d       = restart_pending_q;
         restart_count_d         = restart_count_q;
         conflict_counter_d      = conflict_counter_q;
@@ -775,24 +768,23 @@ module solver_core #(
         load_clause_end_mux     = load_clause_end;
         
         query_index_d           = query_index_q;
-        learn_idx_d             = learn_idx_q;
         conflict_clause_len_d   = conflict_clause_len_q;
         for (int k=0; k<MAX_CLAUSE_LEN; k++) begin
              conflict_levels_d[k] = conflict_levels_q[k];
              conflict_clause_d[k] = conflict_clause_q[k];
         end
         rescan_required_d       = rescan_required_q;
-        
+        restart_mode_d          = restart_mode_q;
+
         cae_start               = 1'b0; // Pulse default
         pse_start               = 1'b0; // Pulse default
         cae_done_r_d = cae_done;
         cae_done_edge = cae_done && !cae_done_r_q;  // Rising edge
-        
+
         query_index_d = query_index_q;  // Default: preserve
-        learn_idx_d = learn_idx_q;  // Default: preserve
         rescan_required_d = rescan_required_q;
         conflict_clause_len_d = conflict_clause_len_q;
-        for (int k = 0; k < 8; k++) begin
+        for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
             conflict_clause_d[k] = conflict_clause_q[k];
             conflict_levels_d[k] = conflict_levels_q[k];  // Default: preserve current
         end
@@ -807,13 +799,16 @@ module solver_core #(
         stats_clear_l0_conflicts    = 1'b0;
         stats_clear_restart_counter = 1'b0;
 
-        // Resync Controller Defaults
-        resync_start = 1'b0;
-
         // VDE repeat-decision guard defaults
         vde_repeat_count_d = vde_repeat_count_q;
         vde_repeat_var_d   = vde_repeat_var_q;
         fallback_idx_d     = fallback_idx_q;
+
+        // FIX5: default hold for new registered signals
+        prop_fifo_lit_d    = prop_fifo_lit_q;
+        prop_fifo_reason_d = prop_fifo_reason_q;
+        vde_check_var_d    = vde_check_var_q;
+        vde_check_phase_d  = vde_check_phase_q;
 
         // Initialize temporary variables (prevent latches)
         lit = '0;
@@ -859,6 +854,13 @@ module solver_core #(
         learn_load_valid      = 1'b0;
         learn_load_literal    = '0;
         learn_load_clause_end = 1'b0;
+        cae_direct_append_en   = 1'b0;
+        cae_direct_append_len  = '0;
+        cae_direct_append_lits = '0;
+
+        // Hold NoC literal capture registers stable by default
+        rx_clause_lit1_d = rx_clause_lit1_q;
+        rx_clause_lit2_d = rx_clause_lit2_q;
 
         // Global memory stubs
         global_read_req        = 1'b0;
@@ -884,7 +886,7 @@ module solver_core #(
         pse_clear_valid = 1'b0;
         pse_clear_var = '0;
         
-        pse_clear_assignments = resync_clear_shadows;
+        pse_clear_assignments = 1'b0;
         
         iface_clause_rx_ready = 1'b0;
         iface_force_ready     = 1'b0; 
@@ -918,12 +920,15 @@ module solver_core #(
         vde_bump_valid    = 1'b0;
         vde_bump_var      = '0;
         vde_bump_count    = '0;
-        for (int k = 0; k < 16; k++) begin
+        for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
             vde_bump_vars[k] = '0;
         end
         vde_decay         = 1'b0;
+        vde_clear_valid   = trail_backtrack_valid;
+        vde_clear_var     = trail_backtrack_valid ? trail_backtrack_var : 32'd0;
         vde_unassign_all  = 1'b0; // Default low
-        pse_clear_assignments = 1'b0;
+        pse_clear_valid   = trail_backtrack_valid;
+        pse_clear_var     = trail_backtrack_valid ? trail_backtrack_var : 32'd0;
         
         // FIFO control defaults
         prop_pop = 1'b0;
@@ -935,7 +940,6 @@ module solver_core #(
                 trail_clear_all = 1'b1; // Maintain reset state while IDLE
                 vde_clear_all = 1'b1;
                 pse_clear_assignments = 1'b1;
-                resync_append_learned_d = 1'b0;
                 vde_repeat_count_d = '0;
                 vde_repeat_var_d   = '0;
                 fallback_idx_d     = 32'd1;
@@ -949,10 +953,10 @@ module solver_core #(
                     level0_conflict_count_d = '0; // Reset conflict counter
                     conflict_counter_d = '0;
                     restart_pending_d = 1'b0;
+                    restart_mode_d = 1'b0;
                     trail_clear_all = 1'b1;
                     vde_clear_all = 1'b1;
                     pse_clear_assignments = 1'b1;
-                    resync_append_learned_d = 1'b0;
 `ifndef SYNTHESIS
                     $strobe("[CORE %0d] Starting Solve. max_var=%0d, clauses=%0d", CORE_ID, vde_max_var, pse_clause_count);
 `endif
@@ -973,103 +977,36 @@ module solver_core #(
                 // This indicates a conflict that PSE missed because it acted on stale assignment state.
                 // Restarting the scan (with current assignment state) will force PSE to see the conflict.
                 if (stats_restart_pending) begin
-                    // Conflict-driven restart: backtrack to level 0 and resync
+                    // Conflict-driven restart: iterative backtrack to level 0
                     stats_inc_restart = 1'b1;
                     stats_clear_restart_counter = 1'b1;
                     decision_level_d = 16'd0;
-                    trail_truncate_en = 1'b1;
-                    trail_truncate_level = 16'd0;
-                    vde_unassign_all = 1'b1;
-                    pse_clear_assignments = 1'b1;
-                    resync_started_d = 1'b0;
-                    resync_idx_d     = 32'd0;
-                    resync_append_learned_d = 1'b0;
+                    trail_backtrack_en = 1'b1;
+                    trail_backtrack_level = 16'd0;
                     rescan_required_d = 1'b0;
                     prop_flush = 1'b1;
-                    state_d = RESYNC_PSE;
+                    restart_mode_d = 1'b1; // No learned clause to append
+                    state_d = BACKTRACK_UNDO;
                 end else if (rescan_required_q) begin
-                     resync_started_d  = 1'b0;
-                     resync_idx_d       = 32'd0;
-                     rescan_required_d  = 1'b0; // Clear flag
-                     resync_append_learned_d = 1'b0;
-                     state_d            = RESYNC_PSE;
+                     // PSE assignment state diverged — restart PSE scan (no full resync needed)
+                     rescan_required_d  = 1'b0;
+                     pse_start     = 1'b1;
+                     pse_started_d = 1'b1;
+                     cycle_count_d = '0;
+                     prop_flush = 1'b1;
+                     state_d       = PSE_PHASE;
                 end else begin
                     // Request a decision from VDE
                     vde_request = !vde_pending_ops;
     
                     if (vde_decision_valid) begin
-                        // Guard: If VDE returns a var already assigned on the trail,
-                        // sync VDE (and optionally PSE) and request a new decision
-                        trail_query_var = vde_decision_var;
-                        if (trail_query_valid) begin
-                            vde_request = 1'b0; // Pause decision requests to let VDE absorb assignments
-
-                            // Track repeat decisions to avoid livelock
-                            if (vde_decision_var == vde_repeat_var_q) begin
-                                vde_repeat_count_d = vde_repeat_count_q + 1'b1;
-                            end else begin
-                                vde_repeat_var_d   = vde_decision_var;
-                                vde_repeat_count_d = 6'd1;
-                            end
-
-                            if (vde_repeat_count_q >= 6'd16) begin
-                                // Fallback to a direct scan for an unassigned variable
-                                vde_repeat_count_d = '0;
-                                vde_repeat_var_d   = '0;
-                                fallback_idx_d     = 32'd1;
-                                state_d = VDE_FALLBACK;
-                            end else begin
-                                vde_assign_valid = 1'b1;
-                                vde_assign_var   = vde_decision_var;
-                                vde_assign_value = trail_query_value;
-
-                                // Keep PSE in sync if its shadow state is stale
-                                pse_assign_broadcast_valid = 1'b1;
-                                pse_assign_broadcast_var   = vde_decision_var;
-                                pse_assign_broadcast_value = trail_query_value;
-
-                                state_d = VDE_PHASE;
-                            end
-                        end else begin
-                            vde_repeat_count_d = '0;
-                            vde_repeat_var_d   = '0;
-                            // Capture decision literal with saved phase
-                            decision_lit_d = vde_decision_phase ? $signed(vde_decision_var) : -$signed(vde_decision_var);
-
-                            // [DEBUG TRACE] Log moved to always_ff
-
-                            // Track this decision for potential backtracking
-                            last_decision_var_d = vde_decision_var;
-                            last_decision_phase_d = vde_decision_phase;
-                            
-                            // Broadcast decision to PSE so it stays in sync
-                            pse_assign_broadcast_valid = 1'b1;
-                            pse_assign_broadcast_var   = vde_decision_var;
-                            pse_assign_broadcast_value = vde_decision_phase;
-                            
-                            // Mark decision assignment in VDE
-                            vde_assign_valid = 1'b1;
-                            vde_assign_var   = vde_decision_var;
-                            vde_assign_value = vde_decision_phase;
-                            
-                            // Push decision to trail at INCREMENTED level
-                            // This allows level 0 for unit propagations, and first decision at level 1
-                            trail_push = 1'b1;
-
-                            trail_push_var = vde_decision_var;
-                            trail_push_value = vde_decision_phase;
-                            trail_push_level = decision_level_q + 1'b1;
-                            trail_push_is_decision = 1'b1;
-                            
-                            // Increment decision level immediately
-                            decision_level_d = decision_level_q + 1'b1;
-                            
-                            // Start PSE propagation with chosen decision
-                            pse_start     = 1'b1;
-                            pse_started_d = 1'b1; // Mark that we've started PSE in this round
-                            cycle_count_d = '0;
-                            state_d       = PSE_PHASE; // CRITICAL FIX: Transition to PSE scanning!
-                        end
+                        // FIX5: Issue trail query and jump to 1-cycle wait state.
+                        // Registered result (trail_query_valid_r) read in VDE_TRAIL_CHECK next cycle.
+                        trail_query_var   = vde_decision_var;
+                        vde_check_var_d   = vde_decision_var;
+                        vde_check_phase_d = vde_decision_phase;
+                        vde_request       = 1'b0;
+                        state_d           = VDE_TRAIL_CHECK;
                     end else if (vde_all_assigned) begin
                         vde_repeat_count_d = '0;
                         vde_repeat_var_d   = '0;
@@ -1137,6 +1074,79 @@ module solver_core #(
                 end
             end
 
+            // FIX5: 1-cycle wait state — reads registered trail query from VDE_PHASE
+            VDE_TRAIL_CHECK: begin
+                // Keep trail query active so mux holds correct value
+                trail_query_var = vde_check_var_q;
+
+                if (trail_query_valid_r) begin
+                    // Already assigned — sync VDE/PSE, loop back to VDE_PHASE
+                    vde_request = 1'b0;
+
+                    // Track repeat decisions to avoid livelock
+                    if (vde_check_var_q == vde_repeat_var_q) begin
+                        vde_repeat_count_d = vde_repeat_count_q + 1'b1;
+                    end else begin
+                        vde_repeat_var_d   = vde_check_var_q;
+                        vde_repeat_count_d = 6'd1;
+                    end
+
+                    if (vde_repeat_count_q >= 6'd16) begin
+                        // Fallback to a direct scan for an unassigned variable
+                        vde_repeat_count_d = '0;
+                        vde_repeat_var_d   = '0;
+                        fallback_idx_d     = 32'd1;
+                        state_d = VDE_FALLBACK;
+                    end else begin
+                        vde_assign_valid = 1'b1;
+                        vde_assign_var   = vde_check_var_q;
+                        vde_assign_value = trail_query_value_r;
+
+                        // Keep PSE in sync if its shadow state is stale
+                        pse_assign_broadcast_valid = 1'b1;
+                        pse_assign_broadcast_var   = vde_check_var_q;
+                        pse_assign_broadcast_value = trail_query_value_r;
+
+                        state_d = VDE_PHASE;
+                    end
+                end else begin
+                    // Not assigned — commit this as the decision
+                    vde_repeat_count_d = '0;
+                    vde_repeat_var_d   = '0;
+                    decision_lit_d = vde_check_phase_q ? $signed(vde_check_var_q) : -$signed(vde_check_var_q);
+
+                    // Track this decision for potential backtracking
+                    last_decision_var_d   = vde_check_var_q;
+                    last_decision_phase_d = vde_check_phase_q;
+
+                    // Broadcast decision to PSE so it stays in sync
+                    pse_assign_broadcast_valid = 1'b1;
+                    pse_assign_broadcast_var   = vde_check_var_q;
+                    pse_assign_broadcast_value = vde_check_phase_q;
+
+                    // Mark decision assignment in VDE
+                    vde_assign_valid = 1'b1;
+                    vde_assign_var   = vde_check_var_q;
+                    vde_assign_value = vde_check_phase_q;
+
+                    // Push decision to trail at INCREMENTED level
+                    trail_push = 1'b1;
+                    trail_push_var           = vde_check_var_q;
+                    trail_push_value         = vde_check_phase_q;
+                    trail_push_level         = decision_level_q + 1'b1;
+                    trail_push_is_decision   = 1'b1;
+
+                    // Increment decision level immediately
+                    decision_level_d = decision_level_q + 1'b1;
+
+                    // Start PSE propagation with chosen decision
+                    pse_start     = 1'b1;
+                    pse_started_d = 1'b1;
+                    cycle_count_d = '0;
+                    state_d       = PSE_PHASE;
+                end
+            end
+
             // STRICT SERIALIZATION: PSE runs while VDE is waiting (vde_request=0)
             // INVARIANT: PSE output must be checked against Trail.
             // - If PropVar is Unassigned: Valid propagation.
@@ -1146,9 +1156,9 @@ module solver_core #(
                 // CRITICAL FIX: Only check pse_conflict if we've started PSE in this round
                 // This prevents checking stale conflict_detected from prior propagation rounds
 `ifndef SYNTHESIS
-                if (state_q == FINAL_VERIFY || state_q == RESYNC_PSE_SETTLE) begin
-                    $strobe("[CORE %0d] PSE_PHASE from %s, pse_done=%b, pse_conflict=%b", 
-                             CORE_ID, (state_q == FINAL_VERIFY ? "FINAL_VERIFY" : "RESYNC_PSE_SETTLE"), pse_done, pse_conflict);
+                if (state_q == FINAL_VERIFY) begin
+                    $strobe("[CORE %0d] PSE_PHASE from FINAL_VERIFY, pse_done=%b, pse_conflict=%b", 
+                             CORE_ID, pse_done, pse_conflict);
                 end
 `endif
                 if (pse_started_q && pse_conflict) begin
@@ -1158,24 +1168,25 @@ module solver_core #(
                     conflict_seen_d = 1'b1;
                     // Capture conflict clause from PSE immediately
                     conflict_clause_len_d = pse_conflict_clause_len;
-                    for (int k = 0; k < 8; k++) begin
+                    for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
                         conflict_clause_d[k] = pse_conflict_clause[k];
                     end
                 end
 
                 // Accumulate propagated literals from PSE (Using FIFO)
+                // FIX5: Pop FIFO, save item, issue trail query, then wait in PSE_PROP_CHECK
                 if (!prop_fifo_empty) begin
                     // CRITICAL FIX: Check if variable is already assigned before propagating
                     // Use FIFO output
                     // prop_var, others declared at top level
                     // logic signed [31:0] fifo_lit; // MOVED TO TOP
                     // logic [15:0] fifo_reason;     // MOVED TO TOP
-                    
+
                     fifo_lit = prop_fifo_out[31:0];
                     fifo_reason = prop_fifo_out[47:32];
-                    
+
                     prop_var = (fifo_lit < 0) ? -fifo_lit[31:0] : fifo_lit[31:0];
-                    
+
                     // Consume from FIFO
                     prop_pop = 1'b1;
 
@@ -1183,71 +1194,12 @@ module solver_core #(
                     if (prop_var == 0) begin
                         // Do not propagate or update trail on invalid literal
                     end else begin
-                    
-                    // Query trail to see if this variable is already assigned
-                    trail_query_var = prop_var;
-                    prop_already_assigned = trail_query_valid;
-                    
-                    if (!prop_already_assigned) begin
-                        // Variable not yet assigned, proceed with propagation
-                        // accumulated_props update removed/dead
-                        prop_count_d = prop_count_q + 1'b1;
-                        // $strobe("[CORE %0d] Propagation %0d: var=%0d", CORE_ID, fifo_lit);
-                        
-                        // Inform VDE of assignment
-                        vde_assign_valid = 1'b1;
-                        vde_assign_var   = prop_var;
-                        vde_assign_value = (fifo_lit > 0);
-                        
-                        // Push propagation to trail
-                        trail_push = 1'b1;
-                        trail_push_var = prop_var;
-                        trail_push_value = (fifo_lit > 0);
-                        trail_push_level = decision_level_q;
-                        trail_push_is_decision = 1'b0;
-                        trail_push_reason = fifo_reason; // Use reason from PSE
-`ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] Pushing Prop %0d (Var %0d) @ Level %0d. DecLvlQ=%0d", CORE_ID, fifo_lit, prop_var, trail_push_level, decision_level_q);
-`endif
-
-
-                        // IMPORTANT: We do NOT broadcast back to PSE here.
-                        // PSE already knows its own propagation.
-                        // Sending it back during a scan can cause races.
-                    end else begin
-                        // Variable already assigned. 
-                        // CRITICAL FIX: Distinguish between Redundant and Conflicting propagations.
-                        
-                         // existing_value, new_value declared at top level
-                        existing_value = trail_query_value;
-                        new_value     = (fifo_lit > 0);
-                        
-                        if (existing_value == new_value) begin
-                            // REDUNDANT: Variable already has this value.
-                            // Keep PSE in sync if its shadow state is stale.
-                            pse_assign_broadcast_valid  = 1'b1;
-                            pse_assign_broadcast_var    = prop_var;
-                            pse_assign_broadcast_value  = existing_value;
-                            pse_assign_broadcast_reason = fifo_reason;
-                        end else begin
-                            // CONFLICT: PSE wants to set X to !V, but Trail says X=V.
-                            // This implies the clause generating this propagation is actually a CONFLICT clause.
-                            // PSE missed this because it had stale state (thought X was unassigned).
-                            // ACTION: Force re-broadcast of the TRUE value to PSE, then RESCAN.
-                            // The Rescan will force PSE to re-evaluate the clause with the correct value, raising a conflict.
-                            // synopsys translate_off
-                            if (DEBUG > 0) $strobe("[CORE %0d] CONFLICT PROP: var=%0d existing=%0d new=%0d reason=%0d", CORE_ID, prop_var, existing_value, new_value, fifo_reason);
-                            // synopsys translate_on
-                            
-                            // Re-broadcast the correct existing value to PSE
-                            pse_assign_broadcast_valid = 1'b1;
-                            pse_assign_broadcast_var   = prop_var;
-                            pse_assign_broadcast_value = existing_value;
-                            
-                            // Trigger full rescan to catch the conflict
-                            rescan_required_d = 1'b1;
-                        end
-                    end
+                        // Save FIFO item and issue trail query.
+                        // Registered result (trail_query_valid_r) consumed in PSE_PROP_CHECK next cycle.
+                        prop_fifo_lit_d    = fifo_lit;
+                        prop_fifo_reason_d = fifo_reason;
+                        trail_query_var    = prop_var;
+                        state_d            = PSE_PROP_CHECK;
                     end
                 end
                 
@@ -1257,15 +1209,20 @@ module solver_core #(
                 // UPDATED: Wait for FIFO to be empty as well!
                 if ((pse_done && prop_fifo_empty) || cycle_count_q > 1000000) begin
 `ifndef SYNTHESIS
-                    if (state_q == FINAL_VERIFY || state_q == RESYNC_PSE_SETTLE) begin
+                    if (state_q == FINAL_VERIFY) begin
                          $strobe("[CORE %0d Cycle %0d] PSE_PHASE exit: pse_done=%b, fifo_empty=%b, vde_all_assigned=%b, conflict=%b", 
                                   CORE_ID, cycle_count_q, pse_done, prop_fifo_empty, vde_all_assigned, pse_conflict);
                     end
 `endif
                     
-                    // Multi-core: Check if any neighbor sent us a clause during propagation
+                    // Multi-core: Check if any neighbor sent us a clause during propagation.
+                    // Register literals and acknowledge the one-cycle pulse here so that
+                    // INJECT_RX_CLAUSE can use stable registers rather than re-checking valid.
                     if (iface_clause_rx_valid) begin
-                        state_d = INJECT_RX_CLAUSE;
+                        state_d               = INJECT_RX_CLAUSE;
+                        rx_clause_lit1_d      = $signed(iface_clause_rx_ptr[63:32]);
+                        rx_clause_lit2_d      = $signed(iface_clause_rx_ptr[31:0]);
+                        iface_clause_rx_ready = 1'b1;  // consume NoC packet this cycle
                     end else if (final_verify_mode_q && !pse_conflict && !conflict_seen_q) begin
                         // Final verification passed: no conflicts during last PSE scan
                         state_d = SAT_CHECK;
@@ -1279,63 +1236,77 @@ module solver_core #(
                     end else if (pse_started_q && (conflict_seen_q || pse_conflict)) begin
                         // Conflict detected and variables remain unassigned
                         // $strobe("[CORE %0d] Conflict detected in ACCUMULATE. pse_started=%d seen=%d conflict=%d", CORE_ID, pse_started_q, conflict_seen_q, pse_conflict);
-                        state_d = QUERY_CONFLICT_LEVELS;
+                        state_d = CONFLICT_ANALYSIS;
                         query_index_d = 4'd0;
                     end else begin
-                        if (cycle_count_q > 1000000) begin
-                            // Timeout: Force RESYNC to ensure PSE state is clean before next decision
-//                            $strobe("[CORE %0d] Timeout: Resyncing PSE state before continuing.", CORE_ID);
-                            resync_started_d = 1'b0;
-                            resync_idx_d     = 32'd0;
-                            resync_append_learned_d = 1'b0;
-                            state_d          = RESYNC_PSE;
-                        end else begin
-                            // PSE finished cleanly with no actions -> Ready for next decision
-                            state_d = VDE_PHASE;
-                        end
+                        // PSE finished cleanly (or timeout) with no actions -> Ready for next decision
+                        state_d = VDE_PHASE;
                     end
                 end
             end
 
-            QUERY_CONFLICT_LEVELS: begin
-                // Sequentially query decision levels for each conflict clause literal
-                if (query_index_q < conflict_clause_len_q) begin
-                    logic signed [31:0] q_lit;
-                    logic [31:0] q_var;
-                    
-                    // Local variables for clarity
-                    q_lit = conflict_clause_q[query_index_q];
-                    q_var = (q_lit < 0) ? $unsigned(-q_lit) : $unsigned(q_lit);
-                    
-                    // Drive Query Interface
-                    trail_query_var = q_var;
-                    
-                    // Capture Result
-                    if (trail_query_valid) begin
-                        conflict_levels_d[query_index_q] = trail_query_level;
+            // FIX5: 1-cycle wait state — reads registered trail query from PSE_PHASE FIFO pop
+            PSE_PROP_CHECK: begin
+                // Recompute prop_var from saved FIFO item
+                prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
+
+                // Keep trail query active so the combinatorial query_valid is also usable if needed
+                trail_query_var = prop_var;
+
+                prop_already_assigned = trail_query_valid_r;
+
+                if (!prop_already_assigned) begin
+                    // Variable not yet assigned, proceed with propagation
+                    prop_count_d = prop_count_q + 1'b1;
+
+                    // Inform VDE of assignment
+                    vde_assign_valid = 1'b1;
+                    vde_assign_var   = prop_var;
+                    vde_assign_value = (prop_fifo_lit_q > 0);
+
+                    // Push propagation to trail
+                    trail_push = 1'b1;
+                    trail_push_var           = prop_var;
+                    trail_push_value         = (prop_fifo_lit_q > 0);
+                    trail_push_level         = decision_level_q;
+                    trail_push_is_decision   = 1'b0;
+                    trail_push_reason        = prop_fifo_reason_q; // Use reason from PSE
 `ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> Level=%0d", 
-                                CORE_ID, q_lit, q_var, trail_query_level);
+                    if (DEBUG > 0) $strobe("[CORE %0d] Pushing Prop %0d (Var %0d) @ Level %0d. DecLvlQ=%0d",
+                                           CORE_ID, prop_fifo_lit_q, prop_var, trail_push_level, decision_level_q);
 `endif
-                        // Advance
-                        query_index_d = query_index_q + 4'd1;
-                    end else begin
-                        // If not found in trail, assume current level (should not happen for valid conflict)
-                        // Or if 0, implies unassigned?
-`ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] QUERY_LEVEL: Lit=%0d Var=%0d -> INVALID (Using DecLvl=%0d)", 
-                                CORE_ID, q_lit, q_var, decision_level_q);
-`endif
-                        conflict_levels_d[query_index_q] = decision_level_q;
-                        query_index_d = query_index_q + 4'd1;
-                    end
-                    
-                    state_d = QUERY_CONFLICT_LEVELS; // Stay in loop
+                    // IMPORTANT: We do NOT broadcast back to PSE here.
+                    // PSE already knows its own propagation.
                 end else begin
-                    // All queries done
-                    query_index_d = 4'd0;
-                    state_d = CONFLICT_ANALYSIS;
+                    // Variable already assigned.
+                    // CRITICAL FIX: Distinguish between Redundant and Conflicting propagations.
+                    existing_value = trail_query_value_r;
+                    new_value      = (prop_fifo_lit_q > 0);
+
+                    if (existing_value == new_value) begin
+                        // REDUNDANT: Variable already has this value.
+                        // Keep PSE in sync if its shadow state is stale.
+                        pse_assign_broadcast_valid  = 1'b1;
+                        pse_assign_broadcast_var    = prop_var;
+                        pse_assign_broadcast_value  = existing_value;
+                        pse_assign_broadcast_reason = prop_fifo_reason_q;
+                    end else begin
+                        // CONFLICT: PSE wants to set X to !V, but Trail says X=V.
+                        // synopsys translate_off
+                        if (DEBUG > 0) $strobe("[CORE %0d] CONFLICT PROP: var=%0d existing=%0d new=%0d reason=%0d",
+                                               CORE_ID, prop_var, existing_value, new_value, prop_fifo_reason_q);
+                        // synopsys translate_on
+                        // Re-broadcast the correct existing value to PSE
+                        pse_assign_broadcast_valid = 1'b1;
+                        pse_assign_broadcast_var   = prop_var;
+                        pse_assign_broadcast_value = existing_value;
+                        // Trigger full rescan to catch the conflict
+                        rescan_required_d = 1'b1;
+                    end
                 end
+
+                // Return to PSE_PHASE to pick up next FIFO item (or check done/conflict)
+                state_d = PSE_PHASE;
             end
 
             // INVARIANT: CAE must resolve the conflict until the First UIP is found.
@@ -1347,7 +1318,7 @@ module solver_core #(
 `ifndef SYNTHESIS
                 if (DEBUG > 0) begin
                     $display("[CORE %0d] CONFLICT_ANALYSIS: Sending to CAE. Len=%0d DecLvl=%0d", CORE_ID, conflict_clause_len_q, decision_level_q);
-                    for (int k = 0; k < 8; k++) begin
+                    for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
                         if (k < conflict_clause_len_q)
                             $display("[CORE %0d]   Lit[%0d]=%0d level_q=%0d level_d=%0d", CORE_ID, k, conflict_clause_q[k], conflict_levels_q[k], conflict_levels_d[k]);
                     end
@@ -1368,7 +1339,7 @@ module solver_core #(
                 // Wait for CAE to complete
                 if (cae_done_edge) begin
                     // Check for UNSAT
-                    if (cae_unsat || cae_learned_len == 4'h0 || (conflict_clause_q[0] == 0 && conflict_clause_q[1] == 0)) begin
+                    if (cae_unsat || cae_learned_len == '0 || (conflict_clause_q[0] == 0 && conflict_clause_q[1] == 0)) begin
                         state_d = FINISH_UNSAT;
                     end else begin
                         // Flush FIFO
@@ -1376,7 +1347,7 @@ module solver_core #(
 
                         // Bump variables
                         vde_bump_count = cae_learned_len;
-                        for (int i = 0; i < 16; i++) begin
+                        for (int i = 0; i < MAX_CLAUSE_LEN; i++) begin
                             if (i < cae_learned_len) begin
                                 vde_bump_vars[i] = (cae_learned_lits[i] < 0) ? 
                                                   $unsigned(-cae_learned_lits[i]) : 
@@ -1387,264 +1358,114 @@ module solver_core #(
                         end
                         vde_decay = 1'b1;
 
-                        // INSTANT BACKTRACK
+                        // START ITERATIVE BACKTRACK
                         decision_level_d = cae_backtrack_level;
-                        trail_truncate_en = 1'b1;
+                        trail_backtrack_en = 1'b1;
+                        trail_backtrack_level = cae_backtrack_level; 
+                        // Actually, in solver_core.sv: .backtrack_to_level(trail_backtrack_level)
+                        // wait, let me check the instantiation.
+                        // I'll set both to be safe.
                         trail_truncate_level = cae_backtrack_level;
-                        vde_unassign_all = 1'b1;
-                        pse_clear_assignments = 1'b1;
+                        
+                        // Capture asserting literal NOW while CAE outputs are stable.
+                        // Avoids delta-cycle re-evaluation hazard in BACKTRACK_UNDO always_comb.
+                        assert_lit_d = (cae_learned_len > 0) ? cae_learned_lits[0] : decision_lit_q;
 
-                        // Replay
-                        resync_started_d = 1'b0;
-                        resync_idx_d     = 32'd0;
-                        learn_idx_d      = 4'd0; // CRITICAL FIX: Reset learned clause index
-                        rescan_required_d = 1'b0;
-                        resync_append_learned_d = 1'b1;
-                        state_d          = RESYNC_PSE;
+                        // We rely on trail_backtrack_valid combinations
+                        // to drive pse_clear_valid and vde_clear_valid.
+                        state_d          = BACKTRACK_UNDO;
                     end
                 end
             end
 
-            // Stream learned clause into PSE via internal load interface (append-only)
-            APPEND_LEARNED: begin
-`ifndef SYNTHESIS
-                if (DEBUG > 0) $strobe("[CORE %0d] Entering APPEND_LEARNED. Len=%0d Idx=%0d", CORE_ID, cae_learned_len, learn_idx_q);
-`endif
-                if (learn_idx_q < cae_learned_len) begin
-                    // Respect PSE load_ready before sending next literal
-                    if (load_ready) begin
-                        learn_load_valid      = 1'b1;
-                        learn_load_literal    = cae_learned_lits[learn_idx_q];
-                        learn_load_clause_end = (learn_idx_q == (cae_learned_len - 4'd1));
-                        learn_idx_d           = learn_idx_q + 4'd1;
-`ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED[%0d/%0d]: lit=%0d end=%0d ready=%0d mux=%0d", CORE_ID, learn_idx_q, cae_learned_len, cae_learned_lits[learn_idx_q], learn_load_clause_end, load_ready, load_valid_mux);
-`endif
-                    end else begin
-`ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED waiting for load_ready (idx=%0d len=%0d)", CORE_ID, learn_idx_q, cae_learned_len);
-`endif
-                    end
-                    state_d = APPEND_LEARNED;
-                end else begin : append_complete_block
-                    // logic [31:0] assert_var;
-                    // logic signed [31:0] final_assert_lit;
-                    // logic skip_broadcast;
-                    
-                    final_assert_lit = (cae_learned_len > 0) ? cae_learned_lits[0] : decision_lit_q;
-`ifndef SYNTHESIS
-                    if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC: Len=%0d Lit0=%0d DecLit=%0d", CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
-`endif
-                    assert_var = (final_assert_lit < 0) ? $unsigned(-final_assert_lit) : $unsigned(final_assert_lit);
-                    
-                    // Skip broadcast for 1x1 grid (no neighbors to receive)
-                    skip_broadcast = (GRID_X == 1 && GRID_Y == 1);
-                    
-                    // ATOMIC BROADCAST TRIGGER
-                    // If learned clause is length 2 AND we have neighbors, broadcast it to mesh
-                    // ATOMIC BROADCAST TRIGGER
-                    // If learned clause is length 2 AND we have neighbors, broadcast it to mesh
-                    if (cae_learned_len == 16'd2 && !skip_broadcast) begin
-                        iface_clause_bcast_req = 1'b1;
-                        iface_clause_lbd       = 8'd2; // Binary clauses are high quality
-                        iface_clause_ptr       = {cae_learned_lits[0], cae_learned_lits[1]}; // Pack 2 lits
-                        
-                        // Wait for ack if mesh is back-pressured (multi-cycle tx)
-                        if (!iface_clause_bcast_ack) begin
-                             state_d = APPEND_LEARNED;
-                        end else begin
-                             // Broadcast Executed. Proceed to PUSH state.
-                             // Latch inputs now to decouple from combinational glitches
-                             decision_lit_d = final_assert_lit;
-                             
-`ifndef SYNTHESIS
-                             if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Broadcast): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
-                                     CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
-`endif
-                             
-                             state_d = APPEND_PUSH;
-                             cycle_count_d = '0; 
-                             restart_pending_d = 1'b0;
-                        end
-                    end else begin
-                        // No Broadcast needed. Proceed to PUSH state.
-                        decision_lit_d = final_assert_lit;
-                        
-`ifndef SYNTHESIS
-                        if (DEBUG > 0) $strobe("[CORE %0d] APPEND_LEARNED_CALC (Local): Len=%0d Lit0=%0d DecLit=%0d -> Pushing To Register", 
-                                CORE_ID, cae_learned_len, cae_learned_lits[0], decision_lit_q);
-`endif
+            BACKTRACK_UNDO: begin
+                // Keep backtrack_en high until done
+                trail_backtrack_en = 1'b1;
+                // MUST preserve trail_backtrack_level to whatever decision_level_q is becoming (cae_backtrack_level is saved to decision_level_q)
+                trail_backtrack_level = decision_level_q;
 
-                        state_d = APPEND_PUSH;
-                        cycle_count_d = '0; 
+                if (trail_backtrack_done) begin
+                    if (restart_mode_q) begin
+                        // Restart mode: no learned clause to append, no asserting literal
+                        restart_mode_d = 1'b0;
+`ifndef SYNTHESIS
+                        if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO restart complete: level=%0d trail_height=%0d",
+                                               CORE_ID, decision_level_q, trail_height);
+`endif
+                        // Start PSE to propagate any level-0 implications
+                        pse_start     = 1'b1;
+                        pse_started_d = 1'b1;
+                        cycle_count_d = '0;
                         restart_pending_d = 1'b0;
-                    end
-                end
-            end
-            
-            // NEW STATE: APPEND_PUSH
-            // Executes one cycle after APPEND_LEARNED
-            // Uses STABLE register values (decision_lit_q) driven from previous cycle.
-            // Glitch-free by design.
-            APPEND_PUSH: begin
-                 logic [31:0] stable_var;
-                 logic        stable_val;
-                 
-                 stable_var = (decision_lit_q < 0) ? $unsigned(-decision_lit_q) : $unsigned(decision_lit_q);
-                 stable_val = (decision_lit_q > 0);
-                 
-                 // GUARD: Only execute push ONCE (when cycle_count is 0)
-                 // This prevents duplicate pushes if the FSM stalls or executes twice.
-                 if (cycle_count_q == 0) begin
-`ifndef SYNTHESIS
-                     if (DEBUG > 0) $strobe("[CORE %0d] APPEND_PUSH: Executing Push with Stable Lit %0d (Var %0d)", CORE_ID, decision_lit_q, stable_var);
-`endif
-                     
-                     // 1. Start PSE for BCP
-                     state_d = PSE_PHASE;
-                     pse_start = 1'b1;
-                     pse_started_d = 1'b1;
-                     
-                     // 2. Drive Trail & VDE & PSE Broadcast
-                     // Explicitly set trail_push_reason to the new learned clause ID
-                     if (stable_var != 0) begin
-                         trail_push = 1'b1;
-                         trail_push_var = stable_var;
-                         trail_push_value = stable_val;
-                         trail_push_level = decision_level_q;
-                         trail_push_is_decision = 1'b0;
-                         trail_push_reason = pse_clause_count - 16'd1; // Valid Learned Clause ID
-                         
-                         vde_assign_valid = 1'b1;
-                         vde_assign_var = stable_var;
-                         vde_assign_value = stable_val;
-                         
-                         pse_assign_broadcast_valid = 1'b1;
-                         pse_assign_broadcast_var = stable_var;
-                         pse_assign_broadcast_value = stable_val;
-                     end else begin
-                         // EmerGen/Abort if var is 0 (Unexpected, but safe)
-`ifndef SYNTHESIS
-                         $display("[CORE %0d] ERROR: APPEND_PUSH derived Var 0 from Lit %0d", CORE_ID, decision_lit_q);
-`endif
-                     end
-                     
-                     // Increment cycle count so we don't push again if we stay in this state
-                     cycle_count_d = 32'd1;
-                 end else begin
-                     // Retrying/Stuck in state. Force transition.
-                     state_d = PSE_PHASE;
-                     pse_start = 1'b1;
-                     pse_started_d = 1'b1;
-                 end
-            end
-
-// Merged into first BACKTRACK_PHASE block
-            
-            // BACKTRACK_UNDO STATE REMOVED - Logic merged into BACKTRACK_PHASE + RESYNC_PSE
-
-            PSE_START_AFTER_LEARN: begin
-                // Force full resync to ensure PSE is 100% consistent with Trail
-                // including the newly appended literal.
-                resync_started_d = 1'b0;
-                resync_idx_d     = 32'd0;
-                rescan_required_d = 1'b0;
-                resync_append_learned_d = 1'b1;
-                state_d          = RESYNC_PSE;
-            end
-            
-            // INVARIANT: When RESYNC_PSE is triggered, PSE's internal assignment state
-            // is wiped and rebuilt exclusively from the Trail's current valid entries.
-            RESYNC_PSE: begin
-                if (!resync_started_q) begin
-                    // Initialize resync scan
-                    resync_started_d = 1'b1;
-                    resync_idx_d     = 32'd0; 
-                    state_d          = RESYNC_PSE;
-                    pse_clear_assignments = 1'b1; // CRITICAL: Ensure PSE clears state before replay!
-                    // Note: PSE/VDE cleared in previous state (BACKTRACK_PHASE or PSE_START_AFTER_LEARN)
-                    // If driven here, we need to assert them again? 
-                    // No, "clear" is a 1-cycle pulse. We asserted it in the transitions INTO this state
-                    // (BACKTRACK_PHASE). If entered from elsewhere, we might need to clear?
-                    // Safe approach: The clear happens in the Transition state.
-                    
-                    // Flush FIFO to avoid re-injecting old props
-                    prop_flush = 1'b1;
-                end else begin
-                    // Iterate through TRAIL entries (0 to height-1)
-                    // This replays the valid history.
-                    
-                    // Note: resync_idx_q is used as trail_read_idx via mux
-                    if (resync_idx_q < trail_height) begin
-                         // Read trail[resync_idx_q] is already happening combinatorially via muxed_trail_read_idx -> cae_trail_read_var/val
-                         // Note: trail_manager outputs trail_read_var based on input idx.
-                         
-                         // Broadcast replay to PSE and VDE
-                                                                 // However, for decision making and conflict analysis, we rely on the TRAIL.
-                                                                 // The PSE/VDE shadow copies are mainly for "Is Assigned?" checks.
-                                                                 // So reason 0xFFFF is safe.
-                         
-                         vde_assign_valid = 1'b1;
-                         vde_assign_var   = cae_trail_read_var;
-                         vde_assign_value = cae_trail_read_value;
-
-                         // FIX: Broadcast to PSE as well!
-                         pse_assign_broadcast_valid = 1'b1;
-                         pse_assign_broadcast_var   = cae_trail_read_var;
-                         pse_assign_broadcast_value = cae_trail_read_value;
-                         pse_assign_broadcast_reason = 16'hFFFF; // Safe default for replay
-
-                         // synopsys translate_off
-                         if (DEBUG > 0) $strobe("[CORE %0d] RESYNC[%0d/%0d] var=%0d val=%0d", CORE_ID, resync_idx_q, trail_height, cae_trail_read_var, cae_trail_read_value);
-                         // synopsys translate_on
-
-                         resync_idx_d = resync_idx_q + 1;
+                        state_d = PSE_PHASE;
                     end else begin
-                        // Done Replaying
-                        if (resync_append_learned_q) begin
-                            state_d = APPEND_LEARNED;
-                        end else begin
-                            state_d = RESYNC_PSE_SETTLE;
-                        end
-                        resync_append_learned_d = 1'b0;
-                        
-                        // Wait! If this was called from PSE_START_AFTER_LEARN, we shouldn't append learned again?
-                        // PSE_START_AFTER_LEARN is effectively dead code or used for re-sync.
-                        // Let's check where PSE_START_AFTER_LEARN comes from. 
-                        // It is NOT used in the main loop anymore.
-                        // But BACKTRACK_PHASE usually transitioned to APPEND_LEARNED.
-                        // So yes, after replaying the trail, we go to APPEND_LEARNED to add the NEW implication.
+
+                    // 1. Append learned clause to PSE clause store
+                    cae_direct_append_en   = 1'b1;
+                    cae_direct_append_len  = cae_learned_len;
+                    cae_direct_append_lits = cae_learned_lits;
+
+                    // 2. Use pre-captured asserting literal (stable register, avoids delta-cycle hazard)
+                    final_assert_lit = assert_lit_q;
+                    decision_lit_d   = final_assert_lit;
+                    assert_var = (final_assert_lit < 0) ? $unsigned(-final_assert_lit) : $unsigned(final_assert_lit);
+
+                    // 3. Push asserting literal to trail + broadcast to PSE/VDE
+                    //    trail_manager handles simultaneous push + BACKTRACK_COMPLETE
+                    //    by writing at bt_index_q instead of stale trail_height_q.
+                    if (assert_var != 0) begin
+                        trail_push = 1'b1;
+                        trail_push_var = assert_var;
+                        trail_push_value = (final_assert_lit > 0);
+                        trail_push_level = decision_level_q;
+                        trail_push_is_decision = 1'b0;
+                        trail_push_reason = pse_clause_count; // Clause being written THIS cycle
+
+                        vde_assign_valid = 1'b1;
+                        vde_assign_var = assert_var;
+                        vde_assign_value = (final_assert_lit > 0);
+
+                        pse_assign_broadcast_valid = 1'b1;
+                        pse_assign_broadcast_var = assert_var;
+                        pse_assign_broadcast_value = (final_assert_lit > 0);
                     end
+
+`ifndef SYNTHESIS
+                    if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO complete: append+push+pse_start in one cycle (len=%0d, assert_lit=%0d, assert_var=%0d, level=%0d, reason=%0d)",
+                                           CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q, pse_clause_count);
+`endif
+
+                    // 4. Start PSE immediately (effective_clause_count in PSE handles this)
+                    pse_start     = 1'b1;
+                    pse_started_d = 1'b1;
+                    cycle_count_d = '0;
+                    restart_pending_d = 1'b0;
+
+                    state_d = PSE_PHASE;
+                    end // end else (normal backtrack, not restart)
+                end else begin
+                    state_d          = BACKTRACK_UNDO;
                 end
-            end
-            
-            RESYNC_PSE_SETTLE: begin
-                // 1-cycle delay: PSE's assign_state has now registered all broadcast updates.
-                // Now safe to start PSE for scanning with consistent state.
-                pse_start     = 1'b1;
-                pse_started_d = 1'b1;  // CRITICAL: Mark PSE as started for conflict detection in PSE_PHASE
-                state_d       = PSE_PHASE;
-                cycle_count_d = '0;
             end
 
             INJECT_RX_CLAUSE: begin
-                // Handle incoming binary clause from NoC mailbox
-                if (iface_clause_rx_valid) begin
-                    // 1. Pass literals to PSE
-                    pse_inject_req  = 1'b1;
-                    // Literal packing format: [63:32]=lit1, [31:0]=lit2
-                    pse_inject_lit1 = $signed(iface_clause_rx_ptr[63:32]);
-                    pse_inject_lit2 = $signed(iface_clause_rx_ptr[31:0]);
-                    
-                    if (pse_inject_ready) begin
-                        iface_clause_rx_ready = 1'b1; // Consume packet
-//                        $strobe("[CORE %0d] RX Clause Injected: {%0d, %0d}", CORE_ID, pse_inject_lit1, pse_inject_lit2);
-                        state_d = PSE_PHASE; // BCP the new clause
-                        cycle_count_d = '0; // Reset budget for new clause
-                    end
-                end else begin
-                    state_d = VDE_PHASE;
-                end
+                // Append the received binary clause using the proven cae_direct_append path
+                // (same mechanism used for learned clauses after conflict analysis).
+                // Literals were captured and the NoC packet was consumed in PSE_PHASE exit,
+                // so no re-check of iface_clause_rx_valid is needed here.
+                // PSE will run INIT_WATCHES on its next start, making the clause visible to BCP.
+                cae_direct_append_en      = 1'b1;
+                cae_direct_append_len     = 5'd2;
+                cae_direct_append_lits[0] = rx_clause_lit1_q;
+                cae_direct_append_lits[1] = rx_clause_lit2_q;
+`ifndef SYNTHESIS
+                $strobe("[CORE %0d] INJECT_RX_CLAUSE: appending {%0d, %0d} via cae_direct_append",
+                        CORE_ID, rx_clause_lit1_q, rx_clause_lit2_q);
+`endif
+                pse_start     = 1'b1;
+                pse_started_d = 1'b1;
+                cycle_count_d = '0;
+                state_d       = PSE_PHASE;
             end
 
             FINAL_VERIFY: begin
@@ -1665,10 +1486,10 @@ module solver_core #(
                 end else begin
                     // False positive: conflict found during final verification
                     conflict_clause_len_d = pse_conflict_clause_len;
-                    for (int k = 0; k < 8; k++) begin
+                    for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
                         conflict_clause_d[k] = pse_conflict_clause[k];
                     end
-                    state_d = QUERY_CONFLICT_LEVELS;
+                    state_d = CONFLICT_ANALYSIS;
                     query_index_d = 4'd0;
                 end
                 final_verify_mode_d = 1'b0; // Always clear verification flag here
@@ -1708,6 +1529,7 @@ module solver_core #(
             prop_count_q     <= '0;
             conflict_seen_q  <= 1'b0;
             decision_lit_q   <= '0;
+            assert_lit_q     <= '0;
             pse_started_q    <= 1'b0;
             cae_done_r_q     <= 1'b0;
             last_decision_var_q   <= '0;
@@ -1720,19 +1542,24 @@ module solver_core #(
             restart_pending_q  <= 1'b0;
             final_verify_mode_q <= 1'b0;
             query_index_q      <= '0;
-            learn_idx_q        <= '0;
-            resync_idx_q       <= '0;
-            resync_started_q   <= 1'b0;
-            resync_append_learned_q <= 1'b0;
             rescan_required_q  <= 1'b0;
+            restart_mode_q     <= 1'b0;
             vde_repeat_count_q <= '0;
             vde_repeat_var_q   <= '0;
             fallback_idx_q     <= 32'd1;
             conflict_clause_len_q <= '0;
-            for (int i = 0; i < 16; i++) begin
+            for (int i = 0; i < MAX_CLAUSE_LEN; i++) begin
                 conflict_clause_q[i] <= '0;
                 conflict_levels_q[i] <= '0;
             end
+            // FIX5: new registers
+            prop_fifo_lit_q    <= '0;
+            prop_fifo_reason_q <= '0;
+            vde_check_var_q    <= '0;
+            vde_check_phase_q  <= 1'b0;
+            // NoC literal capture registers
+            rx_clause_lit1_q   <= '0;
+            rx_clause_lit2_q   <= '0;
         end else begin
             state_q          <= state_d;
             cycle_count_q    <= cycle_count_d;
@@ -1740,6 +1567,7 @@ module solver_core #(
             prop_count_q     <= prop_count_d;
             conflict_seen_q  <= conflict_seen_d;
             decision_lit_q   <= decision_lit_d;
+            assert_lit_q     <= assert_lit_d;
             pse_started_q    <= pse_started_d;
             cae_done_r_q     <= cae_done_r_d;
             last_decision_var_q   <= last_decision_var_d;
@@ -1752,19 +1580,24 @@ module solver_core #(
             restart_pending_q  <= restart_pending_d;
             final_verify_mode_q <= final_verify_mode_d;
             query_index_q      <= query_index_d;
-            learn_idx_q        <= learn_idx_d;
-            resync_idx_q       <= resync_idx_d;
-            resync_started_q   <= resync_started_d;
-            resync_append_learned_q <= resync_append_learned_d;
             rescan_required_q  <= rescan_required_d;
+            restart_mode_q     <= restart_mode_d;
             vde_repeat_count_q <= vde_repeat_count_d;
             vde_repeat_var_q   <= vde_repeat_var_d;
             fallback_idx_q     <= fallback_idx_d;
             conflict_clause_len_q <= conflict_clause_len_d;
-            for (int i = 0; i < 16; i++) begin
+            for (int i = 0; i < MAX_CLAUSE_LEN; i++) begin
                 conflict_clause_q[i] <= conflict_clause_d[i];
                 conflict_levels_q[i] <= conflict_levels_d[i];
             end
+            // FIX5: new registers
+            prop_fifo_lit_q    <= prop_fifo_lit_d;
+            prop_fifo_reason_q <= prop_fifo_reason_d;
+            vde_check_var_q    <= vde_check_var_d;
+            vde_check_phase_q  <= vde_check_phase_d;
+            // NoC literal capture registers
+            rx_clause_lit1_q   <= rx_clause_lit1_d;
+            rx_clause_lit2_q   <= rx_clause_lit2_d;
 
             // PSE PROPAGATION CAPTURE FIFO
             // Handled by u_prop_fifo instance (including capture and pointers)
@@ -1791,7 +1624,6 @@ module solver_core #(
     logic cae_done_edge_r_q;
     logic [5:0] state_r_q;
     logic trail_backtrack_valid_r_q;
-    logic resync_started_r_q;
     
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -1799,17 +1631,11 @@ module solver_core #(
             cae_done_edge_r_q <= 1'b0;
             state_r_q <= IDLE;
             trail_backtrack_valid_r_q <= 1'b0;
-            resync_started_r_q <= 1'b0;
         end else begin
             vde_decision_valid_r_q <= vde_decision_valid && (state_q == VDE_PHASE);
             cae_done_edge_r_q <= cae_done_edge;
             state_r_q <= state_q;
             trail_backtrack_valid_r_q <= trail_backtrack_valid;
-            resync_started_r_q <= resync_started_q;
-            
-            // TRACE MONITOR RESYNC
-            if (state_q == RESYNC_PSE && $time % 1000 == 0) begin
-            end
         end
     end
 
@@ -1824,10 +1650,8 @@ module solver_core #(
                 if (state_q == FINAL_VERIFY) $display("[CORE %0d] STATE: FINAL_VERIFY - Running final PSE verification", CORE_ID);
                 if (state_q == FINISH_SAT)   $display("[SYS] Result: SAT");
                 if (state_q == FINISH_UNSAT) $display("[SYS] Result: UNSAT");
-                if (state_q == QUERY_CONFLICT_LEVELS && final_verify_mode_q) 
+                if (state_q == CONFLICT_ANALYSIS && final_verify_mode_q) 
                     $display("[CORE %0d] WARNING: Conflict during final SAT verification. Re-analyzing...", CORE_ID);
-                if (state_q == RESYNC_PSE && !resync_started_r_q)
-                    $display("[CORE %0d] Starting RESYNC_PSE. Asserting pse_clear_assignments. Trail height=%0d", CORE_ID, trail_height);
                 if (state_q == FINAL_VERIFY && vde_all_assigned)
                     $display("[CORE %0d Cycle %0d] Conflict_Analysis phase: All variables assigned -> Skipping CAE, going to SAT verification", CORE_ID, cycle_count_q);
                 if (state_q == BACKTRACK_PHASE && !vde_all_assigned && state_r_q == CONFLICT_ANALYSIS)

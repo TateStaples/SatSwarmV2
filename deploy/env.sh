@@ -82,13 +82,13 @@ alias verisat-status="$VERISAT_DEPLOY/deploy.sh status"
 # Summary
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
-# AWS F1 Configuration
+# AWS FPGA Configuration
 # -----------------------------------------------------------------------------
-# Detect if running on an F1 instance
-export IS_AWS_F1=false
-if curl -s --connect-timeout 1 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null | grep -q "f1\."; then
-    export IS_AWS_F1=true
-    echo "  Detected: AWS F1 instance"
+# Detect if running on an AWS FPGA instance (F1 or F2)
+export IS_AWS_FPGA=false
+if curl -s --connect-timeout 1 http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null | grep -qE "f[12]\."; then
+    export IS_AWS_FPGA=true
+    echo "  Detected: AWS FPGA instance"
 fi
 
 # AWS FPGA repository paths
@@ -134,8 +134,8 @@ fi
 if [[ -n "$AWS_FPGA_REPO_DIR" ]]; then
     echo "  AWS FPGA SDK:   $AWS_FPGA_REPO_DIR"
 fi
-if [[ "$IS_AWS_F1" == "true" ]]; then
-    echo "  AWS F1:         YES"
+if [[ "$IS_AWS_FPGA" == "true" ]]; then
+    echo "  AWS FPGA:       YES"
 fi
 
 echo ""
@@ -144,6 +144,6 @@ echo "  ./deploy.sh synth         - Zynq synthesis"
 echo "  ./deploy.sh impl          - Zynq implementation"
 echo "  ./deploy.sh program       - Program Zynq FPGA"
 echo "  ./deploy.sh all           - Zynq complete flow"
-echo "  ./deploy.sh aws-synth     - AWS F1 synthesis"
+echo "  ./deploy.sh aws-synth     - AWS synthesis"
 echo "  ./deploy.sh aws-create-afi - Create AWS AFI"
 echo ""

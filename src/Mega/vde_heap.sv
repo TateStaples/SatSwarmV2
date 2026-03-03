@@ -5,7 +5,8 @@
 module vde_heap #(
     parameter int MAX_VARS = 256,
     parameter int ACT_W    = 32,
-    parameter int IDX_W    = $clog2(MAX_VARS) + 1
+    parameter int IDX_W    = $clog2(MAX_VARS) + 1,
+    parameter int BUMP_Q_SIZE = 32
 )(
     input  logic         clk,
     input  logic         reset,
@@ -31,9 +32,9 @@ module vde_heap #(
     input  logic         bump_valid,
     input  logic [31:0]  bump_var,
     
-    // Multi-bump for learned clause (up to 8 vars)
-    input  logic [3:0]   bump_count,
-    input  logic [7:0][31:0] bump_vars,
+    // Multi-bump for learned clause (up to BUMP_Q_SIZE vars)
+    input  logic [$clog2(BUMP_Q_SIZE+1)-1:0]   bump_count,
+    input  logic [BUMP_Q_SIZE-1:0][31:0] bump_vars,
     input  logic         decay,
     
     input  logic         unassign_all, // Reset assignments but KEEP SCORES
@@ -78,8 +79,13 @@ module vde_heap #(
     // Memory Arrays
     // =========================================================================
     localparam int ENTRY_W = ACT_W + IDX_W;
-    logic [ENTRY_W-1:0] heap_mem [0:MAX_VARS-1];
-    logic [IDX_W-1:0] pos_mem [0:MAX_VARS-1];  // var_id (1-indexed) -> heap_index
+    // ram_style="block": reads are already synchronous (always_ff rdata <= mem[addr])
+    // and the two-port mux pattern (addr = we ? waddr : raddr) is Vivado's canonical
+    // TDP RAMB36E2 inference template.  Without this hint, Vivado dissolves both arrays
+    // into flip-flops (~10K FFs) because the conditional-write address mux confuses the
+    // heuristic recognizer.
+    (* ram_style = "block" *) logic [ENTRY_W-1:0] heap_mem [0:MAX_VARS-1];
+    (* ram_style = "block" *) logic [IDX_W-1:0] pos_mem [0:MAX_VARS-1];  // var_id (1-indexed) -> heap_index
     logic phase_hint [0:MAX_VARS-1];
     
     // BRAM Control Signals
@@ -110,8 +116,8 @@ module vde_heap #(
     logic [IDX_W-1:0] next_idx_d, next_idx_q; // Next bubble index
 
     // Bump queue for multi-bump
-    logic [3:0] bump_queue_count_q, bump_queue_count_d;
-    logic [7:0][31:0] bump_queue_q, bump_queue_d;
+    logic [$clog2(BUMP_Q_SIZE+1)-1:0] bump_queue_count_q, bump_queue_count_d;
+    logic [BUMP_Q_SIZE-1:0][31:0] bump_queue_q, bump_queue_d;
 
     // Lazy decay: bump increment
     logic [ACT_W-1:0] bump_increment_q, bump_increment_d;
@@ -142,15 +148,32 @@ module vde_heap #(
     assign addr_p1 = we_p1 ? waddr_p1 : raddr_p1;
     assign addr_p2 = we_p2 ? waddr_p2 : raddr_p2;
 
+    // TDP BRAM inference requires each port in its own always_ff.
+    // Two ports in one process = "multiple writes via different ports" → Vivado
+    // falls back to registers.  Splitting into four processes (heap port A, heap
+    // port B, pos port A, pos port B) matches Vivado's UG901 TDP template.
+
+    // heap_mem Port A
     always_ff @(posedge clk) begin
         if (we_h1) heap_mem[addr_h1] <= wdata_h1;
+        rdata_h1 <= heap_mem[addr_h1];
+    end
+
+    // heap_mem Port B
+    always_ff @(posedge clk) begin
         if (we_h2) heap_mem[addr_h2] <= wdata_h2;
-        rdata_h1 <= heap_mem[addr_h1]; // Read independent of Write (or X during write)
         rdata_h2 <= heap_mem[addr_h2];
-        
+    end
+
+    // pos_mem Port A
+    always_ff @(posedge clk) begin
         if (we_p1) pos_mem[addr_p1] <= wdata_p1;
-        if (we_p2) pos_mem[addr_p2] <= wdata_p2;
         rdata_p1 <= pos_mem[addr_p1];
+    end
+
+    // pos_mem Port B
+    always_ff @(posedge clk) begin
+        if (we_p2) pos_mem[addr_p2] <= wdata_p2;
         rdata_p2 <= pos_mem[addr_p2];
     end
 
@@ -545,7 +568,7 @@ module vde_heap #(
                      if (bump_queue_count_q > 1) begin
                          bump_queue_count_d = bump_queue_count_q - 1;
                          pending_var_d = bump_queue_q[1];
-                         for (int j = 0; j < 7; j++) bump_queue_d[j] = bump_queue_q[j+1];
+                         for (int j = 0; j < BUMP_Q_SIZE-1; j++) bump_queue_d[j] = bump_queue_q[j+1];
                          state_d = BUMP_READ_POS;
                      end else begin
                          bump_queue_count_d = '0;
@@ -564,7 +587,7 @@ module vde_heap #(
                      if (bump_queue_count_q > 1) begin
                          bump_queue_count_d = bump_queue_count_q - 1;
                          pending_var_d = bump_queue_q[1];
-                         for (int j = 0; j < 7; j++) bump_queue_d[j] = bump_queue_q[j+1];
+                         for (int j = 0; j < BUMP_Q_SIZE-1; j++) bump_queue_d[j] = bump_queue_q[j+1];
                          state_d = BUMP_READ_POS;
                      end else begin
                          bump_queue_count_d = '0;
@@ -588,7 +611,7 @@ module vde_heap #(
                      if (bump_queue_count_q > 1) begin
                          bump_queue_count_d = bump_queue_count_q - 1;
                          pending_var_d = bump_queue_q[1];
-                         for (int j = 0; j < 7; j++) bump_queue_d[j] = bump_queue_q[j+1];
+                         for (int j = 0; j < BUMP_Q_SIZE-1; j++) bump_queue_d[j] = bump_queue_q[j+1];
                          state_d = BUMP_READ_POS;
                      end else begin
                          bump_queue_count_d = '0;

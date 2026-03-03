@@ -69,7 +69,12 @@ module pse #(
     output logic [15:0]        clause_read_len,       // Clause length
     
     // Exposed state for Solver Core
-    output logic [15:0]        current_clause_count   // Current number of clauses (next ID)
+    output logic [15:0]        current_clause_count,  // Current number of clauses (next ID)
+
+    // Direct learned-clause append interface (bypasses load stream; single-cycle write)
+    input  logic                                        cae_direct_append_en,
+    input  logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]        cae_direct_append_len,
+    input  logic signed [MAX_CLAUSE_LEN-1:0][31:0]     cae_direct_append_lits
 );
 
     typedef enum logic [3:0] {
@@ -80,34 +85,42 @@ module pse #(
         SEED_DECISION,
         DEQ_PROP,
         SCAN_WATCH,
+        SCAN_WATCH_EVAL,    // FIX5: wait for registered truth results after SCAN_WATCH
         SCAN_REPL,
+        SCAN_REPL_EVAL,     // FIX5: wait for registered truth result in replacement scan
         COMPLETE,
         INJECT_CLAUSE  // New state for inserting foreign clauses
     } state_e;
 
     // Assignment encoding: 2'b00 = unassigned, 2'b01 = false, 2'b10 = true
-    // Assignments and Reasons
-    logic [1:0]  assign_state [0:MAX_VARS-1];
-    logic [15:0] reason_clause [0:MAX_VARS-1];
+    // Assignments and Reasons — ram_style hints force LUTRAM inference on UltraScale+.
+    // BCP reads multiple arrays per cycle (assign_state, lit_mem, watch_head*, watch_next*)
+    // simultaneously, which prevents BRAM (single read port) but is fine for LUTRAM
+    // (async multi-read).
+    (* ram_style = "distributed" *) logic [1:0]  assign_state [0:MAX_VARS-1];
+    (* ram_style = "distributed" *) logic [15:0] reason_clause [0:MAX_VARS-1];
 
     // Clause Store (Local Arrays)
-    logic [15:0] clause_len    [0:MAX_CLAUSES-1];
-    logic [15:0] clause_start  [0:MAX_CLAUSES-1];
-    logic signed [31:0] lit_mem [0:MAX_LITS-1];
+    (* ram_style = "distributed" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists (Local Arrays)
-    logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
-    logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
-    logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
-    logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
-    logic [15:0] watch_head1   [0:2*MAX_VARS-1];
-    logic [15:0] watch_head2   [0:2*MAX_VARS-1];
+    (* ram_style = "distributed" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [15:0] watch_head1   [0:2*MAX_VARS-1];
+    (* ram_style = "distributed" *) logic [15:0] watch_head2   [0:2*MAX_VARS-1];
 
     // Propagation queue
     logic prop_fifo_empty, prop_fifo_full;
     logic [($clog2(PROP_QUEUE_DEPTH)):0] prop_fifo_count;
     logic signed [31:0] prop_fifo_out;
     logic prop_pop;
+    logic        prop_push;
+    logic signed [31:0] prop_push_val;
+    state_e      state_q, state_d;
 
     sfifo #(
         .WIDTH(32),
@@ -154,7 +167,6 @@ module pse #(
     logic [15:0] wm_rd_head_idx, wm_head1, wm_head2;
 
     // Bookkeeping
-    state_e      state_q, state_d;
     logic [15:0] clause_count_q, clause_count_d;
     logic [15:0] lit_count_q, lit_count_d;
     logic [15:0] cur_clause_len_q, cur_clause_len_d;
@@ -184,9 +196,6 @@ module pse #(
     logic [15:0] assign_wr_idx;
     logic [1:0]  assign_wr_val;
 
-    // Propagation queue write helper
-    logic        prop_push;
-    logic signed [31:0] prop_push_val;
     logic               initialized_q, initialized_d;
 
     logic        conflict_detected_q, conflict_detected_d;
@@ -240,9 +249,31 @@ module pse #(
     logic [1:0]         truth_result_a;
     logic [1:0]         truth_result_b;
 
+    // FIX5: Registered (pipelined) truth results — breaks the combinational chain
+    // lit_mem[] → assign_state[] → broadcast_mux → polarity_flip that limits fmax.
+    // SCAN_WATCH issues queries, SCAN_WATCH_EVAL reads registered results.
+    logic [1:0]         truth_result_a_r;
+    logic [1:0]         truth_result_b_r;
+
+    // FIX5: Saved replacement literal across SCAN_REPL → SCAN_REPL_EVAL wait
+    logic signed [31:0] scan_repl_lit_q, scan_repl_lit_d;
+
     always_comb begin
         truth_result_a = lit_truth_raw(truth_query_a);
         truth_result_b = lit_truth_raw(truth_query_b);
+    end
+
+    // FIX5: Pipeline register for truth results (posedge latch)
+    always_ff @(posedge clk or posedge reset) begin
+        if (reset) begin
+            truth_result_a_r <= 2'b00;
+            truth_result_b_r <= 2'b00;
+            scan_repl_lit_q  <= '0;
+        end else begin
+            truth_result_a_r <= truth_result_a;
+            truth_result_b_r <= truth_result_b;
+            scan_repl_lit_q  <= scan_repl_lit_d;
+        end
     end
 
     // Safe literal-to-watch-head-index conversion with bounds clamping
@@ -306,6 +337,7 @@ module pse #(
         logic signed [31:0] l;
         logic [1:0] t;
         logic [15:0] next_clause;
+        logic [15:0] effective_clause_count;
 
         // Initialize defaults
         state_d            = clear_assignments ? IDLE : state_q;
@@ -329,6 +361,7 @@ module pse #(
         scan_other_truth_d = scan_other_truth_q;
         scan_idx_d         = scan_idx_q;
         scan_steps_d       = scan_steps_q;
+        scan_repl_lit_d    = scan_repl_lit_q; // FIX5: default preserve
 
         hold_d             = clear_assignments ? 1'b1 : (start ? 1'b0 : hold_q);
         conflict_detected_d = start ? 1'b0 : conflict_detected_q;
@@ -386,6 +419,11 @@ module pse #(
         conflict_clause_len = conflict_clause_len_q;
         conflict_clause     = conflict_clause_q;
 
+        // When cae_direct_append_en fires in the same cycle as start,
+        // clause_count_q hasn't been incremented yet (it updates in always_ff).
+        // Use effective_clause_count to ensure INIT_WATCHES sees the new clause.
+        effective_clause_count = cae_direct_append_en ? (clause_count_q + 16'd1) : clause_count_q;
+
         case (state_q)
             IDLE: begin
                 // TRACE IDLE
@@ -406,7 +444,7 @@ module pse #(
                     state_d = INJECT_CLAUSE;
                 end else if (start) begin
                     if (initialized_q) begin
-                        if (init_clause_idx_q < clause_count_q) state_d = INIT_WATCHES;
+                        if (init_clause_idx_q < effective_clause_count) state_d = INIT_WATCHES;
                         else state_d = SEED_DECISION;
                     end else begin
                         reset_idx_d = '0;
@@ -431,7 +469,7 @@ module pse #(
                     state_d = LOAD_CLAUSE;
                 end else if (start) begin
                     if (initialized_q) begin
-                        if (init_clause_idx_q < clause_count_q) state_d = INIT_WATCHES;
+                        if (init_clause_idx_q < effective_clause_count) state_d = INIT_WATCHES;
                         else state_d = SEED_DECISION;
                     end else begin
                         reset_idx_d = '0;
@@ -550,28 +588,39 @@ module pse #(
                         lit_other = lit_mem[w1];
                     end
 
+                    // FIX5: Issue truth queries; registered results read in SCAN_WATCH_EVAL
                     truth_query_a = lit_other;
                     truth_query_b = lit_watch;
-                    other_truth = truth_result_a;
 
-                    if (other_truth == 2'b10 || truth_result_b != 2'b01) begin
-                        scan_prev_d   = scan_clause_q;
-                        next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
-                        if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
-                            scan_clause_d = 16'hFFFF;
-                        else
-                            scan_clause_d = next_clause;
-                    end else begin
-                        scan_cstart_d      = cstart;
-                        scan_clen_d        = clen;
-                        scan_w1_d          = w1;
-                        scan_w2_d          = w2;
-                        scan_lit_watch_d   = lit_watch;
-                        scan_lit_other_d   = lit_other;
-                        scan_other_truth_d = other_truth;
-                        scan_idx_d         = 16'd0;
-                        state_d            = SCAN_REPL;
-                    end
+                    // Save clause metadata for SCAN_WATCH_EVAL / SCAN_REPL
+                    scan_cstart_d      = cstart;
+                    scan_clen_d        = clen;
+                    scan_w1_d          = w1;
+                    scan_w2_d          = w2;
+                    scan_lit_watch_d   = lit_watch;
+                    scan_lit_other_d   = lit_other;
+                    state_d            = SCAN_WATCH_EVAL;
+                end
+            end
+
+            // FIX5: Evaluate registered truth results from previous SCAN_WATCH cycle
+            SCAN_WATCH_EVAL: begin
+                other_truth = truth_result_a_r;
+
+                if (other_truth == 2'b10 || truth_result_b_r != 2'b01) begin
+                    // Clause satisfied by other literal, or watched literal not false — skip
+                    scan_prev_d   = scan_clause_q;
+                    next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
+                    if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
+                        scan_clause_d = 16'hFFFF;
+                    else
+                        scan_clause_d = next_clause;
+                    state_d = SCAN_WATCH;
+                end else begin
+                    // Watched literal is false and other is not true — need replacement
+                    scan_other_truth_d = other_truth;
+                    scan_idx_d         = 16'd0;
+                    state_d            = SCAN_REPL;
                 end
             end
 
@@ -579,34 +628,43 @@ module pse #(
                 if (scan_idx_q < scan_clen_q) begin
                     l = lit_mem[scan_cstart_q + scan_idx_q];
                     if ((scan_cstart_q + scan_idx_q != scan_w1_q) && (scan_cstart_q + scan_idx_q != scan_w2_q)) begin
-                        if (lit_truth_raw(l) != 2'b01 && safe_lit_idx(l) != safe_lit_idx(scan_lit_watch_q)) begin
-                            watch_wr_en        = 1'b1;
-                            watch_wr_clause_id = scan_clause_q;
-                            watch_wr_list_sel  = scan_list_sel_q;
-                            watch_wr_new_w     = scan_cstart_q + scan_idx_q;
-                            watch_wr_old_idx   = safe_lit_idx(scan_lit_watch_q);
-                            watch_wr_new_idx   = safe_lit_idx(l);
-                            watch_wr_prev_id   = scan_prev_q;
-
-                            // FIX: clause is being REMOVED from this list (watch_wr_en=1),
-                            // so it must NOT become the new 'prev'. Keep prev unchanged.
-                            scan_prev_d   = scan_prev_q;
-                            next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
-                            if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
-                                scan_clause_d = 16'hFFFF;
-                            else
-                                scan_clause_d = next_clause;
-
-                            state_d = SCAN_WATCH;
-                        end else begin
-                            scan_idx_d = scan_idx_q + 1'b1;
-                        end
+                        // FIX5: Issue truth query for candidate literal, wait for registered result
+                        truth_query_a   = l;
+                        scan_repl_lit_d = l;
+                        state_d = SCAN_REPL_EVAL;
                     end else begin
                         scan_idx_d = scan_idx_q + 1'b1;
                     end
                 end else begin
                     if (scan_other_truth_q == 2'b00) begin
                         v = (scan_lit_other_q < 0) ? -scan_lit_other_q : scan_lit_other_q;
+`ifndef SYNTHESIS
+                        // VALIDATION: Check that other literal is STILL unassigned now
+                        if (lit_truth_raw(scan_lit_other_q) != 2'b00) begin
+                            $display("[PSE UNIT-VALIDATE] WARNING: Clause %0d other_lit=%0d saved_truth=00 but current_truth=%0b (stale!)",
+                                     scan_clause_q, scan_lit_other_q, lit_truth_raw(scan_lit_other_q));
+                        end
+                        // COMPREHENSIVE VALIDATION: Check ALL clause literals
+                        for (int vk = 0; vk < MAX_CLAUSE_LEN; vk++) begin
+                            if ($unsigned(vk) < $unsigned(scan_clen_q)) begin
+                                logic signed [31:0] vl;
+                                logic [1:0] vt;
+                                vl = lit_mem[scan_cstart_q + vk];
+                                vt = lit_truth_raw(vl);
+                                if (vl == scan_lit_other_q) begin
+                                    // This is the unit literal — should be unassigned
+                                    if (vt != 2'b00)
+                                        $display("[PSE PROP-VALIDATE] ERROR: Clause %0d unit_lit=%0d (idx %0d) truth=%0b expected 00",
+                                                 scan_clause_q, vl, vk, vt);
+                                end else begin
+                                    // All other literals should be FALSE
+                                    if (vt != 2'b01)
+                                        $display("[PSE PROP-VALIDATE] ERROR: Clause %0d non-unit lit=%0d (idx %0d) truth=%0b expected 01 (FALSE). Unit=%0d",
+                                                 scan_clause_q, vl, vk, vt, scan_lit_other_q);
+                                end
+                            end
+                        end
+`endif
                         propagated_valid  = 1'b1;
                         propagated_var    = scan_lit_other_q;
                         propagated_reason = scan_clause_q;
@@ -654,8 +712,49 @@ module pse #(
                             if ($unsigned(k) < $unsigned(scan_clen_q))
                                 conflict_clause_d[k] = lit_mem[scan_cstart_q + k];
                         end
+`ifndef SYNTHESIS
+                        // VALIDATION: Verify all literals in conflict clause are actually false
+                        for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
+                            if ($unsigned(k) < $unsigned(scan_clen_q)) begin
+                                if (lit_truth_raw(lit_mem[scan_cstart_q + k]) != 2'b01) begin
+                                    $display("[PSE CONFLICT-VALIDATE] ERROR: Clause %0d lit[%0d]=%0d has truth=%0b (expected FALSE=01) at cstart=%0d clen=%0d",
+                                             scan_clause_q, k, lit_mem[scan_cstart_q + k], 
+                                             lit_truth_raw(lit_mem[scan_cstart_q + k]),
+                                             scan_cstart_q, scan_clen_q);
+                                end
+                            end
+                        end
+`endif
                         state_d = COMPLETE;
                     end
+                end
+            end
+
+            // FIX5: Evaluate registered truth result for SCAN_REPL candidate literal
+            SCAN_REPL_EVAL: begin
+                if (truth_result_a_r != 2'b01 &&
+                    safe_lit_idx(scan_repl_lit_q) != safe_lit_idx(scan_lit_watch_q) &&
+                    safe_lit_idx(scan_repl_lit_q) != safe_lit_idx(scan_lit_other_q)) begin
+                    // Found a suitable replacement literal
+                    watch_wr_en       = 1'b1;
+                    watch_wr_clause_id = scan_clause_q;
+                    watch_wr_list_sel = scan_list_sel_q;
+                    watch_wr_new_w    = scan_cstart_q + scan_idx_q;
+                    watch_wr_old_idx  = safe_lit_idx(scan_lit_watch_q);
+                    watch_wr_new_idx  = safe_lit_idx(scan_repl_lit_q);
+                    watch_wr_prev_id  = scan_prev_q;
+
+                    scan_prev_d = scan_prev_q;
+                    next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
+                    if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
+                        scan_clause_d = 16'hFFFF;
+                    else
+                        scan_clause_d = next_clause;
+                    state_d = SCAN_WATCH;
+                end else begin
+                    // Candidate not suitable, advance to next position
+                    scan_idx_d = scan_idx_q + 1'b1;
+                    state_d    = SCAN_REPL;
                 end
             end
 
@@ -745,8 +844,33 @@ module pse #(
             conflict_clause_q     <= '0;
         end else begin
             state_q          <= state_d;
-            clause_count_q   <= clause_count_d;
-            lit_count_q      <= lit_count_d;
+
+            // Direct append path: CAE writes learned clause in one cycle, bypassing load stream
+            if (cae_direct_append_en && clause_count_q < MAX_CLAUSES &&
+                (lit_count_q + cae_direct_append_len) <= MAX_LITS) begin
+                for (int k = 0; k < MAX_CLAUSE_LEN; k++) begin
+                    if (k < cae_direct_append_len)
+                        lit_mem[lit_count_q + k] <= cae_direct_append_lits[k];
+                end
+                clause_start[clause_count_q] <= lit_count_q;
+                clause_len[clause_count_q]   <= cae_direct_append_len;
+                lit_count_q    <= lit_count_q + cae_direct_append_len;
+                clause_count_q <= clause_count_q + 1;
+            end else begin
+                clause_count_q <= clause_count_d;
+                lit_count_q    <= lit_count_d;
+                if (load_fire) begin
+                    lit_mem[lit_count_q] <= load_literal;
+                    if (load_clause_end) begin
+                        clause_start[clause_count_q] <= lit_count_q - cur_clause_len_q;
+                        clause_len[clause_count_q]   <= cur_clause_len_q + 1'b1;
+`ifndef SYNTHESIS
+                        if (DEBUG >= 2) $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
+`endif
+                    end
+                end
+            end
+
             cur_clause_len_q <= cur_clause_len_d;
             init_clause_idx_q<= init_clause_idx_d;
             reset_idx_q      <= reset_idx_d;
@@ -771,17 +895,6 @@ module pse #(
             conflict_detected_q <= conflict_detected_d;
             conflict_clause_len_q <= conflict_clause_len_d;
             conflict_clause_q <= conflict_clause_d;
-
-            if (load_fire) begin
-                lit_mem[lit_count_q] <= load_literal;
-                if (load_clause_end) begin
-                    clause_start[clause_count_q] <= lit_count_q - cur_clause_len_q;
-                    clause_len[clause_count_q]   <= cur_clause_len_q + 1'b1;
-`ifndef SYNTHESIS
-                    if (DEBUG >= 2) $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
-`endif
-                end
-            end
 
             if (state_q == RESET_WATCHES) begin
                 if (reset_idx_q < MAX_CLAUSES) begin

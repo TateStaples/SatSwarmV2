@@ -1,9 +1,11 @@
 VERILATOR ?= verilator
 TOP      := tb_satswarmv2
 RTL_SRCS := $(abspath ../src/Mega/satswarmv2_pkg.sv \
+            ../src/Mega/mega_pkg.sv \
             ../src/Mega/interface_unit.sv \
             ../src/Mega/mesh_interconnect.sv \
             ../src/Mega/global_mem_arbiter.sv \
+            ../src/Mega/global_allocator.sv \
             ../src/Mega/solver_core.sv \
             ../src/Mega/satswarm_top.sv \
             ../src/Mega/pse.sv \
@@ -25,7 +27,7 @@ MINI_SRCS := $(abspath ../src/Mini/mini_pkg.sv \
 VERILATOR_FLAGS := -Wall --timing --sv --cc --exe \
   --Wno-fatal --Wno-UNUSED --Wno-PINCONNECTEMPTY --Wno-UNOPTFLAT \
   --Wno-INITIALDLY --Wno-WIDTHTRUNC --Wno-WIDTHEXPAND --Wno-MODDUP \
-  --Wno-BLKANDNBLK --Wno-WIDTH
+  --Wno-BLKANDNBLK --Wno-WIDTH --Wno-BLKLOOPINIT --Wno-SYNCASYNCNET
 
 .PHONY: all build test benchmark clean help debug_single regression_single regression_multi mini
 
@@ -57,6 +59,23 @@ build_2x2:
 		-DMULTICORE \
 		-I../src/Mega \
 		-Mdir obj_dir_2x2 \
+		--build -j 8
+
+# Build 2x2 grid (4 cores) for multi-core soundness testing.
+# Note: tb_satswarmv2.sv statically references dut.cols[0].rows[1], dut.cols[1].rows[0],
+# and dut.cols[1].rows[1] inside `ifdef MULTICORE. Verilator resolves all hierarchical
+# signal paths at elaboration time (even guarded by runtime `if (GRID_X >= N)`), so only
+# GRID_X>=2 AND GRID_Y>=2 configurations are supported by this testbench. To test a
+# true 1x2 config, the testbench would need generate-based signal aliasing.
+build_1x2:
+	@echo "Building SatSwarmv2 2x2 (4 Cores) for multi-core soundness testing..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=2 -GGRID_Y=2 \
+		-CFLAGS "-std=c++17" \
+		-DMULTICORE \
+		-I../src/Mega \
+		-Mdir obj_dir_1x2 \
 		--build -j 8
 
 # Build 3x3 grid (9 cores) for benchmark comparison  
@@ -183,7 +202,7 @@ $(STAMP_MINI): sv/tb_mini.sv $(MINI_SRCS) Makefile
 mini: $(STAMP_MINI)
 
 clean:
-	rm -rf obj_dir obj_dir_mini logs *.vcd benchmark_results.txt .build_*_stamp
+	rm -rf obj_dir obj_dir_mini obj_dir_1x1 obj_dir_1x2 obj_dir_2x2 obj_dir_3x3 logs *.vcd benchmark_results.txt .build_*_stamp
 
 help:
 	@echo "SatSwarmv2 Makefile Targets:"

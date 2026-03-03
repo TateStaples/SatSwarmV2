@@ -1,7 +1,6 @@
 `timescale 1ns/1ps
 
 module tb_cae;
-    import satswarmv2_pkg::*;
 
     parameter int MAX_LITS = 8;
     parameter int LEVEL_W = 8;
@@ -19,10 +18,21 @@ module tb_cae;
     logic unsat;
     logic done;
 
+    logic [15:0] trail_read_idx;
+    logic [15:0] trail_height_sig;
+    logic [31:0] reason_query_var;
+    logic [15:0] clause_read_id;
+    logic [$clog2(MAX_LITS+1)-1:0] clause_read_lit_idx;
+    logic [31:0] level_query_var;
+
+    assign trail_height_sig = 0;
+
     cae #(
         .MAX_LITS(MAX_LITS),
-        .LEVEL_W(LEVEL_W)
+        .LEVEL_W(LEVEL_W),
+        .MAX_VARS(256)
     ) dut (
+        .DEBUG(32'd0),
         .clk(clk),
         .reset(reset),
         .start(start),
@@ -35,7 +45,23 @@ module tb_cae;
         .learned_clause(learned_clause),
         .backtrack_level(backtrack_level),
         .unsat(unsat),
-        .done(done)
+        .done(done),
+        .trail_read_idx(trail_read_idx),
+        .trail_read_var(32'd0),
+        .trail_read_value(1'b0),
+        .trail_read_level(16'd0),
+        .trail_read_is_decision(1'b0),
+        .trail_read_reason(16'hFFFF),
+        .trail_height(trail_height_sig),
+        .reason_query_var(reason_query_var),
+        .reason_query_clause(16'd0),
+        .reason_query_valid(1'b0),
+        .clause_read_id(clause_read_id),
+        .clause_read_lit_idx(clause_read_lit_idx),
+        .clause_read_literal(32'sd0),
+        .clause_read_len(16'd0),
+        .level_query_var(level_query_var),
+        .level_query_levels(16'd0)
     );
 
     initial clk = 0;
@@ -54,13 +80,8 @@ module tb_cae;
         repeat(2) @(posedge clk);
         
         // Test 1: Simple Conflict at Level 5
-        // Conflict Clause: {Lit 10 (Lvl 5), Lit 11 (Lvl 3), Lit 12 (Lvl 2)}
-        // Current Level: 5
-        // Expected: UIP is Lit 10. Learned Clause should contain ~10, 11, 12?
-        // Actually CAE logic:
-        // Finds max level in conflict (5).
-        // Finds first lit at max level -> UIP.
-        // Backtrack level = max among OTHERS (3).
+        // Only one literal at decision level -> immediate UIP
+        // UIP = Lit 10, backtrack to level 3 (second-highest)
         
         $display("[Test 1] Direct First-UIP Calculation");
         start <= 1;

@@ -47,6 +47,11 @@ module trail_manager #(
     output logic         query_valid,  // High if query_var is currently assigned
     output logic         query_value,  // Value of assignment (if valid)
     output logic [15:0]  query_reason, // Reason for assignment
+    // FIX5: Registered (pipelined) versions for 125 MHz fmax — 1 cycle latency vs combinational versions above
+    output logic         query_valid_r,
+    output logic [15:0]  query_level_r,
+    output logic         query_value_r,
+    output logic [15:0]  query_reason_r,
 
     
     // Trail read interface (for CAE backward iteration)
@@ -84,30 +89,28 @@ module trail_manager #(
     
     // Lookup tables: variable -> level/value
     // Index is 1-based variable ID; 0 is unused.
-    // Small arrays — inferred as registers at synthesis scale, LUTRAM at full scale
-    logic [15:0] var_to_level [0:MAX_VARS];
-    logic        var_to_value [0:MAX_VARS];
-    logic [15:0] var_to_index [0:MAX_VARS];
+    // ram_style="distributed" forces LUTRAM; without this hint Vivado dissolves these
+    // into individual flip-flops.
+    (* ram_style = "distributed" *) logic [15:0] var_to_level [0:MAX_VARS];
+    (* ram_style = "distributed" *) logic        var_to_value [0:MAX_VARS];
+    (* ram_style = "distributed" *) logic [15:0] var_to_index [0:MAX_VARS];
 
-    // Inferred LUTRAM for Level Start Indices
-    // Tracks the starting trail index for each decision level
+    // LUTRAM for Level Start Indices
     // level_start[L] = index in 'trail' where level L begins.
-    logic [15:0] level_start [0:MAX_VARS]; // Max levels = Max vars
+    (* ram_style = "distributed" *) logic [15:0] level_start [0:MAX_VARS];
 
-    // Trail Stack (Inferred BRAM/LUTRAM depending on size)
-    // We do NOT reset the whole array, allowing inference.
-    // "trail" is read asynchronously (line 182) so it will infer DistRAM or BRAM with read-first/async logic.
-    // If BRAM is required, read must be synchronous. Current usage (line 182) implies async read.
-    // Given MAX_VARS is small (256), DistRAM is fine. For larger, we need to pipeline reads.
-    // VeriSAT uses OCM (BRAM). For that, we'd need to change the read interface to be synchronous.
-    // For now, let's stick to DistRAM for the trail as well unless we want to fix correct BRAM inference.
-    // To fix BRAM inference, we must register the read address. But "trail_read_idx" comes from input.
-    // Let's rely on DistRAM for now (simpler change) but remove the reset loop.
-    // Trail Stack (Inferred BRAM/LUTRAM depending on size)
-    // We do NOT reset the whole array, allowing inference.
-    // "trail" is read asynchronously (line 182) so it will infer DistRAM or BRAM with read-first/async logic.
-    // Use Struct for Verilator/Simulation compatibility (Testbench accesses members)
+    // Trail Stack — synthesis uses logic bits so Vivado can infer LUTRAM (async reads
+    // prevent BRAM; struct arrays prevent LUTRAM inference without this split).
+    // Simulation keeps the struct so debug `\`ifndef SYNTHESIS` blocks can access
+    // .variable / .level etc. directly without casts.
+    // Implicit packed SV assignment converts between the two representations wherever
+    // entry_query/entry_read/new_entry_push (all trail_entry_t) are assigned from trail[].
+`ifdef SYNTHESIS
+    localparam int TRAIL_W = $bits(mega_pkg::trail_entry_t); // 66
+    (* ram_style = "distributed" *) logic [TRAIL_W-1:0] trail [0:MAX_VARS-1];
+`else
     mega_pkg::trail_entry_t trail [0:MAX_VARS-1];
+`endif
 
     // logic [15:0] trail_height_q, trail_height_d; // Removed duplicate
     // logic [15:0] current_level_q, current_level_d; // Removed duplicate
@@ -168,7 +171,23 @@ module trail_manager #(
 `endif
         end
     end
-    
+
+    // FIX5: Registered (pipelined) query outputs — breaks the LUTRAM→comparator→BRAM→comparator
+    // combinatorial chain for 125 MHz fmax. Consumer must issue query 1 cycle before reading _r result.
+    always_ff @(posedge clk or posedge reset) begin
+        if (reset) begin
+            query_valid_r  <= 1'b0;
+            query_level_r  <= 16'd0;
+            query_value_r  <= 1'b0;
+            query_reason_r <= 16'h0;
+        end else begin
+            query_valid_r  <= query_valid;
+            query_level_r  <= query_level;
+            query_value_r  <= query_value;
+            query_reason_r <= query_reason;
+        end
+    end
+
     // Combinational trail read for external access
     always_comb begin
         logic [65:0] trail_read_raw; // Flattened temp (32+1+16+1+16 = 66 bits)
@@ -229,6 +248,9 @@ module trail_manager #(
             trail_height_d = '0;
             current_level_d = '0;
             bt_state_d = IDLE;
+`ifndef SYNTHESIS
+            if (DEBUG >= 1) $display("[TRAIL MANAGER] trail_height_d=0 via clear_all");
+`endif
         end else if (truncate_en) begin
             // O(1) Truncate using level_start array
             // We want to keep all assignments <= truncate_level_target.
@@ -292,6 +314,10 @@ module trail_manager #(
                          backtrack_var = bt_peek_entry.variable;
                          backtrack_value = bt_peek_entry.value;
                          backtrack_is_decision = bt_peek_entry.is_decision;
+`ifndef SYNTHESIS
+                         if (DEBUG >= 1) $display("[TRAIL MANAGER] ITERATIVE UNASSIGN: var=%0d level=%0d target=%0d idx=%0d", 
+                                 bt_peek_entry.variable, bt_peek_entry.level, bt_target_q, bt_index_q);
+`endif
                          // var_to_level cleanup happens in always_ff
                      end else begin
                          bt_state_d = BACKTRACK_COMPLETE;
@@ -299,8 +325,20 @@ module trail_manager #(
                  end
                  
                  BACKTRACK_COMPLETE: begin
-                     trail_height_d = bt_index_q;
+                     // If push fires simultaneously (folded APPEND_PUSH), account
+                     // for the pushed entry: height = bt_index_q + 1.
+                     if (push && bt_index_q < MAX_VARS) begin
+                         trail_height_d = bt_index_q + 16'd1;
+                     end else begin
+                         trail_height_d = bt_index_q;
+                     end
                      current_level_d = bt_target_q;
+`ifndef SYNTHESIS
+                     if (DEBUG >= 1) $display("[TRAIL MANAGER] trail_height_d=%0d via BACKTRACK_COMPLETE (push=%0b)", 
+                                              (push && bt_index_q < MAX_VARS) ? bt_index_q + 16'd1 : bt_index_q, push);
+                     if (DEBUG >= 1) $display("[TRAIL MANAGER] BACKTRACK_COMPLETE: current_level_d = %0d target = %0d idx = %0d", 
+                                              bt_target_q, bt_target_q, bt_index_q);
+`endif
                      backtrack_done = 1'b1;
                      bt_state_d = IDLE;
                  end
@@ -327,38 +365,46 @@ module trail_manager #(
             bt_state_q <= bt_state_d;
             bt_index_q <= bt_index_d;
             bt_target_q <= bt_target_d;
+`ifndef SYNTHESIS
+            if (DEBUG >= 1 && trail_height_q != trail_height_d)
+                $display("[TRAIL MANAGER] trail_height_q changed from %0d to %0d", trail_height_q, trail_height_d);
+`endif
 
             // --- Trail Write Logic ---
             if (push && trail_height_q < MAX_VARS) begin
-                 // Write new entry
+`ifndef SYNTHESIS
+                 // VALIDATION: Check for duplicate trail pushes
+                 if (push_var > 0 && push_var <= MAX_VARS) begin
+                     logic [15:0] dup_lvl, dup_idx;
+                     dup_lvl = var_to_level[push_var];
+                     dup_idx = var_to_index[push_var];
+                     if (dup_lvl <= current_level_q && dup_idx < trail_height_q && trail[dup_idx].variable == push_var)
+                         $display("[TRAIL DUP-VALIDATE] ERROR: Pushing var=%0d but already on trail at idx=%0d lvl=%0d (current push lvl=%0d height=%0d)",
+                                  push_var, dup_idx, dup_lvl, push_level, trail_height_q);
+                 end
+`endif
                  // Write new entry using temporary variable to satisfy Yosys
                  new_entry_push.variable = push_var;
                  new_entry_push.value = push_value;
                  new_entry_push.level = push_level;
                  new_entry_push.is_decision = push_is_decision;
                  new_entry_push.reason = push_reason;
-                 trail[trail_height_q] <= new_entry_push;
+
+                 // If backtrack completed THIS cycle (simultaneous push+BACKTRACK_COMPLETE),
+                 // trail_height_q is stale. Write at bt_index_q (post-backtrack position).
+                 if (bt_state_q == BACKTRACK_COMPLETE) begin
+                     trail[bt_index_q] <= new_entry_push;
+                     var_to_index[push_var] <= bt_index_q;
+                     level_start[push_level + 1] <= bt_index_q + 1'b1;
+                 end else begin
+                     trail[trail_height_q] <= new_entry_push;
+                     var_to_index[push_var] <= trail_height_q;
+                     level_start[push_level + 1] <= trail_height_q + 1'b1;
+                 end
                  
                  // Update var_to_level/value (Synchronous Write)
                  var_to_level[push_var] <= push_level;
                  var_to_value[push_var] <= push_value;
-                 var_to_index[push_var] <= trail_height_q;
-                 
-                 // Update level_start logic
-                 // If we are starting a NEW level (first assignment of level L),
-                 // record its start index.
-                 // We know it's a new level if push_is_decision is true?
-                 // Or if push_level != current_level?
-                 // Usually decision starts the level.
-                 
-                 // If this is the FIRST assignment of push_level...
-                 // Complication: The "start" of level L is where level L-1 ended.
-                 // Easier: Update level_start[push_level + 1] to "trail_height_q + 1".
-                 // So that if we later truncate to push_level, we know where it ends.
-                 // Yes: level_start[L+1] tracks the END of level L (or start of L+1).
-                 
-                 // We proactively update the pointer for the NEXT level.
-                 level_start[push_level + 1] <= trail_height_q + 1'b1;
             end
             
             // --- Backtrack Cleanup Logic ---

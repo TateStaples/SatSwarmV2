@@ -1,6 +1,7 @@
 module vde #(
     parameter int MAX_VARS = 256,
-    parameter int ACT_W    = 32
+    parameter int ACT_W    = 32,
+    parameter int BUMP_Q_SIZE = 32
 )(
     input  logic [31:0]    DEBUG,
     input  logic         clk,
@@ -29,8 +30,8 @@ module vde #(
     input  logic [31:0]  bump_var,
     
     // Multi-bump for learned clause
-    input  logic [3:0]   bump_count,
-    input  logic [7:0][31:0] bump_vars,
+    input  logic [$clog2(BUMP_Q_SIZE+1)-1:0]   bump_count,
+    input  logic [BUMP_Q_SIZE-1:0][31:0] bump_vars,
     input  logic         decay,
     output logic         busy,
     output logic         pending_ops
@@ -126,8 +127,8 @@ module vde #(
     // -------------------------------------------------------------------------
     // 2. Multi-Bump Holding Register
     // -------------------------------------------------------------------------
-    logic [3:0]       held_bump_count;
-    logic [7:0][31:0] held_bump_vars;
+    logic [$clog2(BUMP_Q_SIZE+1)-1:0] held_bump_count;
+    logic [BUMP_Q_SIZE-1:0][31:0] held_bump_vars;
     logic             held_bump_valid;
     logic             ack_bump;
 
@@ -168,8 +169,8 @@ module vde #(
     logic h_assign_valid, h_clear_valid, h_bump_valid;
     logic [31:0] h_assign_var, h_clear_var, h_bump_var;
     logic h_assign_value;
-    logic [3:0] h_bump_count;
-    logic [7:0][31:0] h_bump_vars;
+    logic [$clog2(BUMP_Q_SIZE+1)-1:0] h_bump_count;
+    logic [BUMP_Q_SIZE-1:0][31:0] h_bump_vars;
     logic h_decay;
     
     always_comb begin
@@ -227,7 +228,8 @@ module vde #(
     // -------------------------------------------------------------------------
     vde_heap #(
         .MAX_VARS(MAX_VARS),
-        .ACT_W(ACT_W)
+        .ACT_W(ACT_W),
+        .BUMP_Q_SIZE(BUMP_Q_SIZE)
     ) u_heap (
         .clk(clk),
         .reset(reset),
