@@ -4,6 +4,19 @@
 **Target**: AWS F2 instance (Xilinx VU47P FPGA)  
 **Toolchain**: Vivado 2025.2, Verilator (simulation), AWS HDK v2.3.0
 
+### Repository Structure
+
+- **`src/Mega/`** — Core RTL solver implementation (all SystemVerilog except `mega_sim.py`)
+- **`src/Mini/`** — Simplified solver for development/debugging
+- **`sim/`** — Verilator-based simulation (see §6)
+- **`hdk_cl_satswarm/`** — **AWS HDK wrapper, now Git-tracked**
+  - Contains: design (RTL), verif (tests), build/ (synthesis scripts), host/ (C code)
+  - Files are copied from/symlinked to `$HDK_DIR/cl/examples/cl_satswarm/` during setup
+- **`tools/`** — CUDD (BDD library), Yosys, OpenSTA (unversioned build tools)
+- **`resource_estimation/`** — Area/timing analysis
+- **`docs/`** — Design specs, meeting notes, reference materials
+- **`deploy/`** — Deployment scripts (FPGA image generation, runtime setup)
+
 ---
 
 ## 1. Architecture Overview
@@ -139,19 +152,6 @@ shell's expected port list)
 ---
 
 ## 3. Current Repository State
-
-### HDK
-
-- Repo: `/home/ubuntu/src/project_data/aws-fpga`, tag `v2.3.0`, HEAD detached.
-- No modifications to HDK source. Only untracked additions: our `cl_satswarm` CL directory
-(accessible via symlink from within the HDK tree) and generated verif scripts.
-- HDK v2.3.0 officially supports Vivado 2025.2; the `sh_ddr` encrypted modules work correctly
-when synthesized as a submodule within the CL (not standalone).
-- On a **fresh machine**, after cloning both `aws-fpga` and `SatSwarmV2`, you **must** copy or symlink
-  `src/aws-fpga/hdk/cl/examples/cl_satswarm` from this repo into `$HDK_DIR/cl/examples/cl_satswarm`
-  before running any AWS synthesis or XSim flows. All `CL_DIR` paths in this document assume that
-  directory exists inside the HDK tree.
-- Don't edit the HDK repo when you face issues, this project is way more likely to be the problem.
 
 ### SatSwarm RTL (`src/Mega/`)
 
@@ -292,9 +292,60 @@ To achieve an architectural relaxation, AWS Clock Recipe A2 was utilized to gene
 
 **Validation**: Vivado Makefile testing was initiated via `make C_TEST=test_hello_world` in `verif/scripts/`. Synthesis scripts have been updated to utilize `--clock_recipe_a A2`.
 
+## 4. Git Structure & HDK Integration
+
+### Repository Configuration
+
+- **No submodules**: `src/aws-fpga` is tracked as a directory (not a git submodule), but do not modify
+or commit changes to it. It is a separate clone of the AWS HDK v2.3.0 repository.
+- **cl_satswarm tracking**: **As of 2026-03-03**, all `cl_satswarm` source files have been moved
+from `src/aws-fpga/hdk/cl/examples/cl_satswarm/` to the root-level `hdk_cl_satswarm/` directory
+and are now Git-tracked in this repo. This ensures:
+  - New machines can clone SatSwarmV2 and immediately set up synthesis/simulation
+  - No "untracked files" or manual copies required
+  - All changes to RTL/tests are version-controlled and auditable
+
+### HDK and cl_satswarm
+
+- AWS HDK Repo: `/home/ubuntu/src/project_data/aws-fpga`, tag `v2.3.0`, HEAD detached.
+- No modifications to HDK source itself.
+- **NEW: `hdk_cl_satswarm/` directory** — All `cl_satswarm` source files (design, verification, build scripts,
+host code) are now tracked in this repo at the root level. See below for setup.
+- HDK v2.3.0 officially supports Vivado 2025.2; the `sh_ddr` encrypted modules work correctly
+when synthesized as a submodule within the CL (not standalone).
+
+#### Setup on Fresh Machine
+
+After cloning both `aws-fpga` and `SatSwarmV2`:
+
+1. **Clone/setup aws-fpga separately**:
+   ```bash
+   git clone https://github.com/aws/aws-fpga.git
+   cd aws-fpga && git checkout v2.3.0
+   source hdk_setup.sh
+   ```
+
+2. **Copy or symlink hdk_cl_satswarm from SatSwarmV2**:
+   ```bash
+   # Option A: Symlink (recommended for development)
+   ln -s /path/to/SatSwarmV2/hdk_cl_satswarm $HDK_DIR/cl/examples/cl_satswarm
+   
+   # Option B: Copy (recommended for isolation)
+   cp -r /path/to/SatSwarmV2/hdk_cl_satswarm $HDK_DIR/cl/examples/cl_satswarm
+   ```
+
+3. **Verify the setup**:
+   ```bash
+   ls $HDK_DIR/cl/examples/cl_satswarm  # Should show: design/, build/, verif/, host/
+   ```
+
+All HDK build paths (synthesis, XSim) assume `$CL_DIR = $HDK_DIR/cl/examples/cl_satswarm/`.
+
+- Don't edit the HDK repo when you face issues; this project is far more likely to be the problem.
+
 ---
 
-## 4. How to Run
+## 5. How to Run
 
 ### Initialize HDK environment (required before any AWS build)
 
@@ -444,7 +495,7 @@ See `deploy/tcl/AWS_quickstart.md` for full quick-check workflow reference.
 
 ---
 
-## 5. Open Problems & Future Work
+## 6. Open Problems & Future Work
 
 ### Complete Synthesis (Highest Priority)
 
@@ -655,7 +706,7 @@ safety but may need `$fatal` → `$error` downgrade if they fire spuriously on e
 
 ---
 
-## 6. Test Results (2026-02-27/28)
+## 7. Test Results (2026-02-27/28)
 
 ### Verilator Regression (2026-02-27, baseline)
 

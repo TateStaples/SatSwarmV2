@@ -1,0 +1,18 @@
+# SatSwarm Test Targets
+
+test_satswarm_aws: TEST=test_satswarm_aws
+test_satswarm_aws: all
+
+test_satswarm_basic: TEST=test_satswarm_basic
+test_satswarm_basic: all
+
+test_satswarm_dma: TEST=test_satswarm_dma
+test_satswarm_dma: all
+
+test_satswarm_memory: TEST=test_satswarm_memory
+test_satswarm_memory: all
+
+test_satswarm_regression: TEST=test_satswarm_regression
+test_satswarm_regression: all
+
+DEFAULT_REGRESSION_TEST_LIST_COLLECTION = test_satswarm_aws test_satswarm_basic
