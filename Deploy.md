@@ -1,0 +1,182 @@
+# Deployment, Synthesis & AFI Methodology
+
+This document consolidates the end-to-end synthesis instructions, AWS FPGA Developer tools, and quick-check workflows for bringing SatSwarmV2 to AWS F2 (Xilinx VU47P).
+
+---
+
+## Initialize HDK Environment (Prerequisite)
+
+Before any AWS build step, the HDK environment variables must be populated.
+Note: this script must be sourced from its repository root. Sourcing it from inside SatSwarmV2 will mis-resolve the `$HDK_DIR` path.
+
+```bash
+cd /home/ubuntu/src/project_data/aws-fpga
+source hdk_setup.sh
+```
+
+---
+
+## AWS Quick-Check Workflow
+
+Before embarking on a full Vivado build (which can take 10+ hours and consume huge RAM), utilize quick-check tools on the AWS AMI to catch syntax, connectivity, and simple RTL errors.
+
+### Tools Available
+- **Vivado CLI**: Fast syntax-only checks (`check_syntax`).
+- **File Linting**: Compile individual files via `xvhdl -check_syntax` or `xvlog -lint +all`.
+- **Out-of-context Synthesis**: `synth_design -top <module> -mode out_of_context` to catch elaboration errors early.
+- **XSim**: Basic simulation functionality (see [Verification.md](Verification.md)).
+
+### Quick-Check Steps
+
+1. **Syntax & Lint:** Compile all RTL files pointing to `$CL_DIR/design/*.sv`. Fix any missing semicolons or undeclared signals.
+2. **Out-of-Context Synthesis:** Use `synth_design -mode out_of_context` on the top module to confirm it elaborates.
+3. **DRC Checks:** Run `report_drc` on the synthesized design for major rule violations.
+4. **Constraint Sanity:** Ensure your `.xdc` has basic clocks and pins for the CL.
+
+> **Why?** A quick syntax/lint/synth check taking minutes can save hours of AWS EC2 billing. Only proceed to full implementation when quick checks are clean.
+
+---
+
+## Verifying BRAM Inference
+
+A key scaling blocker for SAT solvers is preventing Vivado from dissolving massive memory arrays into individual flip-flops. Always test array inference on `pse.sv` and `trail_manager.sv` before a full build.
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2
+
+# Background monitor (recommended for fast iteration)
+bash deploy/check_inference.sh -b pse
+
+# Watch for the results live:
+tail -f deploy/logs/synth_pse.log | grep --line-buffered -E "Synth 8-3390|Synth 8-3391|Synth 8-4767|dissolved|multiple write|Finished|ERROR|Killed"
+```
+
+Authoritative reading of `check_inference.sh` output requires opening `deploy/logs/synth_pse.log` and finding the `Distributed RAM: Final Mapping Report`. If your target array isn't listed, it dissolved into flip-flops (and will eventually crash Technology Mapping via OOM). See `Changes.md` for historical details.
+
+---
+
+## Running SatSwarm Synthesis
+
+Once inference is verified, kick off full synthesis.
+
+```bash
+# Preferred launcher (handles HDK env sourcing/paths)
+cd /home/ubuntu/src/project_data/SatSwarmV2/deploy
+./run_synthesis.sh 2>&1 | tee logs/synth_explore.log &
+```
+
+### Current Launcher Settings (`deploy/run_synthesis.sh`)
+
+- **Clock Recipe A (`--clock_recipe_a A2`)**: This configures the HDK shell to generate `gen_clk_extra_a1` at 15.625 MHz. (Shell `clk_main_a0` remains 250 MHz).
+- **Physical Optimization (`-o Explore`)**: Lighter synthesis strategy to conserve host RAM. Avoid `AggressiveExplore`.
+
+*Note: Do not use A0 constraints. Prior attempts OOM-killed during Timing Optimization at 250 MHz. See [Changes.md](Changes.md) for details.*
+
+### Clock Domain Crossing Setup
+
+Clock boundaries transition across AXI paths: OCL, PCIS, and DDR.
+- The `cl_satswarm.sv` instantiation uses `cl_axi_clock_converter` and `cl_axi_clock_converter_light`.
+- All `satswarm_core_bridge` logic is safely partitioned into the slower 15.625 MHz domain (`gen_clk_extra_a1`).
+
+---
+
+## Running Full Build (BuildAll)
+
+Once synthesis writes a clean checkpoint (`*.synthesis.dcp`), kick off implementation mapping:
+
+```bash
+export CL_DIR=$HDK_DIR/cl/examples/cl_satswarm
+cd $CL_DIR/build/scripts
+
+python3 $HDK_DIR/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
+  -c cl_satswarm -f BuildAll --no-encrypt \
+  --aws_clk_gen --clock_recipe_a A2 --clock_recipe_b B0 \
+  --clock_recipe_c C0 --clock_recipe_hbm H0 \
+  -o Explore > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/buildall.log 2>&1 &
+```
+
+### Skipping Synthesis (`ImplCL`)
+
+If your `post_synth.dcp` checkpoint is clean, you can skip the 15-minute synthesis phase by launching **Implementation only** using the timestamp tag from synthesis.
+
+```bash
+python3 $HDK_DIR/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
+  -c cl_satswarm -f ImplCL -t "2026_03_05-145659" --no-encrypt \
+  --aws_clk_gen --clock_recipe_a A2 \ -o Explore > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/build_impl.log 2>&1 &
+```
+*Note: `ImplCL` by default skips the tarball creation script. You will need to manually generate `Developer_CL.tar` if skipping `BuildAll`.*
+
+---
+
+## Convert Synthesis DCP to AFI
+
+After `BuildAll` is completed, the resulting tarball must be uploaded and transformed to an Amazon FPGA Image (AFI).
+
+Tarball location:
+`$CL_DIR/build/checkpoints/to_aws/<timestamp>.Developer_CL.tar`
+
+### 1. Upload to S3 Bucket
+
+```bash
+# Create bucket and logs dir (one-time)
+aws s3 mb s3://<your-bucket>
+aws s3 mb s3://<your-bucket>/logs
+
+# Upload DCP
+aws s3 cp $CL_DIR/build/checkpoints/to_aws/*.Developer_CL.tar s3://<your-bucket>/dcp/
+```
+
+### 2. Create the AFI
+
+```bash
+aws ec2 create-fpga-image \
+    --region us-east-1 \
+    --name "SatSwarmV2" \
+    --description "SatSwarm V2 CDCL solver, 1x1 grid, 15.625 MHz clock" \
+    --input-storage-location Bucket=<your-bucket>,Key=dcp/<filename>.Developer_CL.tar \
+    --logs-storage-location Bucket=<your-bucket>,Key=logs
+```
+
+*Save the returned FpgaImageGlobalId (`agfi-*`).*
+
+### 3. Verify Availability and Load (AWS F2 Instance)
+
+Poll the AWS CLI (this can take 30-60 minutes):
+
+```bash
+aws ec2 describe-fpga-images --fpga-image-ids fi-xxxx --query 'FpgaImages[0].State'
+```
+
+Once `{"Code": "available"}` appears, load it natively into the F2 shell:
+
+```bash
+source $AWS_FPGA_REPO_DIR/sdk_setup.sh
+sudo fpga-clear-local-image  -S 0
+sudo fpga-load-local-image   -S 0 -l agfi-xxxx
+sudo fpga-describe-local-image -S 0 -H
+```
+
+Verify `StatusName: loaded`.
+
+---
+
+## Known Synthesis Warnings
+
+You can safely ignore these known `CRITICAL WARNINGS` that emit during building:
+
+| Code | Cause | Impact |
+|---|---|---|
+| `Designutils 20-1280` | Clock IPs registered as RTL sources instead of IP blocks, preventing corresponding XDCs from applying. | None — XDCs apply to shell-managed clocking, not CL logic. |
+| `Synth 8-6858/6859` | Multi-driven payload outputs on unused NoC edges (e.g. `tx_pkt_n`). | None — Unconnected mesh outputs are safely tied to GND. |
+
+---
+
+## Future Deployment Improvements
+
+### External DDR Migration (VeriSAT Scaling)
+
+SatSwarmV2 currently sets `DDR_PRESENT=0` and stores all literals in partitioned BRAM (`lit_mem`).
+To support massive SAT clauses (e.g. >65,536 max literals), the project should look toward VeriSAT architecture:
+- Re-activate `DDR_PRESENT=1` inside `cl_satswarm.sv`.
+- Switch `lit_mem` over to AXI4 multi-port memory queues on the F2 DDR.
+- Pipelined latency changes inside the `pse.sv` BCP loop.

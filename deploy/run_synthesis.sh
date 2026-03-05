@@ -21,6 +21,9 @@ set -e
 AWS_FPGA_REPO_DIR=/home/ubuntu/src/project_data/aws-fpga
 export GIT_DISCOVERY_ACROSS_FILESYSTEM=1
 
+# Ensure logs directory exists
+mkdir -p "$(dirname "$0")/logs"
+
 echo "=== Sourcing HDK setup ==="
 cd "$AWS_FPGA_REPO_DIR"
 source hdk_setup.sh

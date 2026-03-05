@@ -1,8 +1,8 @@
 # SatSwarmv2: Hardware SAT Solver for FPGA
 
-**A high-performance, hardware-optimized SAT solver implementation in SystemVerilog targeting the Xilinx ZU9EG FPGA.**
+**A high-performance, hardware-optimized SAT solver implementation in SystemVerilog targeting the Xilinx VU47P FPGA (AWS F2 instance).**
 
-SatSwarmv2 implements the conflict-driven clause learning (CDCL) algorithm—the foundation of modern SAT solvers—directly in synthesizable hardware. It uses three alternating processing stages (Propagation, Conflict Analysis, Variable Decision) to efficiently solve Boolean satisfiability problems, with support for up to 16,384 variables and 1 million literals.
+SatSwarmV2 implements the conflict-driven clause learning (CDCL) algorithm—the foundation of modern SAT solvers—directly in synthesizable hardware. It uses three alternating processing stages (Propagation, Conflict Analysis, Variable Decision) to efficiently solve Boolean satisfiability problems.
 
 ---
 
@@ -10,23 +10,87 @@ SatSwarmv2 implements the conflict-driven clause learning (CDCL) algorithm—the
 
 | Aspect | Value |
 |--------|-------|
-| **Target Platform** | Xilinx ZU9EG (UltraScale+) |
-| **Clock Frequency** | 150 MHz |
-| **Max Variables** | 16,384 |
-| **Max Literals** | 1,048,576 |
-| **Max Clauses** | 262,144 |
-| **External Memory** | DDR4 via AXI4-Lite |
-| **Memory Capacity** | 2 GB available |
-| **Primary RTL Language** | SystemVerilog (Verilator 5.020+ compatible) |
-| **Toolchain** | Vivado 2023.4 |
+| **Target Platform** | Xilinx VU47P (AWS F2 Instance) |
+| **Solver Clock** | 15.625 MHz (Clock Recipe A2) |
+| **Max Variables** | 256 |
+| **Max Clauses** | 4,096 |
+| **Max Literals** | 65,536 |
+| **Target Clause Length** | 32 |
+| **Primary Base Language** | SystemVerilog |
+| **Toolchain** | Vivado 2025.2, AWS HDK v2.3.0 |
 | **Simulation** | Verilator 5.044 |
-| **Implementation Status** | ~95% complete, 75+ variable benchmarks validated |
 
 ---
 
-## Quick Start
+## Repository Structure
 
-### Prerequisites
+- **`src/Mega/`** — Core RTL solver implementation (all SystemVerilog)
+- **`src/Mini/`** — Simplified solver for development/debugging
+- **`sim/`** — Verilator-based simulation (see [Verification.md](Verification.md))
+- **`hdk_cl_satswarm/`** — **AWS HDK wrapper, Git-tracked**
+  - Contains: design (RTL), verif (tests), build/ (synthesis scripts), host/ (C code)
+  - Files are copied from/symlinked to `$HDK_DIR/cl/examples/cl_satswarm/` during setup
+- **`tools/`** — CUDD (BDD library), OpenSTA (unversioned build tools)
+- **`resource_estimation/`** — Area/timing analysis
+- **`docs/`** — Design specs, meeting notes, reference materials
+- **`deploy/`** — Deployment scripts (FPGA image generation, runtime setup)
+
+### RTL Hierarchy (`src/Mega/`)
+
+```
+satswarm_top
+  └── solver_core  (one per grid cell, parameterized GRID_X × GRID_Y)
+        ├── cae.sv              — Conflict Analysis Engine (First-UIP learning)
+        ├── pse.sv              — Propagation Search Engine (BCP / unit propagation)
+        ├── vde.sv              — Variable Decision Engine (VSIDS heuristic wrapper)
+        │     └── vde_heap.sv   — Binary max-heap for O(log N) variable selection
+        ├── trail_manager.sv    — Decision/implication trail storage
+        ├── clause_store.sv     — Clause database (watch lists, learned clause storage)
+        ├── watch_manager.sv    — Two-watched-literal scheme
+        └── shared_clause_buffer.sv
+  ├── mesh_interconnect.sv      — Inter-core learned clause sharing
+  ├── global_allocator.sv       — Shared clause ID allocation
+  ├── global_mem_arbiter.sv     — DDR4 access arbiter
+  ├── interface_unit.sv         — Host interface (AXI-Lite / literal loading)
+
+satswarmv2_pkg.sv               — Global parameters and types (included by all modules)
+```
+
+### AWS CL wrapper (`hdk_cl_satswarm/design/`)
+
+```
+cl_satswarm.sv          — HDK top-level; full cl_ports.vh interface, sh_ddr instantiation
+satswarm_core_bridge.sv — Adapts AWS shell buses to satswarm_top simplified interface
+```
+
+---
+
+## Setup & Installation
+
+### Development Environment Setup
+
+```bash
+# 1. Clone repositories (AWS HDK and SatSwarmV2)
+git clone https://github.com/aws/aws-fpga.git
+cd aws-fpga && git checkout v2.3.0
+source hdk_setup.sh
+
+# 2. Clone SatSwarmV2 (if not already done)
+cd /path/to/workdir
+git clone <satswarmv2-repo-url> SatSwarmV2
+
+# 3. Link HDK CL directory
+# Option A: Symlink (recommended for development)
+ln -s /path/to/SatSwarmV2/hdk_cl_satswarm $HDK_DIR/cl/examples/cl_satswarm
+
+# Option B: Copy (recommended for isolation)
+cp -r /path/to/SatSwarmV2/hdk_cl_satswarm $HDK_DIR/cl/examples/cl_satswarm
+
+# 4. Verify the setup
+ls $HDK_DIR/cl/examples/cl_satswarm  # Should show: design/, build/, verif/, host/
+```
+
+### Simulation Prerequisites
 
 ```bash
 # macOS (Homebrew)
@@ -37,93 +101,6 @@ sudo apt install verilator
 
 # Verify installation
 verilator --version  # Should be 5.0.0 or later
-```
-
-### Clone and Build
-
-```bash
-cd /path/to/SatSwarmv2
-cd sim
-make  # Compiles simulator with Verilator
-```
-
-### Run a Simple Test
-
-```bash
-# First test: very simple SAT instance (1 variable)
-cd sim
-./obj_dir/Vtb_verisat <<EOF
-p cnf 1 2
-1 0
--1 0
-EOF
-# Expected: UNSAT (contradictory clauses)
-
-# Second test: satisfiable instance (2 variables)
-./obj_dir/Vtb_verisat <<EOF
-p cnf 2 3
-1 2 0
--1 3 0
--2 3 0
-EOF
-# Expected: SAT (or similar satisfying assignment)
-```
-
-### Directory Structure
-
-```
-SatSwarmv2/
-├── README.md                            # This file
-├── SatSwarmv2.pdf                          # Original paper
-├── .github/copilot-instructions.md      # Development guidelines
-├── docs/
-│   ├── README.md                        # Documentation navigation hub
-│   ├── guides/
-│   │   ├── ALGORITHM_IMPLEMENTATION.md  # Deep-dive: CDCL algorithm
-│   │   ├── SYSTEMVERILOG_DESIGN.md      # Deep-dive: Hardware design
-│   │   └── TESTING_VERIFICATION.md      # Deep-dive: Testing strategy
-│   ├── status/                          # Project status tracking
-│   └── archive/                         # Historical documentation
-├── src/Mega/                            # Main RTL implementation (CDCL solver)
-│   ├── satswarmv2_pkg.sv                # Package: parameters, types, NoC structures
-│   ├── solver_core.sv                   # Top-level CDCL FSM orchestrator
-│   ├── pse.sv                           # Propagation Search Engine (BCP)
-│   ├── cae.sv                           # Conflict Analysis Engine (First-UIP)
-│   ├── vde.sv                           # Variable Decision Engine (VSIDS)
-│   ├── vde_heap.sv                      # Min-heap for VSIDS activity
-│   ├── trail_manager.sv                 # Trail & backtracking logic
-│   ├── watch_manager.sv                 # Watched literal management
-│   ├── clause_store.sv                  # Clause database management
-│   ├── shared_clause_buffer.sv          # Learned clause sharing buffer
-│   ├── global_allocator.sv              # Memory allocation
-│   ├── global_mem_arbiter.sv            # Memory arbitration
-│   ├── resync_controller.sv             # PSE state resynchronization
-│   ├── stats_manager.sv                 # Performance statistics
-│   ├── interface_unit.sv                # NoC interface (Swarm)
-│   ├── mesh_interconnect.sv             # 2D mesh routing
-│   └── satswarm_top.sv                  # Top-level multi-core wrapper
-├── src/Mini/                            # Lightweight DPLL solver (testing)
-│   ├── mini_pkg.sv                      # Mini solver parameters
-│   ├── mini_solver_core.sv              # Simplified DPLL FSM
-│   ├── mini_pse.sv                      # Simplified propagation
-│   └── mini_top.sv                      # Mini solver top-level
-├── sim/
-│   ├── Makefile                         # Build system
-│   ├── tb_verisat.sv                    # Main testbench
-│   ├── sim_main.cpp                     # Verilator harness
-│   ├── obj_dir/                         # Compiled simulator (generated)
-│   └── [test scripts]                   # Quick test utilities
-├── tests/
-│   ├── *.cnf                            # DIMACS CNF test instances
-│   ├── gen_sat_*.cnf                    # Generated SAT instances
-│   └── gen_unsat_*.cnf                  # Generated UNSAT instances
-├── reference/
-│   ├── SatSwarmv2.pdf                      # Original paper
-│   ├── SatAccel/                        # UCLA-VAST HLS reference
-│   └── [other references]               # Supporting materials
-└── resource_estimation/
-    ├── resource_report_*.md             # Area/power analysis
-    └── [solver-specific reports]        # Per-implementation metrics
 ```
 
 ---
@@ -169,7 +146,7 @@ SatSwarmv2/
 2. **Conflict Analysis Engine (CAE)** — Analyzes conflicts and learns new clauses
    - Input: Conflict clause, implication graph (trail + reasons)
    - Output: Learned clause, backtrack decision level
-   - Uses First-UIP heuristic with pipelined DDR access
+   - Uses First-UIP heuristic
 
 3. **Variable Decision Engine (VDE)** — Selects next variable to branch on
    - Input: Current variable activities, assignment state
@@ -185,10 +162,8 @@ SatSwarmV2 scales beyond a single core using a Network-on-Chip (NoC) based mesh 
 1.  **Mesh Topology**: Cores are arranged in a 2D mesh (e.g., 2x2, 3x3) using dimension-ordered routing X-Y.
 2.  **Clause Sharing Strategy**:
     -   To minimize network congestion, only high-quality clauses are shared between cores.
-    -   **Criteria**:
-        -   **Small Clauses**: Length $\le$ 2.
-        -   **High Quality**: Low Literal Block Distance (LBD), inspired by the MallobSat approach.
-3.  **Portfolio Approach**: Each core initializes with different random seeds/phases to explore different parts of the search space, maximizing the probability of finding a solution quickly (especially for SAT instances).
+    -   **Criteria**: Small Clauses (Length $\le$ 2) and High Quality (Low Literal Block Distance).
+3.  **Portfolio Approach**: Each core initializes with different random seeds/phases to explore different parts of the search space.
 
 ---
 
@@ -198,84 +173,37 @@ SatSwarmV2 scales beyond a single core using a Network-on-Chip (NoC) based mesh 
 
 **Purpose**: Boolean Constraint Propagation via watched-literal scheme  
 **Key Algorithm**: Unit clause detection + conflict discovery  
-**FSM States**: 9 (IDLE → INIT_SCAN → FETCH_CLAUSE → CHECK_WLIT → SCAN_LITERALS → FIND_WATCHER → PROPAGATE → DONE)
-
 **What It Does**:
-- Scans watch lists concurrently (up to 4 cursors configurable)
+- Scans watch lists concurrently
 - Evaluates literals against current variable assignments
 - Enqueues unit propagations to variable table
 - Broadcasts conflict clause on unsatisfiable state
-
-**Resource Estimate**: 2,000–3,000 LUTs per cursor
 
 ### Conflict Analysis Engine (`cae.sv`)
 
 **Purpose**: First-UIP clause learning with conflict-driven backjumping  
 **Key Algorithm**: Resolution-based first unique implication point detection  
-**FSM States**: 4 (IDLE → LOAD → SCAN → DONE)
-
 **What It Does**:
 - Walks resolution chain from conflict clause backward
 - Tracks visited variables and decision levels
 - Learns new clause that subsumes conflict
 - Computes backtrack decision level (or detects UNSAT)
-- Hides DDR latency with 4-cycle pipelined fetch
-
-**Resource Estimate**: 1,500–2,000 LUTs
 
 ### Variable Decision Engine (`vde.sv`)
 
 **Purpose**: VSIDS variable selection heuristic  
 **Key Algorithm**: Activity scoring with exponential decay  
-**Operations**: Bump activity on conflict, decay periodically, extract-min from heap
-
 **What It Does**:
-- Maintains per-variable activity score (32-bit)
-- Decays all activities: $\text{activity}[v] \leftarrow \text{activity}[v] - (\text{activity}[v] >> 16)$ (≈0.9275 factor)
-- Bumps conflicting variable: activity += 1000
+- Maintains per-variable activity score
+- Decays all activities periodically
+- Bumps conflicting variable activity
 - Returns variable with minimum activity from heap
 - Saves/restores phase (polarity) around restarts
-
-**Resource Estimate**: 1,000–1,500 LUTs
 
 ### Memory & Arbitration (`global_mem_arbiter.sv`)
 
 **Purpose**: Coordinate reads/writes to on-chip BRAM and external DDR4  
-**Scheme**:
-- **On-Chip (BRAM/LUTRAM)**:
-  - Clause table: 262K entries × 128 bits (cached watchers + LBD)
-  - Variable table: 16K entries × 96 bits (assignment, level, reason, phase)
-  - Trail queue: 16K FIFO × 32 bits
-  - Activity/phase arrays: 16K × 32 bits each
-- **External DDR4**:
-  - Literal store: 1M × 32 bits (append-only)
-  - AXI4-Lite interface (~4-cycle latency per access)
-
 **Arbitration Strategy**: Fixed-priority mux for read requests; separate write queue
-
-**Resource Estimate**: 500–800 LUTs
-
----
-
-## Implementation Status
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| **Core CDCL Loop** | ✅ 100% | FSM orchestrates PSE → CAE → VDE alternation |
-| **Propagation (PSE)** | ✅ 100% | Multi-cursor watch list with conflict detection, resync support |
-| **Conflict Analysis (CAE)** | ✅ 100% | First-UIP learning + pipelined DDR fetch + literal filtering |
-| **Variable Decision (VDE)** | ✅ 100% | Min-heap VSIDS with activity decay & phase saving |
-| **Trail & Backtracking** | ✅ 100% | Level-based undo with divergence support (Swarm) |
-| **Watch Manager** | ✅ 100% | Two-literal watching with efficient updates |
-| **Clause Store** | ✅ 100% | Learned clause management with LBD tracking |
-| **Memory Arbitration** | ✅ 90% | Fixed-priority arbiter with validation |
-| **Resync Controller** | ✅ 100% | PSE state recovery after race conditions |
-| **Distributed (Swarm)** | ✅ 100% | 1x1, 2x2, and 3x3 mesh topologies fully validated |
-| **Clause Sharing** | ✅ 100% | Length-2 + LBD-based filtering (MallobSat-inspired) |
-| **Restart Policy** | ⚠️ 50% | Basic LBD-based trigger; full policy deferred |
-| **Host Driver (PS-side)** | ❌ 0% | DIMACS parsing, AXI control deferred (future) |
-
-**Overall**: ~95% implementation complete, validated on 75+ variable SATLIB benchmarks
 
 ---
 
@@ -292,8 +220,6 @@ The solver has been validated against **UF50 (SAT)** and **UUF50 (UNSAT)** bench
 | **SatSwarm 2x2** | 50 MHz | 12,158 | 0.243 | **2.03x** |
 | **SatSwarm 3x3** | 50 MHz | 8,300 | 0.166 | **2.98x** |
 
-> **Note**: Even at 1/3rd the clock frequency, SatSwarm 2x2 and 3x3 configurations outperform VeriSAT in wall-clock time for SAT instances due to algorithmic efficiency and parallel search.
-
 ### UNSAT Results (UUF50)
 
 | Design | Frequency | Raw Cycles (Avg) | Time (ms) | Speedup (vs 1x1) |
@@ -306,222 +232,19 @@ The solver has been validated against **UF50 (SAT)** and **UUF50 (UNSAT)** bench
 ### Performance Analysis
 -   **Cycle Efficiency**: SatSwarmV2 requires significantly fewer cycles per problem than VeriSAT (e.g., ~24k vs ~39k for SAT), validating the architectural efficiency.
 -   **Scaling**: The 3x3 configuration achieves near-linear speedup on SAT instances (~3x speedup with 9 cores implies strong portfolio effect) and moderate speedup on UNSAT instances.
--   **Verdict**: The parallel swarm architecture successfully offsets the lower clock frequency (50 MHz vs 150 MHz), beating state-of-the-art performance on SAT problems.
 
 ---
 
-## Resolved Issues
+## Documentation Navigation
 
-10+ critical bugs have been identified and fixed during development. Key fixes include:
+This documentation has been split into focused chunks to make navigation easier:
 
-| Bug | Severity | Issue | Status |
-|-----|----------|-------|--------|
-| BUG-011 | Critical | Invalid literal 0 in conflict analysis | ✅ Fixed |
-| BUG-010 | Critical | CAE reason staleness causing false UNSATs | ✅ Fixed |
-| BUG-007 | Critical | Infinite loop & soundness failure | ✅ Fixed |
-| BUG-006 | High | Completeness failure (truncated clauses) | ✅ Fixed |
-| BUG-005 | Critical | Single-core soundness (PSE race condition) | ✅ Fixed |
-| BUG-003 | Critical | Sign inversion in learned clauses | ✅ Fixed |
-| BUG-002 | High | Livelock in ACCUMULATE_PROPS | ✅ Fixed |
-
-See [docs/bugs/BUG_TRACKER.md](docs/bugs/BUG_TRACKER.md) for complete details.
-
----
-
-## Development Workflow
-
-### Build & Simulate
-
-```bash
-cd sim
-make clean        # Remove generated files
-make              # Compile RTL with Verilator
-make wave         # Run simulation + generate waveform (if gtkwave available)
-make test         # Run quick regression suite
-```
-
-### Common Tasks
-
-#### Add a New Test Case
-
-```bash
-# Create DIMACS file
-cat > tests/my_test.cnf <<EOF
-p cnf 3 4
-1 2 0
-1 -3 0
--1 2 0
--2 3 0
-EOF
-
-# Test it
-./obj_dir/Vtb_verisat < tests/my_test.cnf
-```
-
-#### Modify VSIDS Decay Factor
-
-Edit [src/Mega/vde.sv](src/Mega/vde.sv):
-```systemverilog
-// Change this line (line ~150)
-activity_q[idx] <= activity_q[idx] - (activity_q[idx] >> 16);  // 0.9275 factor
-// To a different shift for different decay rate
-activity_q[idx] <= activity_q[idx] - (activity_q[idx] >> 15);  // ~0.9375 (faster decay)
-```
-
-#### Adjust Clause Cache Size
-
-Edit [src/Mega/verisat_pkg.sv](src/Mega/verisat_pkg.sv):
-```systemverilog
-// Change parameter
-parameter MAX_CLAUSES = 262144;  // Currently ~262K
-// To your desired size (must be power of 2 for pointer width)
-```
-
-#### Profile Decision/Conflict Frequency
-
-Modify [sim/tb_verisat.sv](sim/tb_verisat.sv) to add counters:
-```systemverilog
-always @(posedge clk) begin
-    if (reset) begin
-        decision_count <= 0;
-        conflict_count <= 0;
-    end else begin
-        if (vde_decide_valid)
-            decision_count <= decision_count + 1;
-        if (pse_conflict_detected)
-            conflict_count <= conflict_count + 1;
-    end
-end
-```
-
-### Debugging Tips
-
-**Simulation hangs?**
-- Check testbench timeout (default: 900,000 cycles)
-- Increase in [sim/Makefile](sim/Makefile): `SIM_CYCLES ?= 5000000`
-- Enable waveform to diagnose FSM state: `make wave`
-
-**Wrong SAT/UNSAT answer?**
-- Compare trail assignments against expected solution
-- Verify CAE backtrack level computation (should point to highest non-UIP literal)
-- Check arbitration didn't drop memory write (enable detailed logging in arbiter)
-
-**Performance regression?**
-- Count conflicts/decisions in waveform
-- Compare against baseline regression suite
-- Profile BRAM vs. DDR access ratio
-
----
-
-## Contribution Guidelines
-
-### Development Environment Setup
-
-```bash
-# 1. Clone repository
-git clone https://github.com/[owner]/SatSwarmv2.git
-cd SatSwarmv2
-
-# 2. Install dependencies (macOS)
-brew install verilator
-
-# 3. Verify build
-cd sim
-make
-```
-
-### Code Style & Conventions
-
-**SystemVerilog RTL**:
-- Use explicit FSMs (prefer `enum` for states, not binary encoding)
-- Parameterize hardcoded values (VAR_MAX, LIT_MAX, etc.)
-- Comment arbitration logic and concurrency assumptions
-- Keep modules synthesizable (no `initial`, no dynamic allocation)
-- Use `always @(posedge clk)` for sequential, `always @(*)` for combinational
-
-**Naming**:
-- Signals: `snake_case` (e.g., `decision_valid`)
-- Parameters: `UPPER_CASE` (e.g., `VAR_MAX`)
-- State enum: `name_t` (e.g., `pse_state_t`)
-
-**Documentation**:
-- Header comment on each module (1-2 sentences)
-- Complex FSM transitions: explain why (e.g., "stall on RAW hazard")
-- Latency-critical paths: note expected cycle count
-
-### Regression Testing
-
-Before submitting a pull request, verify no performance regression:
-
-```bash
-cd sim
-# Baseline (on main branch)
-git checkout main
-make test 2>&1 | tee baseline.txt
-
-# Your changes
-git checkout your-branch
-make test 2>&1 | tee your-test.txt
-
-# Compare (cycle counts should not increase >5%)
-diff baseline.txt your-test.txt
-```
-
-### Pull Request Process
-
-1. **Fork** the repository
-2. **Branch** from `main`: `git checkout -b feature/your-feature`
-3. **Implement** changes with clean commits
-4. **Test** locally: `cd sim && make test` (must pass all tests)
-5. **Document** changes in commit message (reference issue #123 if applicable)
-6. **Submit** PR with:
-   - Clear description of changes
-   - Link to related issues
-   - Performance impact (cycle count delta)
-   - New tests (if applicable)
-7. **Respond** to review feedback promptly
-
-### Performance Regression Gates
-
-Merge is blocked if:
-- **Correctness**: Any test case returns wrong SAT/UNSAT answer
-- **Performance**: Any benchmark instance >5% slower than baseline
-- **Resource Usage**: Synthesis shows >10% area growth unexpectedly
-- **Tests**: Regression suite has failures (see [Testing & Verification Guide](docs/guides/TESTING_VERIFICATION.md))
-
----
-
-## Further Reading
-
-For deeper understanding, consult the specialized documentation:
-
-1. **[Algorithm Implementation Guide](docs/guides/ALGORITHM_IMPLEMENTATION.md)**
-   - Detailed CDCL algorithm walkthrough
-   - First-UIP clause learning with worked examples
-   - VSIDS heuristic and activity decay mechanics
-   - Memory data structures and access patterns
-
-2. **[SystemVerilog Hardware Design Guide](docs/guides/SYSTEMVERILOG_DESIGN.md)**
-   - Synthesizable SystemVerilog principles
-   - Module-level design for each component
-   - Arbitration and concurrency strategy
-   - Resource estimation and optimization
-   - Timing analysis and critical paths
-   - Xilinx platform-specific details
-
-3. **[Testing & Verification Guide](docs/guides/TESTING_VERIFICATION.md)**
-   - Unit, integration, system test strategies
-   - Testbench structure and benchmark methodology
-   - Formal verification approach
-   - CI/CD pipeline and regression gates
-   - Debugging techniques
-
-### Key References
-
-- **[SatSwarmv2.pdf](reference/SatSwarmv2.pdf)** — Original paper describing the architecture
-- **[MiniSat](http://minisat.se)** — Reference SAT solver (CDCL baseline)
-- **[SatAccel](reference/SatAccel/)** — UCLA-VAST HLS reference implementation
-- **IEEE/ACM papers** on DPLL, CDCL, VSIDS heuristics (see Algorithm Guide references)
+- **[README.md](README.md)** (You are here): Architecture overview, repository structure, and quick-start instructions.
+- **[Deploy.md](Deploy.md)**: Details the AWS HDK synthesis methodology. Includes Vivado settings, quick-check steps, and DDR/clock domain crossing setup.
+- **[FPGA.md](FPGA.md)**: Final bitstream details and Amazon FPGA Image (AFI) creation instructions.
+- **[Verification.md](Verification.md)**: Testing and debugging guide. Details Verilator simulation targets, regression scripts, XSim integration sweeps, and Vivado BRAM inference checks.
+- **[Changes.md](Changes.md)**: Historical log of bug fixes, synthesis attempts, memory profiling, and major architectural design shifts over time.
+- **[HANDOFF.md](HANDOFF.md)**: Living document updating the current state of the design, latest development blockers, key parameters, and actionable next steps. Must be updated by any departing developer (or AI agent).
 
 ---
 
@@ -537,28 +260,10 @@ For deeper understanding, consult the specialized documentation:
 - MiniSat solver authors (Eén & Sörensson)
 - Verilator simulator (Veripool)
 
----
-
 ## Frequently Asked Questions
 
-**Q: How do I interpret the cycle count from simulation?**  
-A: Cycle count in the waveform / simulator output represents real clock cycles at 150 MHz. To estimate wall-clock time: time (ms) = cycles / (150 × 10⁶). See [Testing Guide](docs/TESTING_VERIFICATION.md#performance-testing) for benchmarking methodology.
-
 **Q: Can I run this on a different FPGA?**  
-A: Yes, with modifications. Update parameters in [verisat_pkg.sv](src/Mega/verisat_pkg.sv) (VAR_MAX, LIT_MAX, etc.) and adjust BRAM/DDR4 interfaces for your platform. See [Hardware Design Guide](docs/SYSTEMVERILOG_DESIGN.md#target-platform-xilinx-zu9eg) for platform-specific considerations.
-
-**Q: What's the difference between SatSwarmv2 and SatAccel?**  
-A: SatSwarmv2 is the original paper-based implementation (src/Mega); SatAccel is a reference HLS implementation (reference/SatAccel). Both implement CDCL but with different trade-offs in parallelism and resource usage. See [Algorithm Guide](docs/ALGORITHM_IMPLEMENTATION.md#references) for detailed comparison.
+A: Yes, with modifications. Update parameters in `satswarmv2_pkg.sv` (VAR_MAX, LIT_MAX, etc.) and adjust BRAM/DDR4 interfaces for your platform.
 
 **Q: How do I add support for incremental SAT (add/remove clauses)?**  
-A: Incremental solving requires clause deletion and/or variable freezing. Refer to [Algorithm Guide § Clause Deletion Strategies](docs/ALGORITHM_IMPLEMENTATION.md#algorithmic-trade-offs) and design a clause GC module. This is a future enhancement (not currently implemented).
-
-**Q: My simulation times out. What should I do?**  
-A: See [Debugging Tips](#debugging-tips) above. Most likely causes: (1) infinite loop in PSE/CAE (check watch list traversal), (2) clause database saturated (increase MAX_CLAUSES), (3) timeout too short (increase SIM_CYCLES in Makefile). Use waveform (make wave) to inspect FSM states.
-
----
-
-**For questions, issues, or contributions**: Please open a GitHub issue or start a discussion.
-
-**Last Updated**: January 30, 2026  
-**Documentation Version**: 2.0 (Post-Stabilization)
+A: Incremental solving requires clause deletion and/or variable freezing. Refer to Algorithm Guides and design a clause GC module. This is a future enhancement.
