@@ -17,15 +17,46 @@
 
 
 module cl_sda_slv (
-
    input aclk,
    input aresetn,
 
-   axi_bus_t.master sda_cl_bus
-
+   // Explicit AXI-Lite ports instead of axi_bus_t interface
+   input  logic [31:0] sda_cl_bus_awaddr,
+   input  logic        sda_cl_bus_awvalid,
+   output logic        cl_sda_bus_awready,
+   input  logic [31:0] sda_cl_bus_wdata,
+   input  logic  [3:0] sda_cl_bus_wstrb,
+   input  logic        sda_cl_bus_wvalid,
+   output logic        cl_sda_bus_wready,
+   output logic  [1:0] cl_sda_bus_bresp,
+   output logic        cl_sda_bus_bvalid,
+   input  logic        sda_cl_bus_bready,
+   input  logic [31:0] sda_cl_bus_araddr,
+   input  logic        sda_cl_bus_arvalid,
+   output logic        cl_sda_bus_arready,
+   output logic [31:0] cl_sda_bus_rdata,
+   output logic  [1:0] cl_sda_bus_rresp,
+   output logic        cl_sda_bus_rvalid,
+   input  logic        sda_cl_bus_rready
 );
 
-axi_bus_t sda_cl_q();
+logic [31:0] sda_cl_q_awaddr;
+logic        sda_cl_q_awvalid;
+logic        sda_cl_q_awready;
+logic [31:0] sda_cl_q_wdata;
+logic  [3:0] sda_cl_q_wstrb;
+logic        sda_cl_q_wvalid;
+logic        sda_cl_q_wready;
+logic  [1:0] sda_cl_q_bresp;
+logic        sda_cl_q_bvalid;
+logic        sda_cl_q_bready;
+logic [31:0] sda_cl_q_araddr;
+logic        sda_cl_q_arvalid;
+logic        sda_cl_q_arready;
+logic [31:0] sda_cl_q_rdata;
+logic  [1:0] sda_cl_q_rresp;
+logic        sda_cl_q_rvalid;
+logic        sda_cl_q_rready;
 
 //---------------------------------
 // flop the input SDA bus
@@ -33,72 +64,82 @@ axi_bus_t sda_cl_q();
    axi_register_slice_light AXIL_SDA_REG_SLC (
     .aclk          (aclk),
     .aresetn       (aresetn),
-    .s_axi_awaddr  (sda_cl_bus.awaddr[31:0]),
-    .s_axi_awvalid (sda_cl_bus.awvalid),
-    .s_axi_awready (sda_cl_bus.awready),
-    .s_axi_wdata   (sda_cl_bus.wdata[31:0]),
-    .s_axi_wstrb   (sda_cl_bus.wstrb[3:0]),
-    .s_axi_wvalid  (sda_cl_bus.wvalid),
-    .s_axi_wready  (sda_cl_bus.wready),
-    .s_axi_bresp   (sda_cl_bus.bresp),
-    .s_axi_bvalid  (sda_cl_bus.bvalid),
-    .s_axi_bready  (sda_cl_bus.bready),
-    .s_axi_araddr  (sda_cl_bus.araddr[31:0]),
-    .s_axi_arvalid (sda_cl_bus.arvalid),
-    .s_axi_arready (sda_cl_bus.arready),
-    .s_axi_rdata   (sda_cl_bus.rdata[31:0]),
-    .s_axi_rresp   (sda_cl_bus.rresp),
-    .s_axi_rvalid  (sda_cl_bus.rvalid),
-    .s_axi_rready  (sda_cl_bus.rready),
+    .s_axi_awaddr  (sda_cl_bus_awaddr),
+    .s_axi_awvalid (sda_cl_bus_awvalid),
+    .s_axi_awready (cl_sda_bus_awready),
+    .s_axi_wdata   (sda_cl_bus_wdata),
+    .s_axi_wstrb   (sda_cl_bus_wstrb),
+    .s_axi_wvalid  (sda_cl_bus_wvalid),
+    .s_axi_wready  (cl_sda_bus_wready),
+    .s_axi_bresp   (cl_sda_bus_bresp),
+    .s_axi_bvalid  (cl_sda_bus_bvalid),
+    .s_axi_bready  (sda_cl_bus_bready),
+    .s_axi_araddr  (sda_cl_bus_araddr),
+    .s_axi_arvalid (sda_cl_bus_arvalid),
+    .s_axi_arready (cl_sda_bus_arready),
+    .s_axi_rdata   (cl_sda_bus_rdata),
+    .s_axi_rresp   (cl_sda_bus_rresp),
+    .s_axi_rvalid  (cl_sda_bus_rvalid),
+    .s_axi_rready  (sda_cl_bus_rready),
 
-    .m_axi_awaddr  (sda_cl_q.awaddr[31:0]),
-    .m_axi_awvalid (sda_cl_q.awvalid),
-    .m_axi_awready (sda_cl_q.awready),
-    .m_axi_wdata   (sda_cl_q.wdata[31:0]),
-    .m_axi_wstrb   (sda_cl_q.wstrb[3:0]),
-    .m_axi_wvalid  (sda_cl_q.wvalid),
-    .m_axi_wready  (sda_cl_q.wready),
-    .m_axi_bresp   (sda_cl_q.bresp),
-    .m_axi_bvalid  (sda_cl_q.bvalid),
-    .m_axi_bready  (sda_cl_q.bready),
-    .m_axi_araddr  (sda_cl_q.araddr[31:0]),
-    .m_axi_arvalid (sda_cl_q.arvalid),
-    .m_axi_arready (sda_cl_q.arready),
-    .m_axi_rdata   (sda_cl_q.rdata[31:0]),
-    .m_axi_rresp   (sda_cl_q.rresp),
-    .m_axi_rvalid  (sda_cl_q.rvalid),
-    .m_axi_rready  (sda_cl_q.rready)
+    .m_axi_awaddr  (sda_cl_q_awaddr),
+    .m_axi_awvalid (sda_cl_q_awvalid),
+    .m_axi_awready (sda_cl_q_awready),
+    .m_axi_wdata   (sda_cl_q_wdata),
+    .m_axi_wstrb   (sda_cl_q_wstrb),
+    .m_axi_wvalid  (sda_cl_q_wvalid),
+    .m_axi_wready  (sda_cl_q_wready),
+    .m_axi_bresp   (sda_cl_q_bresp),
+    .m_axi_bvalid  (sda_cl_q_bvalid),
+    .m_axi_bready  (sda_cl_q_bready),
+    .m_axi_araddr  (sda_cl_q_araddr),
+    .m_axi_arvalid (sda_cl_q_arvalid),
+    .m_axi_arready (sda_cl_q_arready),
+    .m_axi_rdata   (sda_cl_q_rdata),
+    .m_axi_rresp   (sda_cl_q_rresp),
+    .m_axi_rvalid  (sda_cl_q_rvalid),
+    .m_axi_rready  (sda_cl_q_rready)
    );
 
 //---------------------------------
-// RAM slave for SDA accesses
+// Simple tie-off for SDA accesses
+//   Accepts all transactions.
+//   Read data returns 0.
+//   Response always OKAY (00).
 //---------------------------------
-   axil_slave  AXIL_SLAVE(
-      .clk(aclk),
-      .rst_n(aresetn),
 
-      .awvalid(sda_cl_q.awvalid),
-      .awaddr({54'b0, sda_cl_q.awaddr[9:0]}),
-      .awready(sda_cl_q.awready),
+   // Write channels
+   assign sda_cl_q_awready = 1'b1;
+   assign sda_cl_q_wready  = 1'b1;
 
-      .wvalid(sda_cl_q.wvalid),
-      .wdata(sda_cl_q.wdata[31:0]),
-      .wstrb(sda_cl_q.wstrb[3:0]),
-      .wready(sda_cl_q.wready),
+   always_ff @(posedge aclk or negedge aresetn) begin
+      if (!aresetn) begin
+         sda_cl_q_bvalid <= 1'b0;
+      end else begin
+         if (sda_cl_q_wvalid && sda_cl_q_wready) begin
+            sda_cl_q_bvalid <= 1'b1;
+         end else if (sda_cl_q_bvalid && sda_cl_q_bready) begin
+            sda_cl_q_bvalid <= 1'b0;
+         end
+      end
+   end
+   assign sda_cl_q_bresp = 2'b00;
 
-      .bvalid(sda_cl_q.bvalid),
-      .bresp(sda_cl_q.bresp),
-      .bready(sda_cl_q.bready),
+   // Read channels
+   assign sda_cl_q_arready = 1'b1;
+   assign sda_cl_q_rdata   = 32'h0;
+   assign sda_cl_q_rresp   = 2'b00;
 
-      .arvalid(sda_cl_q.arvalid),
-      .araddr({54'b0, sda_cl_q.araddr[9:0]}),
-      .arready(sda_cl_q.arready),
-
-      .rvalid(sda_cl_q.rvalid),
-      .rdata(sda_cl_q.rdata[31:0]),
-      .rresp(sda_cl_q.rresp),
-
-      .rready(sda_cl_q.rready)
-   );
+   always_ff @(posedge aclk or negedge aresetn) begin
+      if (!aresetn) begin
+         sda_cl_q_rvalid <= 1'b0;
+      end else begin
+         if (sda_cl_q_arvalid && sda_cl_q_arready && !sda_cl_q_rvalid) begin
+            sda_cl_q_rvalid <= 1'b1;
+         end else if (sda_cl_q_rvalid && sda_cl_q_rready) begin
+            sda_cl_q_rvalid <= 1'b0;
+         end
+      end
+   end
 
 endmodule

@@ -346,93 +346,106 @@ module trail_manager #(
         end
     end
     
-    // Sequential Logic (Writes)
-    integer i;
+    // ─── Sequential Logic ──────────────────────────────────────────────────────
+    // Control registers (trail_height, bt_state, etc.) — no memory arrays here.
     always_ff @(posedge clk) begin
         if (reset) begin
-            trail_height_q <= '0;
+            trail_height_q  <= '0;
             current_level_q <= '0;
-            bt_state_q <= IDLE;
-            bt_index_q <= '0;
-            bt_target_q <= '0;
-            // Note: We do NOT reset var_to_level or trail to allow RAM inference.
-            // level_start[0] should be 0.
-             level_start[0] <= 16'd0;
-             level_start[1] <= 16'd0; // Initialize next potential
+            bt_state_q      <= IDLE;
+            bt_index_q      <= '0;
+            bt_target_q     <= '0;
         end else begin
-            trail_height_q <= trail_height_d;
+            trail_height_q  <= trail_height_d;
             current_level_q <= current_level_d;
-            bt_state_q <= bt_state_d;
-            bt_index_q <= bt_index_d;
-            bt_target_q <= bt_target_d;
+            bt_state_q      <= bt_state_d;
+            bt_index_q      <= bt_index_d;
+            bt_target_q     <= bt_target_d;
 `ifndef SYNTHESIS
             if (DEBUG >= 1 && trail_height_q != trail_height_d)
-                $display("[TRAIL MANAGER] trail_height_q changed from %0d to %0d", trail_height_q, trail_height_d);
+                $display("[TRAIL MANAGER] trail_height_q changed from %0d to %0d",
+                         trail_height_q, trail_height_d);
 `endif
+        end
+    end
 
-            // --- Trail Write Logic ---
-            if (push && trail_height_q < MAX_VARS) begin
+    // ─── trail[] write — dedicated block for BRAM/LUTRAM inference ────────────
+    // Single write address per cycle; no async reset; no other arrays here.
+    always_ff @(posedge clk) begin
+        if (push && trail_height_q < MAX_VARS) begin
 `ifndef SYNTHESIS
-                 // VALIDATION: Check for duplicate trail pushes
-                 if (push_var > 0 && push_var <= MAX_VARS) begin
-                     logic [15:0] dup_lvl, dup_idx;
-                     dup_lvl = var_to_level[push_var];
-                     dup_idx = var_to_index[push_var];
-                     if (dup_lvl <= current_level_q && dup_idx < trail_height_q && trail[dup_idx].variable == push_var)
-                         $display("[TRAIL DUP-VALIDATE] ERROR: Pushing var=%0d but already on trail at idx=%0d lvl=%0d (current push lvl=%0d height=%0d)",
-                                  push_var, dup_idx, dup_lvl, push_level, trail_height_q);
-                 end
+            // VALIDATION: Check for duplicate trail pushes (simulation only)
+            if (push_var > 0 && push_var <= MAX_VARS) begin
+                logic [15:0] dup_lvl, dup_idx;
+                dup_lvl = var_to_level[push_var];
+                dup_idx = var_to_index[push_var];
+                if (dup_lvl <= current_level_q && dup_idx < trail_height_q &&
+                    trail[dup_idx].variable == push_var)
+                    $display("[TRAIL DUP-VALIDATE] ERROR: Pushing var=%0d but already on trail at idx=%0d lvl=%0d (current push lvl=%0d height=%0d)",
+                             push_var, dup_idx, dup_lvl, push_level, trail_height_q);
+            end
 `endif
-                 // Write new entry using temporary variable to satisfy Yosys
-                 new_entry_push.variable = push_var;
-                 new_entry_push.value = push_value;
-                 new_entry_push.level = push_level;
-                 new_entry_push.is_decision = push_is_decision;
-                 new_entry_push.reason = push_reason;
-
-                 // If backtrack completed THIS cycle (simultaneous push+BACKTRACK_COMPLETE),
-                 // trail_height_q is stale. Write at bt_index_q (post-backtrack position).
-                 if (bt_state_q == BACKTRACK_COMPLETE) begin
-                     trail[bt_index_q] <= new_entry_push;
-                     var_to_index[push_var] <= bt_index_q;
-                     level_start[push_level + 1] <= bt_index_q + 1'b1;
-                 end else begin
-                     trail[trail_height_q] <= new_entry_push;
-                     var_to_index[push_var] <= trail_height_q;
-                     level_start[push_level + 1] <= trail_height_q + 1'b1;
-                 end
-                 
-                 // Update var_to_level/value (Synchronous Write)
-                 var_to_level[push_var] <= push_level;
-                 var_to_value[push_var] <= push_value;
-            end
-            
-            // --- Backtrack Cleanup Logic ---
-            // If in BACKTRACK_LOOP, we are removing 'backtrack_var'.
-            // We should clear its var_to_level entry.
-            if (bt_state_q == BACKTRACK_LOOP && backtrack_valid) begin
-                var_to_level[backtrack_var] <= 16'd0;
-                var_to_value[backtrack_var] <= 1'b0;
-                var_to_index[backtrack_var] <= 16'hFFFF;
-            end
-            
-            // Clear All reset logic (Iterative? No, reset signal usually implies global)
-            // But we can't global reset RAM.
-            // Since clear_all resets height to 0, current_level to 0.
-            // query logic checks (lvl <= current_level). 0 <= 0 is true.
-            // But lvl 0 is usually "unassigned" or "root".
-            // If we use lvl 0 for assignments, we have a problem.
-            // Assuming levels start at 1?
-            // Code assumes level 0 is root?
-            // If clear_all is used, we might need a "generation" or just rely on overwrites.
-            if (clear_all) begin
-                level_start[0] <= 16'd0;
-                level_start[1] <= 16'd0;
-                // Cannot clear var_to_level array efficiently here.
-                // Assuming system logic handles consistency.
+            // Compute single write address (post-backtrack or normal).
+            begin : trail_wr_blk
+                logic [15:0] widx;
+                widx = (bt_state_q == BACKTRACK_COMPLETE) ? bt_index_q : trail_height_q;
+`ifdef SYNTHESIS
+                // Inline packed concatenation — no struct temp so Vivado infers LUTRAM.
+                // Bit layout matches trail_entry_t packed order:
+                //   [65:34] variable  [33] value  [32:17] level
+                //   [16]    is_decision  [15:0] reason
+                trail[widx] <= {push_var, push_value, push_level, push_is_decision, push_reason};
+`else
+                new_entry_push.variable    = push_var;
+                new_entry_push.value       = push_value;
+                new_entry_push.level       = push_level;
+                new_entry_push.is_decision = push_is_decision;
+                new_entry_push.reason      = push_reason;
+                trail[widx] <= new_entry_push;
+`endif
             end
         end
     end
+
+    // ─── var_to_level[] / var_to_value[] — dedicated block ───────────────────
+    // Push and backtrack write to the same variable address (never simultaneously),
+    // so this remains single-port and infers as LUTRAM.
+    always_ff @(posedge clk) begin
+        if (push && trail_height_q < MAX_VARS) begin
+            var_to_level[push_var] <= push_level;
+            var_to_value[push_var] <= push_value;
+        end else if (bt_state_q == BACKTRACK_LOOP && backtrack_valid) begin
+            var_to_level[backtrack_var] <= 16'd0;
+            var_to_value[backtrack_var] <= 1'b0;
+        end
+    end
+
+    // ─── var_to_index[] — dedicated block ────────────────────────────────────
+    always_ff @(posedge clk) begin
+        if (push && trail_height_q < MAX_VARS) begin
+            var_to_index[push_var] <=
+                (bt_state_q == BACKTRACK_COMPLETE) ? bt_index_q : trail_height_q;
+        end else if (bt_state_q == BACKTRACK_LOOP && backtrack_valid) begin
+            var_to_index[backtrack_var] <= 16'hFFFF;
+        end
+    end
+
+    // ─── level_start[] — dedicated block ─────────────────────────────────────
+    // Writes: push (single address = push_level+1) and clear_all (index 0 and 1).
+    // Reset initialises index 0/1 to 0.
+    always_ff @(posedge clk) begin
+        if (reset) begin
+            level_start[0] <= 16'd0;
+            level_start[1] <= 16'd0;
+        end else if (clear_all) begin
+            level_start[0] <= 16'd0;
+            level_start[1] <= 16'd0;
+        end else if (push && trail_height_q < MAX_VARS) begin
+            level_start[push_level + 1] <=
+                (bt_state_q == BACKTRACK_COMPLETE) ? bt_index_q + 1'b1 : trail_height_q + 1'b1;
+        end
+    end
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Aligned Debug Logging
     always_ff @(posedge clk or posedge reset) begin
