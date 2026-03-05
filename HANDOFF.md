@@ -853,6 +853,19 @@ No functional regression from any of the five BRAM/LUTRAM inference fixes. The `
 attributes are transparent to Verilator; the `shared_clause_buffer` restructure and `trail_manager`
 `ifdef SYNTHESIS` split are functionally equivalent to the original code.
 
+### Verilator Regression post Synthesis success (2026-03-05)
+
+1×1 binary run after Attempt 22 full synthesis (idle system, no synthesis in progress):
+
+```
+Total Tests: 98    Passed: 98    Failed: 0
+Configuration: 1×1 grid, MAX_VARS=256, MAX_CLAUSES=4096, restarts DISABLED
+Binary: sim/obj_dir_1x1/Vtb_satswarmv2
+```
+
+All 98 tests passed cleanly. Confirms the serialized `pse.sv` write path introduced for BRAM inference
+introduced no functional regressions.
+
 ### XSim BFM Test (2026-02-27)
 
 ```
