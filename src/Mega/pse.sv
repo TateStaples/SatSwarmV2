@@ -777,7 +777,10 @@ module pse #(
             WATCH_REPL_CYCLE2: begin
                 // Cycle 2: add to new list; then resume SCAN_WATCH
                 scan_clause_d = watch_repl_next_clause_q;
-                scan_prev_d   = watch_repl_clause_id_q;
+                // Continue traversing the OLD list from the clause after the moved
+                // node. The previous node in that old list remains the original
+                // predecessor, not the moved clause itself.
+                scan_prev_d   = watch_repl_prev_id_q;
                 state_d       = SCAN_WATCH;
             end
 
