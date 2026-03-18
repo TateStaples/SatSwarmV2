@@ -61,16 +61,35 @@ module interface_unit #(
     // Route incoming packets to appropriate handlers
     logic diverge_rx_valid;
     logic signed [31:0] diverge_rx_lit;
-    logic clause_rx_fifo_valid;
-    logic [7:0] clause_rx_fifo_lbd;
-    logic [63:0] clause_rx_fifo_ptr;
+    logic clause_from_noc_valid;
+    logic [7:0] clause_from_noc_lbd;
+    logic [63:0] clause_from_noc_ptr;
+
+    // 1-entry clause buffer: holds an incoming clause until the solver acknowledges it.
+    // This decouples the one-cycle NoC packet from the solver's PSE-completion acceptance window,
+    // ensuring no received clause is silently dropped due to a timing mismatch.
+    logic        clause_buf_valid_q, clause_buf_valid_d;
+    logic [7:0]  clause_buf_lbd_q,   clause_buf_lbd_d;
+    logic [63:0] clause_buf_ptr_q,   clause_buf_ptr_d;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            clause_buf_valid_q <= 1'b0;
+            clause_buf_lbd_q   <= '0;
+            clause_buf_ptr_q   <= '0;
+        end else begin
+            clause_buf_valid_q <= clause_buf_valid_d;
+            clause_buf_lbd_q   <= clause_buf_lbd_d;
+            clause_buf_ptr_q   <= clause_buf_ptr_d;
+        end
+    end
 
     // Packet muxing and routing
     always_comb begin
         // Default: no ready
         rx_ready_n = 1'b0; rx_ready_s = 1'b0; rx_ready_e = 1'b0; rx_ready_w = 1'b0;
         diverge_rx_valid = 1'b0; diverge_rx_lit = '0;
-        clause_rx_fifo_valid = 1'b0; clause_rx_fifo_lbd = '0; clause_rx_fifo_ptr = '0;
+        clause_from_noc_valid = 1'b0; clause_from_noc_lbd = '0; clause_from_noc_ptr = '0;
 
         // Priority 1: Divergence
         if (rx_valid_n && rx_pkt_n.msg_type == satswarmv2_pkg::MSG_DIVERGE) begin
@@ -81,23 +100,46 @@ module interface_unit #(
             diverge_rx_valid = 1'b1; diverge_rx_lit = rx_pkt_e.payload[31:0]; rx_ready_e = 1'b1;
         end else if (rx_valid_w && rx_pkt_w.msg_type == satswarmv2_pkg::MSG_DIVERGE) begin
             diverge_rx_valid = 1'b1; diverge_rx_lit = rx_pkt_w.payload[31:0]; rx_ready_w = 1'b1;
-        // Priority 2: Clauses
-        end else if (rx_valid_n && rx_pkt_n.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
-            clause_rx_fifo_valid = 1'b1; clause_rx_fifo_lbd = rx_pkt_n.quality_metric; clause_rx_fifo_ptr = rx_pkt_n.payload; rx_ready_n = 1'b1;
-        end else if (rx_valid_s && rx_pkt_s.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
-            clause_rx_fifo_valid = 1'b1; clause_rx_fifo_lbd = rx_pkt_s.quality_metric; clause_rx_fifo_ptr = rx_pkt_s.payload; rx_ready_s = 1'b1;
-        end else if (rx_valid_e && rx_pkt_e.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
-            clause_rx_fifo_valid = 1'b1; clause_rx_fifo_lbd = rx_pkt_e.quality_metric; clause_rx_fifo_ptr = rx_pkt_e.payload; rx_ready_e = 1'b1;
-        end else if (rx_valid_w && rx_pkt_w.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
-            clause_rx_fifo_valid = 1'b1; clause_rx_fifo_lbd = rx_pkt_w.quality_metric; clause_rx_fifo_ptr = rx_pkt_w.payload; rx_ready_w = 1'b1;
+        // Priority 2: Clauses — only accept a new clause from NoC when the buffer is empty
+        end else if (!clause_buf_valid_q && rx_valid_n && rx_pkt_n.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
+            clause_from_noc_valid = 1'b1; clause_from_noc_lbd = rx_pkt_n.quality_metric; clause_from_noc_ptr = rx_pkt_n.payload; rx_ready_n = 1'b1;
+        end else if (!clause_buf_valid_q && rx_valid_s && rx_pkt_s.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
+            clause_from_noc_valid = 1'b1; clause_from_noc_lbd = rx_pkt_s.quality_metric; clause_from_noc_ptr = rx_pkt_s.payload; rx_ready_s = 1'b1;
+        end else if (!clause_buf_valid_q && rx_valid_e && rx_pkt_e.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
+            clause_from_noc_valid = 1'b1; clause_from_noc_lbd = rx_pkt_e.quality_metric; clause_from_noc_ptr = rx_pkt_e.payload; rx_ready_e = 1'b1;
+        end else if (!clause_buf_valid_q && rx_valid_w && rx_pkt_w.msg_type == satswarmv2_pkg::MSG_CLAUSE) begin
+            clause_from_noc_valid = 1'b1; clause_from_noc_lbd = rx_pkt_w.quality_metric; clause_from_noc_ptr = rx_pkt_w.payload; rx_ready_w = 1'b1;
         end
     end
 
-    assign force_valid = diverge_rx_valid;
-    assign force_lit = diverge_rx_lit;
-    assign clause_rx_valid = clause_rx_fifo_valid;
-    assign clause_rx_lbd = clause_rx_fifo_lbd;
-    assign clause_rx_ptr = clause_rx_fifo_ptr;
+    // Clause buffer next-state logic:
+    // Load a new clause when one arrives from the NoC (and buffer is empty).
+    // Clear the buffer when the solver acknowledges (clause_rx_ready).
+    always_comb begin
+        clause_buf_valid_d = clause_buf_valid_q;
+        clause_buf_lbd_d   = clause_buf_lbd_q;
+        clause_buf_ptr_d   = clause_buf_ptr_q;
+
+        if (clause_buf_valid_q && clause_rx_ready) begin
+            // Solver consumed the buffered clause
+            clause_buf_valid_d = 1'b0;
+            clause_buf_lbd_d   = '0;
+            clause_buf_ptr_d   = '0;
+        end
+
+        if (clause_from_noc_valid) begin
+            // Latch new clause from NoC (only when buffer was empty, as guaranteed above)
+            clause_buf_valid_d = 1'b1;
+            clause_buf_lbd_d   = clause_from_noc_lbd;
+            clause_buf_ptr_d   = clause_from_noc_ptr;
+        end
+    end
+
+    assign force_valid    = diverge_rx_valid;
+    assign force_lit      = diverge_rx_lit;
+    assign clause_rx_valid = clause_buf_valid_q;
+    assign clause_rx_lbd  = clause_buf_lbd_q;
+    assign clause_rx_ptr  = clause_buf_ptr_q;
 
     // Outgoing packet construction
     always_comb begin
