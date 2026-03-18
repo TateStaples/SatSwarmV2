@@ -8,6 +8,12 @@ SatSwarmV2 debugging workflows utilize native Verilator flows coupled with AWS-F
 
 The primary testing methodology relies heavily on Verilator. Run testing workflows from `/sim`.
 
+> **Prerequisite**: Verilator is not pre-installed on this machine. Install once with:
+> ```bash
+> sudo apt-get install -y verilator
+> ```
+> Version 5.020 confirmed working.
+
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/sim
 
@@ -36,10 +42,17 @@ Pass the `+DEBUG` parameter to view Verilator cycle-by-cycle logging:
 Run the core testing suite (98 distinct test-files, ranging from 4v to 75v setups).
 
 ```bash
-cd sim
-# To test the default baseline solver
-BIN=$PWD/obj_dir_1x1/Vtb_satswarmv2 bash scripts/run_bigger_ladder.sh
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+
+# run_bigger_ladder.sh expects the binary at obj_dir/Vtb_satswarmv2.
+# Create the symlink once after building:
+ln -sfn obj_dir_1x1 obj_dir
+
+# Run the full regression:
+bash scripts/run_bigger_ladder.sh
 ```
+
+> **Note**: The `BIN=` env var override works for `run_cnf.sh` but **not** for `run_bigger_ladder.sh`, which hardcodes `$SIM_DIR/obj_dir/Vtb_satswarmv2`. The symlink above is the correct workaround.
 
 To run an exhaustive parameter/instance sweep across all small-tests:
 ```bash
@@ -96,6 +109,9 @@ Any absent arrays were converted into Flip-Flops and indicate a failed implement
 # Check running background processes
 ps aux | grep "unwrapped.*vivado" | grep -v grep | awk '{printf "PID=%s CPU=%s RSS_MB=%.0f\n", $2, $3, $6/1024}'
 
-# Rapidly grep through /tmp/synth_explore.log
-grep -E "Finished Synthesis|Thrashing|Killed|ERROR" /tmp/synth_explore.log | tail -5
+# Monitor the active build log (logs go to /home/ubuntu/buildall_*.log)
+tail -20 /home/ubuntu/buildall_*.log | tail -20
+
+# Check major phase milestones and errors
+grep -E "^AWS FPGA:|ERROR|WNS" /home/ubuntu/buildall_*.log | tail -20
 ```
