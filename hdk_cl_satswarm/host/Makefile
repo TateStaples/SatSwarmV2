@@ -10,7 +10,7 @@
 #   make test         # Build and show usage
 
 CC      := gcc
-CFLAGS  := -std=c11 -Wall -Wextra -O2 -g
+CFLAGS  := -std=c11 -Wall -Wextra -O2 -g -D_POSIX_C_SOURCE=200809L
 
 # AWS FPGA SDK paths
 SDK_DIR   ?= $(AWS_FPGA_REPO_DIR)/sdk
