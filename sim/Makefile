@@ -61,6 +61,21 @@ build_2x2:
 		-Mdir obj_dir_2x2 \
 		--build -j 8
 
+# Build 2x1 grid (2 cores, 2 columns × 1 row) for benchmark comparison.
+# MULTICORE is intentionally omitted: the testbench's `ifdef MULTICORE` blocks reference
+# dut.cols[1].rows[0] which does not exist when GRID_Y=1, causing Verilator elaboration
+# errors.  Without MULTICORE the host_done/host_sat/host_unsat top-level signals still
+# aggregate all cores correctly, so cycle counts are accurate.
+build_2x1:
+	@echo "Building SatSwarmv2 2x1 (2 Cores) for Benchmark..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=2 -GGRID_Y=1 \
+		-CFLAGS "-std=c++17" \
+		-I../src/Mega \
+		-Mdir obj_dir_2x1 \
+		--build -j 8
+
 # Build 2x2 grid (4 cores) for multi-core soundness testing.
 # Note: tb_satswarmv2.sv statically references dut.cols[0].rows[1], dut.cols[1].rows[0],
 # and dut.cols[1].rows[1] inside `ifdef MULTICORE. Verilator resolves all hierarchical
@@ -202,7 +217,7 @@ $(STAMP_MINI): sv/tb_mini.sv $(MINI_SRCS) Makefile
 mini: $(STAMP_MINI)
 
 clean:
-	rm -rf obj_dir obj_dir_mini obj_dir_1x1 obj_dir_1x2 obj_dir_2x2 obj_dir_3x3 logs *.vcd benchmark_results.txt .build_*_stamp
+	rm -rf obj_dir obj_dir_mini obj_dir_1x1 obj_dir_1x2 obj_dir_2x1 obj_dir_2x2 obj_dir_3x3 logs *.vcd benchmark_results.txt .build_*_stamp
 
 help:
 	@echo "SatSwarmv2 Makefile Targets:"
