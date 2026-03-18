@@ -22,6 +22,7 @@ export HDK_IP_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/ip
 export HDK_BD_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/bd
 export HDK_BD_GEN_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.gen/sources_1/bd
 export CL_DIR=$AWS_FPGA_REPO_DIR/hdk/cl/examples/cl_satswarm
+export FAAS_CL_DIR=$CL_DIR
 export VIVADO_TOOL_VERSION=2025.2
 export XILINX_VIVADO=/opt/Xilinx/2025.2/Vivado
 export PATH=/opt/Xilinx/2025.2/Vivado/bin:$PATH
@@ -80,18 +81,18 @@ cd /home/ubuntu/src/project_data/SatSwarmV2/deploy
 ./run_synthesis.sh 2>&1 | tee logs/synth_explore.log &
 ```
 
-### Current Launcher Settings (`deploy/run_synthesis.sh`)
+### Current Launcher Settings
 
-- **Clock Recipe A (`--clock_recipe_a A2`)**: This configures the HDK shell to generate `gen_clk_extra_a1` at 15.625 MHz. (Shell `clk_main_a0` remains 250 MHz).
-- **Physical Optimization (`-o Explore`)**: Lighter synthesis strategy to conserve host RAM. Avoid `AggressiveExplore`.
+- **Clock Recipe A (`--clock_recipe_a A1`)**: Configures `clk_out1_clk_mmcm_a` = 150 MHz (6.667 ns period). This is the clock domain used by the SatSwarm core (`satswarm_core_bridge`, `vde_heap`, etc.).
+- **`--aws_clk_gen`**: Required when specifying custom clock recipes. Without this flag the build script rejects `--clock_recipe_*` arguments.
 
-*Note: Do not use A0 constraints. Prior attempts OOM-killed during Timing Optimization at 250 MHz. See [Changes.md](Changes.md) for details.*
+*Note: A2 (15.625 MHz) was used in earlier sessions and met timing but is very slow. A0 caused OOM during Timing Optimization at prior attempts. A1 (150 MHz) is the current target — timing closes after the `vde_heap` pipeline fix (see [Changes.md](Changes.md)).*
 
 ### Clock Domain Crossing Setup
 
 Clock boundaries transition across AXI paths: OCL, PCIS, and DDR.
 - The `cl_satswarm.sv` instantiation uses `cl_axi_clock_converter` and `cl_axi_clock_converter_light`.
-- All `satswarm_core_bridge` logic is safely partitioned into the slower 15.625 MHz domain (`gen_clk_extra_a1`).
+- All `satswarm_core_bridge` logic runs in the `clk_out1_clk_mmcm_a` domain (150 MHz with A1 recipe).
 
 ---
 
@@ -100,8 +101,7 @@ Clock boundaries transition across AXI paths: OCL, PCIS, and DDR.
 Once synthesis writes a clean checkpoint (`*.synthesis.dcp`), kick off implementation mapping:
 
 ```bash
-# Set env vars first (see Initialize HDK Environment above), then:
-bash -c '
+# All vars must be in the same shell as the build command:
 export AWS_FPGA_REPO_DIR=/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
 export HDK_DIR=$AWS_FPGA_REPO_DIR/hdk
 export HDK_COMMON_DIR=$HDK_DIR/common
@@ -111,32 +111,38 @@ export HDK_IP_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/ip
 export HDK_BD_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/bd
 export HDK_BD_GEN_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.gen/sources_1/bd
 export CL_DIR=$AWS_FPGA_REPO_DIR/hdk/cl/examples/cl_satswarm
+export FAAS_CL_DIR=$CL_DIR
 export VIVADO_TOOL_VERSION=2025.2
 export XILINX_VIVADO=/opt/Xilinx/2025.2/Vivado
 export PATH=/opt/Xilinx/2025.2/Vivado/bin:$PATH
+LOG=/home/ubuntu/buildall_$(date +%Y%m%d_%H%M%S).log
 cd $CL_DIR/build/scripts
-nohup python3 $AWS_FPGA_REPO_DIR/hdk/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
-  -c cl_satswarm -f BuildAll --no-encrypt --aws_clk_gen \
-  --clock_recipe_a A2 --clock_recipe_b B0 --clock_recipe_c C0 --clock_recipe_hbm H0 \
-  -o Explore \
-  > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/buildall_<tag>.log 2>&1 &
-echo "Build PID: $!"
-'
+nohup python3 aws_build_dcp_from_cl.py \
+  --cl cl_satswarm --aws_clk_gen \
+  --clock_recipe_a A1 --clock_recipe_b B0 --clock_recipe_c C0 \
+  > "$LOG" 2>&1 &
+echo "PID=$! LOG=$LOG"
 ```
+
+> **Note**: The script must be run from `$CL_DIR/build/scripts/` — invoking it from another directory with a full path causes incorrect relative-path resolution for TCL includes.
 
 The output tar lands at:
 `$CL_DIR/build/checkpoints/<tag>.Developer_CL.tar`
 
+> **Note**: Older docs refer to a `to_aws/` subdirectory — this is incorrect. The tar is placed directly under `checkpoints/`.
+
 ### Skipping Synthesis (`ImplCL`)
 
-If your `post_synth.dcp` checkpoint is clean, you can skip the 15-minute synthesis phase by launching **Implementation only** using the timestamp tag from synthesis.
+If your `post_synth.dcp` checkpoint is clean, skip the synthesis phase using the existing tag:
 
 ```bash
-python3 $HDK_DIR/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
-  -c cl_satswarm -f ImplCL -t "2026_03_05-145659" --no-encrypt \
-  --aws_clk_gen --clock_recipe_a A2 \ -o Explore > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/build_impl.log 2>&1 &
+cd $CL_DIR/build/scripts
+python3 aws_build_dcp_from_cl.py \
+  --cl cl_satswarm -f ImplCL -t "2026_03_18-120815" \
+  --aws_clk_gen --clock_recipe_a A1 --clock_recipe_b B0 --clock_recipe_c C0 \
+  > /home/ubuntu/build_impl.log 2>&1 &
 ```
-*Note: `ImplCL` by default skips the tarball creation script. You will need to manually generate `Developer_CL.tar` if skipping `BuildAll`.*
+*Note: `ImplCL` skips tarball creation. You will need to manually generate `Developer_CL.tar` if using this flow.*
 
 ---
 
@@ -145,7 +151,7 @@ python3 $HDK_DIR/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
 After `BuildAll` is completed, the resulting tarball must be uploaded and transformed to an Amazon FPGA Image (AFI).
 
 Tarball location:
-`$CL_DIR/build/checkpoints/to_aws/<timestamp>.Developer_CL.tar`
+`$CL_DIR/build/checkpoints/<timestamp>.Developer_CL.tar`
 
 ### 1. Upload to S3 Bucket
 
@@ -164,7 +170,7 @@ aws s3 cp \
 aws ec2 create-fpga-image \
     --region us-east-1 \
     --name "SatSwarmV2-<grid>" \
-    --description "SatSwarm V2 CDCL solver, <NxN> grid, 15.625 MHz clock" \
+    --description "SatSwarm V2 CDCL solver, <NxN> grid, 150 MHz (A1 recipe)" \
     --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/<tag>.Developer_CL.tar \
     --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
 ```
