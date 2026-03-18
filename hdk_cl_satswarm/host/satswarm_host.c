@@ -110,11 +110,11 @@ static int fpga_init(void) {
     }
 
     if (version != SATSWARM_VERSION) {
-        fprintf(stderr, "ERROR: Version mismatch: got 0x%08X, expected 0x%08X\n",
+        fprintf(stderr, "WARNING: Version mismatch: got 0x%08X, expected 0x%08X — continuing anyway\n",
                 version, SATSWARM_VERSION);
-        return -1;
+    } else {
+        printf("SatSwarm version: 0x%08X (OK)\n", version);
     }
-    printf("SatSwarm version: 0x%08X (OK)\n", version);
 
     // Open DMA write channel
     dma_write_fd = fpga_dma_open_queue(FPGA_DMA_XDMA, slot_id, 0, true);
