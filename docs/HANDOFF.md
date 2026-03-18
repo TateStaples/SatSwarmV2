@@ -57,11 +57,12 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 
 ## 3. Current Project State
 
-- **Design configuration**: Design files currently set to 2×2 (`GRID_X=2, GRID_Y=2`). Revert to 1×1 for 1×1 builds.
-- **1×1 build**: ✅ **COMPLETE** — log `/home/ubuntu/buildall_1x1_a2_cdc_20260318_163435.log`
+- **Design configuration**: Design files currently set to **1×1** (`GRID_X=1, GRID_Y=1`). Change to 2×2 in the five files for 2×2 builds.
+- **1×1 A2 build**: ✅ **COMPLETE** — log `/home/ubuntu/buildall_1x1_a2_cdc_20260318_163435.log`
+- **1×1 A1 build (150 MHz)**: ⏳ **IN PROGRESS** — log `/home/ubuntu/buildall_1x1_a1_150mhz_20260318_224623.log`, PID=2964
 - **1×1 AFI**: ✅ **available** — afi-08366141b8a92b36f (agfi-0f933cb959906a494)
 - **2×2 build**: ✅ **COMPLETE** — log `/home/ubuntu/buildall_2x2_a2_20260318_171846.log`, tag `2026_03_18-171846`, WNS=+0.711 ns
-- **2×2 AFI**: ✅ **submitted** — afi-01ef63d452c8940a2 (agfi-0193eda3eade22ae4); poll for `available` then load with `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+- **2×2 AFI**: ✅ **available** — afi-01ef63d452c8940a2 (agfi-0193eda3eade22ae4); load with `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
 - **Clock**: A2 recipe (`clk_main_a0` = 15.625 MHz, 64 ns) — switched from A1 due to unresolved 150 MHz timing
 
 ### Build Artifacts
@@ -74,7 +75,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 1×1 A1 pipelined | `2026_03_18-142140` | WNS=-18.820 ns ❌ | ✅ | ❌ | — | 2nd timing fail (pos_mem/bubble), killed |
 | 1×1 A2 (REQP+pipe fixed) | `2026_03_18-151300` | WNS=-1.627 ns ❌ | ✅ | ❌ | — | CDC fail: vled crossing user→shell clk, fixed in commit ef79614 |
 | 1×1 A2 (CDC fixed) | `2026_03_18-163435` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **available** | afi-08366141b8a92b36f, agfi-0f933cb959906a494 |
-| 2×2 A2 (CDC fixed) | `2026_03_18-171846` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **submitted** | afi-01ef63d452c8940a2, agfi-0193eda3eade22ae4 |
+| 2×2 A2 (CDC fixed) | `2026_03_18-171846` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **available** | afi-01ef63d452c8940a2, agfi-0193eda3eade22ae4 |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -112,14 +113,13 @@ sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
 sudo fpga-describe-local-image -S 0 -H
 ```
 
-### Priority 2: Poll 2×2 AFI and Load When Available
+### Priority 2: Load 2×2 AFI (Available)
 
-2×2 tar uploaded and AFI created (afi-01ef63d452c8940a2). Poll until available (10–30 min):
+2×2 AFI is **available**. Load on F2:
 ```bash
-aws ec2 describe-fpga-images --fpga-image-ids afi-01ef63d452c8940a2 \
-  --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' --region us-east-1
+sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4
 ```
-Then load on F2: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+(Use `fpga-clear-local-image -S 0` first if slot 0 already has an image.)
 
 ### Priority 3: Revert to 1×1 for Future 1×1 Builds
 
@@ -174,6 +174,4 @@ There are two copies of the CL design files with **different inodes** — only o
 
 **AFI (2026-03-18)**:
 - **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — SatSwarmV2-1x1-15MHz, tag `2026_03_18-163435` — **available**. Load: `sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494`
-- **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4) — SatSwarmV2-2x2-15MHz, tag `2026_03_18-171846` — **submitted**; poll for `available`, then load: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
-
-**Note to next agent**: 2×2 build completed and AFI submitted; update HANDOFF when 2×2 AFI state becomes `available` if you poll it.
+- **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4) — SatSwarmV2-2x2-15MHz, tag `2026_03_18-171846` — **available**. Load: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`

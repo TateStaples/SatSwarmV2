@@ -1,8 +1,8 @@
 // Simple 2D Mesh Interconnect: Dimension-order (X-Y) routing
 // For a 2x2 or larger grid, routes packets between neighboring cores.
 module mesh_interconnect #(
-    parameter int GRID_X = 2,
-    parameter int GRID_Y = 2
+    parameter int GRID_X = 1,
+    parameter int GRID_Y = 1
 )(
     input  logic clk,
     input  logic rst_n,

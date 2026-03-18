@@ -76,6 +76,48 @@ A successful output resembles:
 
 ---
 
+## XSim AXI Bridge Smoke Test
+
+Run this when the Verilator regression is 98/98 and you have high confidence the RTL is ready. It verifies that `satswarm_core_bridge` — the AXI-Lite / PCIS DMA bridge between the AWS shell and `satswarm_top` — is correctly wired for both SAT and UNSAT cases. This layer is completely bypassed by Verilator.
+
+The test compiles once (xvlog + xelab, ~5-10 seconds), then runs xsim on **6 fixed instances** (3 SAT + 3 UNSAT, ~30 seconds total). It is not a correctness suite; correctness over the full instance set is the Verilator ladder's job.
+
+```bash
+# From the project root (hdk_setup.sh cannot be sourced — the script sets env vars manually):
+bash /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts/run_xsim_bridge_test.sh
+```
+
+Expected output:
+```
+=============================================
+ SatSwarm XSim AXI Bridge Smoke Test
+=============================================
+[1/3] Compiling RTL (xvlog)...
+[2/3] Elaborating snapshot (xelab)...
+[3/3] Running 6 bridge tests...
+
+  sat_5v_10c_1.cnf     [SAT]    PASS (cycles=1568)
+  sat_20v_80c_1.cnf    [SAT]    PASS (cycles=5219)
+  sat_50v_215c_1.cnf   [SAT]    PASS (cycles=30209)
+  unsat_5v_10c_1.cnf   [UNSAT]  PASS (cycles=1875)
+  unsat_20v_80c_1.cnf  [UNSAT]  PASS (cycles=8011)
+  unsat_32v_136c_1.cnf [UNSAT]  PASS (cycles=19322)
+
+=============================================
+ Bridge Test Results
+=============================================
+  6/6 PASSED — AXI bridge OK
+```
+
+If the snapshot already exists from a prior run, skip recompile with `--skip-compile`:
+```bash
+bash .../run_xsim_bridge_test.sh --skip-compile
+```
+
+> **Note**: The testbench instantiates `satswarm_core_bridge` (simplified AXI port interface) directly — not `cl_satswarm` (full AWS `cl_ports.vh` interface). This correctly exercises the AXI bridge and solver logic without the AWS shell BFM overhead. The `MAX_LITS=1024` parameter keeps simulation memory low; the larger 50v UNSAT instances are excluded from this test for that reason.
+
+---
+
 ## BRAM / LUTRAM Inference Validation
 
 Often, Vivado fails Technology Mapping due to RAM being dissolved into excessive Flip-Flops. Validate inference early on any modification to `pse.sv` or `trail_manager.sv` using check-scripts instead of large syntheses:
@@ -114,4 +156,33 @@ tail -20 /home/ubuntu/buildall_*.log | tail -20
 
 # Check major phase milestones and errors
 grep -E "^AWS FPGA:|ERROR|WNS" /home/ubuntu/buildall_*.log | tail -20
+```
+
+---
+
+## Pre-Synthesis Verification Workflow
+
+Run these gates in order before every Vivado build. Each step catches different classes of errors in seconds-to-minutes vs the hours a Vivado build costs.
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+
+# 1. Build Verilator binary (once, or after any RTL change)
+make build_1x1 && ln -sfn obj_dir_1x1 obj_dir
+
+# 2. Heap unit test (after any vde_heap.sv change)
+make test_vde_heap
+
+# 3. Full correctness regression — 98 files (seconds each)
+bash scripts/run_bigger_ladder.sh              # must be 98/98
+
+# 4. BRAM inference check (after any pse.sv / trail_manager.sv change)
+bash /home/ubuntu/src/project_data/SatSwarmV2/deploy/check_inference.sh pse
+
+# 5. AXI bridge smoke test — 6 fixed instances via XSim (~30s)
+#    Run this when Verilator is 98/98 and you're ready to commit to Vivado.
+#    Exercises satswarm_core_bridge AXI path that Verilator bypasses.
+bash /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts/run_xsim_bridge_test.sh
+
+# All pass → proceed to Vivado BuildAll (see Deploy.md)
 ```
