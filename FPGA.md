@@ -9,29 +9,18 @@ This document outlines the final steps to deploy SatSwarm V2 to an AWS F2 instan
 All artifacts are under:
 `/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
-### 1×1 Build (tag `2026_03_18-004125`)
+> **Important**: All builds prior to commit `fd6a0a3` (REQP-123 fix) will fail AWS bitgen with `UNKNOWN_BITSTREAM_GENERATE_ERROR`. Do not submit those tars.
 
-- **Tarball**: `2026_03_18-004125.Developer_CL.tar`
-- **Post-Route DCP**: `cl_satswarm.2026_03_18-004125.post_route.dcp`
-- **S3**: `s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-004125.Developer_CL.tar` ✅ uploaded
-- **AFI status**: `afi-0edbf121d0cabe2b3` — **FAILED** (transient `UNKNOWN_BITSTREAM_GENERATE_ERROR`; resubmit using tar already on S3)
+### Build History
 
-### 2×2 Build (tag `2026_03_18-020509`)
+| Tag | Grid | Clock | WNS | Tar on disk | S3 | Submit? |
+|---|---|---|---|---|---|---|
+| `2026_03_18-004125` | 1×1 | A2 / 15.625 MHz | +0.711 ns | ✅ | ✅ | ❌ Pre-REQP-123-fix |
+| `2026_03_18-020509` | 2×2 | A2 / 15.625 MHz | +0.711 ns | ✅ | ✅ | ❌ Pre-REQP-123-fix |
+| `2026_03_18-120815` | 1×1 | A1 / 150 MHz | -18.135 ns | ✅ | ❌ | ❌ Timing failure |
+| _(in progress)_ | 1×1 | A1 / 150 MHz | — | — | — | ⏳ Awaiting result |
 
-- **Tarball**: `2026_03_18-020509.Developer_CL.tar`
-- **Post-Route DCP**: `cl_satswarm.2026_03_18-020509.post_route.dcp`
-- **S3**: not yet uploaded
-- **AFI status**: not yet submitted
-
-### Timing Results
-
-| Metric | 1×1 (`2026_03_18-004125`) | 2×2 (`2026_03_18-020509`) |
-|---|---|---|
-| WNS | +0.711 ns | +0.711 ns |
-| TNS | 0.000 ns | 0.000 ns |
-| WHS | +0.014 ns | +0.011 ns |
-| Build time | ~31 min | ~62 min |
-| Status | Timing MET | Timing MET |
+The in-progress build applies both fixes (REQP-123 + `vde_heap` pipeline). Once complete, check WNS ≥ 0 before uploading and submitting.
 
 ---
 
@@ -40,31 +29,22 @@ All artifacts are under:
 ### Step 2a: Upload Tarball to S3
 
 ```bash
-# For 2x2 (1x1 is already uploaded):
+# Replace <tag> with the actual build tag (e.g. 2026_03_18-142140)
+TAG=<tag>
 aws s3 cp \
-  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_18-020509.Developer_CL.tar \
-  s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-020509.Developer_CL.tar
+  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/${TAG}.Developer_CL.tar \
+  s3://satswarm-v2-afi-624824941978/dcp/${TAG}.Developer_CL.tar
 ```
 
 ### Step 2b: Request AFI Creation
 
-**1×1 (retry — tar already on S3):**
 ```bash
+TAG=<tag>
 aws ec2 create-fpga-image \
     --region us-east-1 \
-    --name "SatSwarmV2-1x1" \
-    --description "SatSwarm V2 CDCL solver, 1x1 grid, 15.625 MHz clock" \
-    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-004125.Developer_CL.tar \
-    --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
-```
-
-**2×2 (new submission):**
-```bash
-aws ec2 create-fpga-image \
-    --region us-east-1 \
-    --name "SatSwarmV2-2x2" \
-    --description "SatSwarm V2 CDCL solver, 2x2 grid (4 cores), 15.625 MHz clock" \
-    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-020509.Developer_CL.tar \
+    --name "SatSwarmV2-1x1-150MHz" \
+    --description "SatSwarm V2 CDCL solver, 1x1 grid, 150 MHz (A1), REQP-123+timing fixed" \
+    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/${TAG}.Developer_CL.tar \
     --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
 ```
 
@@ -108,8 +88,10 @@ Verify `StatusName: loaded` in the output. The solver is now running on the FPGA
 
 ## 4. AFI History
 
-| AFI ID | Grid | Tag | Status | Notes |
-|---|---|---|---|---|
-| `afi-0edbf121d0cabe2b3` | 1×1 | `2026_03_18-004125` | FAILED | Transient `UNKNOWN_BITSTREAM_GENERATE_ERROR` |
-| `afi-033c546a9698c9134` | 1×1 | `2026_03_18-004125` | pending | Retry; GlobalId: `agfi-0fc60c975e389b731` |
-| `afi-0a3e524ae986734e5` | 2×2 | `2026_03_18-020509` | pending | New; GlobalId: `agfi-031f551cf7bed2bdd` |
+| AFI ID | Grid | Tag | Clock | Status | Notes |
+|---|---|---|---|---|---|
+| `afi-0edbf121d0cabe2b3` | 1×1 | `2026_03_18-004125` | A2 / 15.625 MHz | FAILED | `UNKNOWN_BITSTREAM_GENERATE_ERROR` — root cause: REQP-123 (pre-fix tar) |
+| `afi-033c546a9698c9134` | 1×1 | `2026_03_18-004125` | A2 / 15.625 MHz | cancelled/ignore | Same broken tar — do not use |
+| `afi-0a3e524ae986734e5` | 2×2 | `2026_03_18-020509` | A2 / 15.625 MHz | cancelled/ignore | Pre-fix tar — do not use |
+
+> All AFIs above were built from tars that predate the REQP-123 fix and will fail bitgen. The next valid AFI will be from the current in-progress build.
