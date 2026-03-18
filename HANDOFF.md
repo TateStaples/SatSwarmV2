@@ -18,73 +18,52 @@ The repository's documentation has been modularized:
 
 ## 2. Last Agent Session (2026-03-18, continued — bigger_ladder timing fix)
 
+**Primary objectives completed this session:**
+1. Identified root cause of all prior AFI failures: DRC REQP-123 (fixed).
+2. Discovered and fixed timing failure at 150 MHz in `vde_heap.sv` (bigger_ladder).
+3. Verified RTL fix via Verilator simulation: `run_bigger_ladder.sh` 98/98 PASSED.
+4. Launched new 1×1 build at 150 MHz (A1 recipe) with the pipeline fix — **currently running**.
+
 ### REQP-123 DRC Root Cause & Fix
 
-All prior AFI submissions failed with `UNKNOWN_BITSTREAM_GENERATE_ERROR`. AWS backend Vivado logs revealed the true cause: **DRC REQP-123** — `MMCME4_ADV.CLKIN1` was driven by `1'b0` (constant) instead of a real toggling clock.
+All prior AFI submissions failed with `UNKNOWN_BITSTREAM_GENERATE_ERROR`. AWS backend Vivado logs revealed the true cause: **DRC REQP-123** — `MMCME4_ADV.CLKIN1` was driven by `1'b0` (constant) instead of a real toggling clock. AWS `ingest.tcl` resets all DRC severities to ERROR before `write_bitstream`, making local Warning suppressions ineffective.
 
-**Fix** (1 line, `cl_satswarm.sv:94`):
+**Fix** (1 line, `cl_satswarm.sv:94`, commit `fd6a0a3`):
 ```diff
 - .i_clk_hbm_ref (1'b0),
 + .i_clk_hbm_ref (clk_hbm_ref),
 ```
 
-### Timing Failure at 150 MHz (A1 Recipe)
+**Do NOT resubmit any tars built before this fix** — they will all fail AWS bitgen with REQP-123.
 
-After fixing REQP-123, a new 1×1 build (tag `2026_03_18-120815`) completed but has **timing failure**: WNS = -18.135 ns at 150 MHz.
+### Timing Failure at 150 MHz — bigger_ladder
 
-**Critical path**: `vde_heap.sv`, `BUMP_UPDATE_WRITE` state — reads BRAM, adds `bump_increment_q`, writes result back to BRAM in one cycle. The combinational path is 24.6 ns (176 logic levels, 145 CARRY8). Clock period is 6.667 ns.
+A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but had **WNS = -18.135 ns**. Do not submit this tar.
 
-**Do NOT submit tag `2026_03_18-120815` to AWS** — timing failure means the design will malfunction.
+**Root cause**: `vde_heap.sv` `BUMP_UPDATE_WRITE` state — BRAM read output fed directly into 32-bit adder → BRAM write data in one cycle (24.6 ns path, 176 logic levels, 145 CARRY8). Clock period is 6.667 ns.
 
-**Fix**: Add a `BUMP_UPDATE_PIPE` state between `BUMP_UPDATE_READ` and `BUMP_UPDATE_WRITE` to register the BRAM output before the adder. See `Changes.md` for details.
+**Fix** (`vde_heap.sv`, commit `bab99f4`): Added `BUMP_UPDATE_PIPE` state that registers `rdata_h1` into `bump_rdata_q` before the adder. `BUMP_UPDATE_WRITE` uses `bump_rdata_q` instead of the raw BRAM output.
 
-**Verification gate**: must pass `sim/scripts/run_bigger_ladder.sh` (98 CNF regression tests via Verilator) before launching FPGA rebuild.
-
----
-
-## 3. Last Agent Session (2026-03-18)
-
-This handoff supersedes all prior snapshots for active work status.
-
-**Primary objectives completed this session:**
-1. Completed the 1×1 BuildAll successfully (tag `2026_03_18-004125`, build time ~31 min).
-2. Submitted 1×1 AFI — received `afi-0edbf121d0cabe2b3` / `agfi-0610ea9ddef56b71d`. AFI **failed** with `UNKNOWN_BITSTREAM_GENERATE_ERROR` (transient AWS backend error, not an RTL bug). Tar is already on S3 and can be re-submitted immediately.
-3. Switched design files from 1×1 to 2×2 grid (4 solver cores).
-4. Completed the 2×2 BuildAll successfully (tag `2026_03_18-020509`, build time ~62 min). Timing met (WNS=+0.711 ns, identical to 1×1).
-5. Discovered and documented the HDK environment setup workaround (see Operational Notes).
-
-**Actions taken:**
-- Changed `GRID_X=1, GRID_Y=1` → `GRID_X=2, GRID_Y=2` in four files (see Key Active Parameters).
-- Launched 2×2 BuildAll and confirmed synthesis bound `GRID_X=2, GRID_Y=2, NUM_CORES=4`.
-- Verified both tars are on disk. 1×1 tar is already uploaded to S3. 2×2 tar has not yet been uploaded.
+**Verification**: `sim/scripts/run_bigger_ladder.sh` — **98/98 PASSED** after fix.
 
 ---
 
 ## 3. Current Project State
 
-- **Design configuration**: 2×2 grid (4 solver cores) — design files are currently set to GRID_X=2, GRID_Y=2.
-- **Build process**: Not running. Both builds complete.
-- **Latest 1×1 log**: `deploy/logs/buildall_1x1_20260318.log`
-- **Latest 2×2 log**: `deploy/logs/buildall_2x2_20260318.log`
+- **Design configuration**: 1×1 grid (1 solver core) — `GRID_X=1, GRID_Y=1`
+- **Build process**: ⏳ **RUNNING** — PID 35679, log `/home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log`
+- **Clock**: A1 recipe (`clk_out1_clk_mmcm_a` = 150 MHz, 6.667 ns)
 
-### Completed Build Artifacts
+### Build Artifacts
 
-| Build | Tag | post_route.dcp | Developer_CL.tar | S3 | AFI |
-|---|---|---|---|---|---|
-| 1×1 | `2026_03_18-004125` | ✅ | ✅ | ✅ uploaded | ❌ `afi-0edbf121d0cabe2b3` failed (transient); retry: `afi-033c546a9698c9134` pending |
-| 2×2 | `2026_03_18-020509` | ✅ | ✅ | ✅ uploaded | ⏳ `afi-0a3e524ae986734e5` pending |
+| Build | Tag | Timing | Developer_CL.tar | S3 | AFI | Notes |
+|---|---|---|---|---|---|---|
+| 1×1 A2 | `2026_03_18-004125` | WNS=+0.711 ns ✅ | ✅ | ✅ | ❌ REQP-123 fail | Pre-fix, **do not resubmit** |
+| 2×2 A2 | `2026_03_18-020509` | WNS=+0.711 ns ✅ | ✅ | ✅ | ⏳ `afi-0a3e524ae986734e5` | Pre-fix, **do not resubmit** |
+| 1×1 A1 | `2026_03_18-120815` | WNS=-18.135 ns ❌ | ✅ | ❌ | — | Timing fail, **do not submit** |
+| 1×1 A1 pipelined | in progress | — | — | — | — | **This build** |
 
-All artifacts under:
-`src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
-
-### Timing Results (Both Builds)
-
-| Metric | 1×1 | 2×2 |
-|---|---|---|
-| WNS | +0.711 ns | +0.711 ns |
-| TNS | 0.000 ns | 0.000 ns |
-| WHS | +0.014 ns | +0.011 ns |
-| Status | MET | MET |
+All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
 ### AWS Infrastructure
 
@@ -98,65 +77,68 @@ All artifacts under:
 
 ### Key Active Parameters
 
-| Parameter | Value | Files Changed |
+| Parameter | Value | Files |
 |---|---|---|
-| `GRID_X` × `GRID_Y` | **2×2** | `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv` |
+| `GRID_X` × `GRID_Y` | **1×1** | `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv` |
 | `DDR_PRESENT` | 0 | `cl_satswarm.sv` |
 | `RESTART_CONFLICT_THRESHOLD` | 65535 (Disabled) | `satswarmv2_pkg.sv` |
-| Clock Recipe | A2 (15.625 MHz) | build command |
-
-### Active Build-Script Modification
-
-- **File**: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/scripts/build_level_1_cl.tcl`
-- **Change**: Guard added before `place_design` that downgrades DRC check `REQP-123` from ERROR to WARNING.
-- **Expected log line**: `INFO: Downgrading DRC REQP-123 to Warning for placement precheck`
+| Clock Recipe | **A1 (150 MHz)** | build command |
+| `i_clk_hbm_ref` | `clk_hbm_ref` (fixed) | `cl_satswarm.sv:94` |
 
 ---
 
 ## 4. Immediate Next Steps (For Next Agent)
 
-### Priority 1: Submit Both AFIs
+### Priority 1: Confirm Build Passes Timing
 
-**1×1 retry** (tar already on S3, no upload needed):
+Check the running build log (PID 35679):
 ```bash
-aws ec2 create-fpga-image \
-  --name "SatSwarmV2-1x1" \
-  --description "SatSwarm V2 CDCL solver, 1x1 grid, 15.625 MHz clock" \
-  --input-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-004125.Developer_CL.tar" \
-  --logs-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=logs/" \
-  --region us-east-1
+tail -20 /home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log
 ```
 
-**2×2 new submission** (upload first, then submit):
+Once it completes, verify timing:
+```bash
+grep "WNS\|Build completes\|ERROR" /home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log | tail -10
+```
+
+Pass criteria: `WNS >= 0` and `Build completes` in log. If timing still fails, check `build/reports/cl_satswarm.<tag>.post_route_timing.rpt` for the new critical path.
+
+### Priority 2: Upload and Submit AFI
+
+Once timing is met:
 ```bash
 # Upload
+TAG=<new-tag>  # from build log
 aws s3 cp \
-  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_18-020509.Developer_CL.tar \
-  s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-020509.Developer_CL.tar
+  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/${TAG}.Developer_CL.tar \
+  s3://satswarm-v2-afi-624824941978/dcp/${TAG}.Developer_CL.tar
 
 # Submit
 aws ec2 create-fpga-image \
-  --name "SatSwarmV2-2x2" \
-  --description "SatSwarm V2 CDCL solver, 2x2 grid (4 cores), 15.625 MHz clock" \
-  --input-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-020509.Developer_CL.tar" \
+  --name "SatSwarmV2-1x1-150MHz" \
+  --description "SatSwarm V2 CDCL solver, 1x1 grid, 150 MHz (A1), REQP-123+timing fixed" \
+  --input-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=dcp/${TAG}.Developer_CL.tar" \
   --logs-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=logs/" \
   --region us-east-1
 ```
 
-Save both `FpgaImageId` (for polling) and `FpgaImageGlobalId` (for loading) from each response.
+### Priority 3: Build 2×2 at 150 MHz
 
-### Priority 2: Poll Both AFIs
+After 1×1 AFI is submitted, switch to 2×2 and rebuild:
+- Change `GRID_X=1, GRID_Y=1` → `GRID_X=2, GRID_Y=2` in four files (see previous session)
+- Rerun the same build command with the same clock recipe (A1)
+- Verify timing, upload, submit
+
+### Priority 4: Poll and Load
 
 ```bash
 aws ec2 describe-fpga-images \
-  --fpga-image-ids <afi-1x1-new> <afi-2x2-new> \
+  --fpga-image-ids <afi-id> \
   --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' \
   --region us-east-1
 ```
 
-### Priority 3: Load onto F2 Instance
-
-Once an AFI is `available`:
+Once `available`:
 ```bash
 source /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/sdk_setup.sh
 sudo fpga-clear-local-image -S 0
