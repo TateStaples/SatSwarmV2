@@ -305,7 +305,7 @@ static void usage(const char *prog) {
 
 int main(int argc, char *argv[]) {
     const char *cnf_file = NULL;
-    int timeout_sec = 60;
+    int timeout_sec = 15;
     int debug_level = 0;
     int rc;
 
