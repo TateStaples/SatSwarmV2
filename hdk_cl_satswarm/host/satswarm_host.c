@@ -101,20 +101,26 @@ static int fpga_init(void) {
         return rc;
     }
 
-    // Verify version register
-    uint32_t version;
-    rc = fpga_pci_peek(ocl_bar_handle, REG_VERSION, &version);
-    if (rc) {
-        fprintf(stderr, "ERROR: Failed to read version register: %d\n", rc);
-        return rc;
+    // Poll version register until it responds correctly (MMCM lock / reset deassertion)
+    uint32_t version = 0;
+    printf("Waiting for FPGA core to come out of reset...\n");
+    for (int i = 0; i < 50; i++) {
+        rc = fpga_pci_peek(ocl_bar_handle, REG_VERSION, &version);
+        if (rc) {
+            fprintf(stderr, "ERROR: Failed to read version register: %d\n", rc);
+            return rc;
+        }
+        if (version == SATSWARM_VERSION) break;
+        printf("  [%d] version=0x%08X, retrying...\n", i, version);
+        usleep(100000); // 100ms
     }
 
     if (version != SATSWARM_VERSION) {
-        fprintf(stderr, "WARNING: Version mismatch: got 0x%08X, expected 0x%08X — continuing anyway\n",
-                version, SATSWARM_VERSION);
-    } else {
-        printf("SatSwarm version: 0x%08X (OK)\n", version);
+        fprintf(stderr, "ERROR: Core never came out of reset after 5s. version=0x%08X\n", version);
+        fprintf(stderr, "       AXI-Lite interface may be broken or wrong BAR.\n");
+        return -1;
     }
+    printf("SatSwarm version: 0x%08X (OK)\n", version);
 
     // Open DMA write channel
     dma_write_fd = fpga_dma_open_queue(FPGA_DMA_XDMA, slot_id, 0, true);
