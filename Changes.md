@@ -4,6 +4,34 @@ This document serves as an archive of major architectural pivots, difficult bugs
 
 ---
 
+## Session Log: 2026-03-18
+
+### 1×1 BuildAll — Completed
+- Tag: `2026_03_18-004125`, build time ~31 min.
+- Timing: WNS=+0.711 ns, TNS=0, WHS=+0.014 ns. All met.
+- Tar uploaded to `s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-004125.Developer_CL.tar`.
+- AFI submitted: `afi-0edbf121d0cabe2b3` / `agfi-0610ea9ddef56b71d` — **FAILED** with `UNKNOWN_BITSTREAM_GENERATE_ERROR` (transient AWS backend error). Resubmit the same tar.
+
+### 2×2 Grid Switch
+Changed `GRID_X=1, GRID_Y=1` → `GRID_X=2, GRID_Y=2` in four files:
+- `src/aws-fpga/hdk/cl/examples/cl_satswarm/design/cl_satswarm.sv` (lines 17–18)
+- `src/aws-fpga/hdk/cl/examples/cl_satswarm/design/satswarm_core_bridge.sv` (lines 19–20)
+- `src/Mega/satswarm_top.sv` (lines 3–4)
+- `src/Mega/mesh_interconnect.sv` (lines 4–5)
+
+Note: `satswarmv2_pkg.sv` was already `GRID_X=2, GRID_Y=2` by default.
+
+### 2×2 BuildAll — Completed
+- Tag: `2026_03_18-020509`, build time ~62 min.
+- Timing: WNS=+0.711 ns, TNS=0, WHS=+0.011 ns. All met.
+- Synthesis confirmed `GRID_X bound to: 2`, `GRID_Y bound to: 2`, `NUM_CORES bound to: 4`.
+- Tar on disk, not yet uploaded to S3 or submitted as AFI.
+
+### HDK Environment Workaround Discovered
+`hdk_setup.sh` cannot be sourced from this project directory. `set_common_env_vars.sh` calls `git rev-parse --show-toplevel` to set `repo_root`; since this is not a git repo, `repo_root` is empty and `AWS_FPGA_REPO_DIR` gets zeroed out, causing Vivado's `build_all.tcl` to fail with "HDK_SHELL_DIR not set". Fix: export all HDK env vars manually in the same shell/bash-c block as the build command. See `Deploy.md` and `HANDOFF.md` for the complete export block.
+
+---
+
 ## Synthesis Attempt History
 
 Synthesizing a complex CDCL solver for AWS F2 (Xilinx VU47P) required multiple iterations to fit within timing and memory (OOM) constraints.

@@ -1,82 +1,115 @@
-# FPGA Deployment Instructions 🚀
+# FPGA Deployment Instructions
 
-This document outlines the final steps to deploy the SatSwarm V2 generated bitstream to an AWS F2 instance.
+This document outlines the final steps to deploy SatSwarm V2 to an AWS F2 instance.
+
+---
 
 ## 1. Bitstream Artifacts
 
-The final, fully routed design checkpoint (DCP) and the packaged AWS tarball are located here:
+All artifacts are under:
+`/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
-- **Tarball (for AWS ingestion):** `/home/ubuntu/src/project_data/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_05-145659.Developer_CL.tar`
-- **Post-Route DCP:** `/home/ubuntu/src/project_data/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_05-145659.post_route.dcp`
+### 1×1 Build (tag `2026_03_18-004125`)
 
-### Implementation Metrics
-The 2026_03_05 BuildAll (Attempt 3: ImplCL only) completed successfully with the following critical metrics:
-- **Completion Time**: ~3 hours 10 mins (18:44 UTC)
-- **Worst Negative Slack (WNS)**: `+0.711 ns` (Timing MET for 15.625 MHz clock)
-- **Total Negative Slack (TNS)**: `0.000 ns`
-- **Worst Hold Slack (WHS)**: `+0.011 ns`
+- **Tarball**: `2026_03_18-004125.Developer_CL.tar`
+- **Post-Route DCP**: `cl_satswarm.2026_03_18-004125.post_route.dcp`
+- **S3**: `s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-004125.Developer_CL.tar` ✅ uploaded
+- **AFI status**: `afi-0edbf121d0cabe2b3` — **FAILED** (transient `UNKNOWN_BITSTREAM_GENERATE_ERROR`; resubmit using tar already on S3)
+
+### 2×2 Build (tag `2026_03_18-020509`)
+
+- **Tarball**: `2026_03_18-020509.Developer_CL.tar`
+- **Post-Route DCP**: `cl_satswarm.2026_03_18-020509.post_route.dcp`
+- **S3**: not yet uploaded
+- **AFI status**: not yet submitted
+
+### Timing Results
+
+| Metric | 1×1 (`2026_03_18-004125`) | 2×2 (`2026_03_18-020509`) |
+|---|---|---|
+| WNS | +0.711 ns | +0.711 ns |
+| TNS | 0.000 ns | 0.000 ns |
+| WHS | +0.014 ns | +0.011 ns |
+| Build time | ~31 min | ~62 min |
+| Status | Timing MET | Timing MET |
 
 ---
 
 ## 2. Amazon FPGA Image (AFI) Creation Workflow
 
-To load this design onto an F2 instance, you must ask AWS to ingest the `.Developer_CL.tar` file and generate an Amazon FPGA Image (AFI).
-
-### Step 2a: Upload the Tarball to S3
-AWS requires the bitstream to be in an S3 bucket you own inside the same region (e.g., `us-east-1`).
+### Step 2a: Upload Tarball to S3
 
 ```bash
-# Set your bucket name (must be globally unique)
-export MY_S3_BUCKET="your-satswarm-bucket-name"
-
-# Create the bucket and a logs folder if you haven't already
-aws s3 mb s3://$MY_S3_BUCKET
-aws s3 mb s3://$MY_S3_BUCKET/logs
-
-# Copy the tarball to S3
-aws s3 cp /home/ubuntu/src/project_data/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_05-145659.Developer_CL.tar s3://$MY_S3_BUCKET/dcp/
+# For 2x2 (1x1 is already uploaded):
+aws s3 cp \
+  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_18-020509.Developer_CL.tar \
+  s3://satswarm-v2-afi-624824941978/dcp/2026_03_18-020509.Developer_CL.tar
 ```
 
-### Step 2b: Request the AFI Creation
-Tell the AWS EC2 systems to ingest the tarball and generate the AFI:
+### Step 2b: Request AFI Creation
 
+**1×1 (retry — tar already on S3):**
 ```bash
 aws ec2 create-fpga-image \
     --region us-east-1 \
-    --name "SatSwarmV2" \
+    --name "SatSwarmV2-1x1" \
     --description "SatSwarm V2 CDCL solver, 1x1 grid, 15.625 MHz clock" \
-    --input-storage-location Bucket=$MY_S3_BUCKET,Key=dcp/2026_03_05-145659.Developer_CL.tar \
-    --logs-storage-location Bucket=$MY_S3_BUCKET,Key=logs
+    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-004125.Developer_CL.tar \
+    --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
 ```
-*This command will output a JSON payload containing an `FpgaImageGlobalId` (`agfi-xxxx...`). **Save this ID, as this is what you will use to load the FPGA.*** Note: The output also includes an `FpgaImageId` (`fi-xxxx...`) which is used for checking status.
 
-### Step 2c: Wait for AWS Ingestion (30-60 mins)
-AWS runs background DRC checks on the bitstream. You can poll its status using the `fi-xxxx...` ID:
+**2×2 (new submission):**
+```bash
+aws ec2 create-fpga-image \
+    --region us-east-1 \
+    --name "SatSwarmV2-2x2" \
+    --description "SatSwarm V2 CDCL solver, 2x2 grid (4 cores), 15.625 MHz clock" \
+    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/2026_03_18-020509.Developer_CL.tar \
+    --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
+```
+
+Each command returns `FpgaImageId` (`afi-*`, for polling) and `FpgaImageGlobalId` (`agfi-*`, for loading). **Save both.**
+
+### Step 2c: Poll for Availability (30–60 min)
 
 ```bash
-aws ec2 describe-fpga-images --fpga-image-ids fi-your-id-here --query 'FpgaImages[0].State'
+aws ec2 describe-fpga-images \
+  --fpga-image-ids <afi-1x1> <afi-2x2> \
+  --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' \
+  --region us-east-1
 ```
-Wait until the command outputs `{"Code": "available"}`.
+
+Wait until `{"Code": "available"}` for the AFI you want to load.
 
 ---
 
 ## 3. Load onto the F2 Instance
 
-Once the AFI is `available`, connect to your F2 instance and flash the FPGA slot:
+Once an AFI is `available`, connect to your F2 instance:
 
 ```bash
 # Source the AWS SDK (not HDK)
-cd /home/ubuntu/src/project_data/aws-fpga
+cd /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
 source sdk_setup.sh
 
 # Clear the current slot 0 image
 sudo fpga-clear-local-image -S 0
 
-# Load the new AFI (use the agfi-xxxx ID)
-sudo fpga-load-local-image -S 0 -l agfi-your-id-here
+# Load the AFI (use the agfi-* GlobalId)
+sudo fpga-load-local-image -S 0 -l agfi-xxxxxxxxxxxxxxxxxxxx
 
-# Verify it was loaded successfully
+# Verify loaded successfully
 sudo fpga-describe-local-image -S 0 -H
 ```
 
-You are now ready to run your host-application software against the solver!
+Verify `StatusName: loaded` in the output. The solver is now running on the FPGA.
+
+---
+
+## 4. AFI History
+
+| AFI ID | Grid | Tag | Status | Notes |
+|---|---|---|---|---|
+| `afi-0edbf121d0cabe2b3` | 1×1 | `2026_03_18-004125` | FAILED | Transient `UNKNOWN_BITSTREAM_GENERATE_ERROR` |
+| `afi-033c546a9698c9134` | 1×1 | `2026_03_18-004125` | pending | Retry; GlobalId: `agfi-0fc60c975e389b731` |
+| `afi-0a3e524ae986734e5` | 2×2 | `2026_03_18-020509` | pending | New; GlobalId: `agfi-031f551cf7bed2bdd` |

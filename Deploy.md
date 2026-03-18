@@ -7,12 +7,27 @@ This document consolidates the end-to-end synthesis instructions, AWS FPGA Devel
 ## Initialize HDK Environment (Prerequisite)
 
 Before any AWS build step, the HDK environment variables must be populated.
-Note: this script must be sourced from its repository root. Sourcing it from inside SatSwarmV2 will mis-resolve the `$HDK_DIR` path.
+
+> **Warning**: `hdk_setup.sh` **cannot be sourced** from this project. It calls `git rev-parse --show-toplevel` to locate the repo root; since `SatSwarmV2` is not a git repository, this returns empty and zeros out `AWS_FPGA_REPO_DIR`, breaking all downstream paths.
+
+**Set all required vars manually:**
 
 ```bash
-cd /home/ubuntu/src/project_data/aws-fpga
-source hdk_setup.sh
+export AWS_FPGA_REPO_DIR=/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
+export HDK_DIR=$AWS_FPGA_REPO_DIR/hdk
+export HDK_COMMON_DIR=$HDK_DIR/common
+export HDK_SHELL_DIR=$HDK_COMMON_DIR/shell_stable
+export HDK_SHELL_DESIGN_DIR=$HDK_SHELL_DIR/design
+export HDK_IP_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/ip
+export HDK_BD_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/bd
+export HDK_BD_GEN_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.gen/sources_1/bd
+export CL_DIR=$AWS_FPGA_REPO_DIR/hdk/cl/examples/cl_satswarm
+export VIVADO_TOOL_VERSION=2025.2
+export XILINX_VIVADO=/opt/Xilinx/2025.2/Vivado
+export PATH=/opt/Xilinx/2025.2/Vivado/bin:$PATH
 ```
+
+These exports must live in the **same shell** (or `bash -c '...'` block) as the build command that follows, so the child process inherits them.
 
 ---
 
@@ -85,15 +100,32 @@ Clock boundaries transition across AXI paths: OCL, PCIS, and DDR.
 Once synthesis writes a clean checkpoint (`*.synthesis.dcp`), kick off implementation mapping:
 
 ```bash
-export CL_DIR=$HDK_DIR/cl/examples/cl_satswarm
+# Set env vars first (see Initialize HDK Environment above), then:
+bash -c '
+export AWS_FPGA_REPO_DIR=/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
+export HDK_DIR=$AWS_FPGA_REPO_DIR/hdk
+export HDK_COMMON_DIR=$HDK_DIR/common
+export HDK_SHELL_DIR=$HDK_COMMON_DIR/shell_stable
+export HDK_SHELL_DESIGN_DIR=$HDK_SHELL_DIR/design
+export HDK_IP_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/ip
+export HDK_BD_SRC_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.srcs/sources_1/bd
+export HDK_BD_GEN_DIR=$HDK_COMMON_DIR/ip/cl_ip/cl_ip.gen/sources_1/bd
+export CL_DIR=$AWS_FPGA_REPO_DIR/hdk/cl/examples/cl_satswarm
+export VIVADO_TOOL_VERSION=2025.2
+export XILINX_VIVADO=/opt/Xilinx/2025.2/Vivado
+export PATH=/opt/Xilinx/2025.2/Vivado/bin:$PATH
 cd $CL_DIR/build/scripts
-
-python3 $HDK_DIR/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
-  -c cl_satswarm -f BuildAll --no-encrypt \
-  --aws_clk_gen --clock_recipe_a A2 --clock_recipe_b B0 \
-  --clock_recipe_c C0 --clock_recipe_hbm H0 \
-  -o Explore > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/buildall.log 2>&1 &
+nohup python3 $AWS_FPGA_REPO_DIR/hdk/common/shell_stable/build/scripts/aws_build_dcp_from_cl.py \
+  -c cl_satswarm -f BuildAll --no-encrypt --aws_clk_gen \
+  --clock_recipe_a A2 --clock_recipe_b B0 --clock_recipe_c C0 --clock_recipe_hbm H0 \
+  -o Explore \
+  > /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/buildall_<tag>.log 2>&1 &
+echo "Build PID: $!"
+'
 ```
+
+The output tar lands at:
+`$CL_DIR/build/checkpoints/<tag>.Developer_CL.tar`
 
 ### Skipping Synthesis (`ImplCL`)
 
@@ -117,13 +149,13 @@ Tarball location:
 
 ### 1. Upload to S3 Bucket
 
-```bash
-# Create bucket and logs dir (one-time)
-aws s3 mb s3://<your-bucket>
-aws s3 mb s3://<your-bucket>/logs
+S3 bucket: `satswarm-v2-afi-624824941978` (already exists; `aws s3 ls` is denied by IAM but direct-path operations work).
 
-# Upload DCP
-aws s3 cp $CL_DIR/build/checkpoints/to_aws/*.Developer_CL.tar s3://<your-bucket>/dcp/
+```bash
+# Upload tar (replace <tag> with actual timestamp tag)
+aws s3 cp \
+  $CL_DIR/build/checkpoints/<tag>.Developer_CL.tar \
+  s3://satswarm-v2-afi-624824941978/dcp/<tag>.Developer_CL.tar
 ```
 
 ### 2. Create the AFI
@@ -131,10 +163,10 @@ aws s3 cp $CL_DIR/build/checkpoints/to_aws/*.Developer_CL.tar s3://<your-bucket>
 ```bash
 aws ec2 create-fpga-image \
     --region us-east-1 \
-    --name "SatSwarmV2" \
-    --description "SatSwarm V2 CDCL solver, 1x1 grid, 15.625 MHz clock" \
-    --input-storage-location Bucket=<your-bucket>,Key=dcp/<filename>.Developer_CL.tar \
-    --logs-storage-location Bucket=<your-bucket>,Key=logs
+    --name "SatSwarmV2-<grid>" \
+    --description "SatSwarm V2 CDCL solver, <NxN> grid, 15.625 MHz clock" \
+    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/<tag>.Developer_CL.tar \
+    --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
 ```
 
 *Save the returned FpgaImageGlobalId (`agfi-*`).*
