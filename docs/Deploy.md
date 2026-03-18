@@ -53,6 +53,176 @@ Before embarking on a full Vivado build (which can take 10+ hours and consume hu
 
 ---
 
+## Testing & Simulation (Pre-Synthesis Gate)
+
+Run these checks in order before every Vivado build. Verilator catches logic bugs in seconds; Vivado synthesis takes hours and consumes significant RAM.
+
+### Prerequisites
+
+```bash
+# Verilator (one-time install; v5.020 confirmed working)
+sudo apt-get install -y verilator
+
+# All sim commands below run from the sim directory
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+```
+
+---
+
+### 1. Build the Verilator Binary
+
+The Makefile produces grid-specific binaries in separate `obj_dir_*` folders.
+
+| Target | Grid | Binary | Use |
+|---|---|---|---|
+| `make build_1x1` | 1×1 | `obj_dir_1x1/Vtb_satswarmv2` | Default regression and CI |
+| `make build_2x2` | 2×2 | `obj_dir_2x2/Vtb_satswarmv2` | Multi-core soundness (4 cores) |
+| `make build_3x3` | 3×3 | `obj_dir_3x3/Vtb_satswarmv2` | 9-core scalability tests |
+| `make mini` | 1×1 Mini DPLL | `obj_dir_mini/Vtb_mini` | DPLL-only baseline (no CDCL) |
+| `make test_vde_heap` | — | `obj_dir/Vtb_vde_heap` | Variable-decision heap unit test |
+
+```bash
+# Most common: 1x1 build
+make build_1x1
+
+# After building 1x1, create the canonical obj_dir symlink that run_bigger_ladder.sh uses:
+ln -sfn obj_dir_1x1 obj_dir
+```
+
+> **Note**: `build` (no suffix) is an alias for `build_1x1` and also copies the binary to `obj_dir/`. The symlink is more reliable for scripts that look for `obj_dir/Vtb_satswarmv2`.
+
+---
+
+### 2. Run a Single CNF File
+
+Use `scripts/run_cnf.sh` to drive the 1×1 binary against any DIMACS `.cnf` file:
+
+```bash
+# Basic usage
+bash scripts/run_cnf.sh tests/unit_tests/simple_sat1.cnf SAT
+
+# With explicit cycle limit and debug output
+bash scripts/run_cnf.sh tests/unit_tests/simple_unsat1.cnf UNSAT 2000000 +DEBUG=1
+```
+
+Or invoke the binary directly with Verilator plus-args:
+
+```bash
+./obj_dir/Vtb_satswarmv2 \
+  +CNF=tests/generated_instances/sat_50v_215c_1.cnf \
+  +EXPECT=SAT \
+  +TIMEOUT=5000000 \
+  +DEBUG=0
+```
+
+**Debug levels** (pass as `+DEBUG=<level>`):
+
+| Level | Output |
+|---|---|
+| `0` | Silent — fastest; for regression |
+| `1` | FSM state changes, conflict variables, decisions, learned clauses |
+| `2` | Full verbosity including watch-list replacements |
+
+> **Critical**: The argument is `+EXPECT=`, **not** `+EXPECTED=`. A typo silently ignores the check.
+
+**Mini DPLL baseline** (no CDCL — useful for isolating BCP vs. conflict-analysis bugs):
+
+```bash
+bash scripts/run_mini_cnf.sh tests/unit_tests/simple_sat1.cnf SAT
+```
+
+---
+
+### 3. Run the Full Regression (Bigger Ladder)
+
+`run_bigger_ladder.sh` runs every `.cnf` file in `tests/generated_instances/` (98 files, 4v–75v). File names encode expected results: files containing `sat` → expect SAT, `unsat` → expect UNSAT.
+
+```bash
+# Requires the obj_dir symlink (set up in step 1):
+ln -sfn obj_dir_1x1 obj_dir
+
+bash scripts/run_bigger_ladder.sh
+```
+
+Expected output ends with:
+```
+Total Tests: 98
+Passed:      98
+Failed:      0
+ALL TESTS PASSED
+```
+
+To run only the unit-test subset (minimal and pure-literal cases in `tests/unit_tests/`):
+
+```bash
+bash scripts/run_unit_tests.sh
+```
+
+This script compiles and runs dedicated per-module testbenches for `tb_vde`, `tb_trail_manager`, and `tb_cae`.
+
+---
+
+### 4. VDE Heap Unit Test
+
+The variable-decision heap (`vde_heap.sv`) has a dedicated testbench that tests the BUMP_UPDATE pipeline fix (commit `bab99f4`). Always run this after any change to `vde_heap.sv`:
+
+```bash
+make test_vde_heap
+```
+
+---
+
+### 5. Multi-Core Soundness (2×2 Build)
+
+```bash
+make build_2x2
+
+# Run a single file against the 4-core build
+./obj_dir_2x2/Vtb_satswarmv2 \
+  +CNF=tests/generated_instances/sat_50v_215c_1.cnf \
+  +EXPECT=SAT +TIMEOUT=5000000 +DEBUG=0
+```
+
+> **Note**: `tb_satswarmv2.sv` references `dut.cols[0].rows[1]`, `dut.cols[1].rows[0]`, and `dut.cols[1].rows[1]` under `ifdef MULTICORE`. Verilator resolves these hierarchical paths at elaboration time, so only `GRID_X≥2, GRID_Y≥2` is supported. A true 1×2 config requires generate-based signal aliasing in the testbench.
+
+---
+
+### 6. AWS HDK XSim Integration Test
+
+Run this before submitting to Vivado to verify the AXI shell interconnect is wired correctly:
+
+```bash
+# HDK env must be set (see "Initialize HDK Environment" above)
+cd /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts
+
+# Single AWS BFM smoke test
+make TEST=test_satswarm_aws
+```
+
+Expected: `TEST: test_satswarm_aws    RESULT: *** TEST PASSED ***    Time: 11380 ns`
+
+**Full AWS regression over all generated instances** (XSim is ~10× slower than Verilator; each file has a 180 s timeout):
+
+```bash
+# From the SatSwarmV2 root
+bash sim/scripts/run_aws_regression.sh
+```
+
+> **Warning**: `run_aws_regression.sh` requires `$HDK_DIR` to be set. Use the manual env-var block from "Initialize HDK Environment" first.
+
+---
+
+### Testing Workflow Summary
+
+```
+make build_1x1 && ln -sfn obj_dir_1x1 obj_dir   # build once
+make test_vde_heap                                 # heap unit test
+bash sim/scripts/run_bigger_ladder.sh              # 98-file regression
+# If all pass → proceed to BRAM inference check, then Vivado build
+```
+
+---
+
 ## Verifying BRAM Inference
 
 A key scaling blocker for SAT solvers is preventing Vivado from dissolving massive memory arrays into individual flip-flops. Always test array inference on `pse.sv` and `trail_manager.sv` before a full build.
@@ -86,7 +256,7 @@ cd /home/ubuntu/src/project_data/SatSwarmV2/deploy
 - **Clock Recipe A (`--clock_recipe_a A1`)**: Configures `clk_out1_clk_mmcm_a` = 150 MHz (6.667 ns period). This is the clock domain used by the SatSwarm core (`satswarm_core_bridge`, `vde_heap`, etc.).
 - **`--aws_clk_gen`**: Required when specifying custom clock recipes. Without this flag the build script rejects `--clock_recipe_*` arguments.
 
-*Note: A2 (15.625 MHz) was used in earlier sessions and met timing but is very slow. A0 caused OOM during Timing Optimization at prior attempts. A1 (150 MHz) is the current target — timing closes after the `vde_heap` pipeline fix (see [Changes.md](Changes.md)).*
+*Note: **A2 (15.625 MHz) is the current working clock** — WNS = +0.711 ns on both 1×1 and 2×2 builds. A1 (150 MHz) requires additional RTL pipelining in `pos_mem`/bubble logic (WNS = −18.820 ns after `vde_heap` fix alone). Do not attempt A1 until A2 deployment is confirmed. See [Changes.md](Changes.md) for history.*
 
 ### Clock Domain Crossing Setup
 
@@ -119,7 +289,7 @@ LOG=/home/ubuntu/buildall_$(date +%Y%m%d_%H%M%S).log
 cd $CL_DIR/build/scripts
 nohup python3 aws_build_dcp_from_cl.py \
   --cl cl_satswarm --aws_clk_gen \
-  --clock_recipe_a A1 --clock_recipe_b B0 --clock_recipe_c C0 \
+  --clock_recipe_a A2 --clock_recipe_b B0 --clock_recipe_c C0 \
   > "$LOG" 2>&1 &
 echo "PID=$! LOG=$LOG"
 ```
@@ -138,8 +308,8 @@ If your `post_synth.dcp` checkpoint is clean, skip the synthesis phase using the
 ```bash
 cd $CL_DIR/build/scripts
 python3 aws_build_dcp_from_cl.py \
-  --cl cl_satswarm -f ImplCL -t "2026_03_18-120815" \
-  --aws_clk_gen --clock_recipe_a A1 --clock_recipe_b B0 --clock_recipe_c C0 \
+  --cl cl_satswarm -f ImplCL -t "2026_03_18-163435" \
+  --aws_clk_gen --clock_recipe_a A2 --clock_recipe_b B0 --clock_recipe_c C0 \
   > /home/ubuntu/build_impl.log 2>&1 &
 ```
 *Note: `ImplCL` skips tarball creation. You will need to manually generate `Developer_CL.tar` if using this flow.*

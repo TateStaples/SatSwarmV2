@@ -26,7 +26,7 @@ SatSwarmV2 implements the conflict-driven clause learning (CDCL) algorithm—the
 
 - **`src/Mega/`** — Core RTL solver implementation (all SystemVerilog)
 - **`src/Mini/`** — Simplified solver for development/debugging
-- **`sim/`** — Verilator-based simulation (see [Verification.md](Verification.md))
+- **`sim/`** — Verilator-based simulation (see [Verification.md](docs/Verification.md))
 - **`hdk_cl_satswarm/`** — **AWS HDK wrapper, Git-tracked**
   - Contains: design (RTL), verif (tests), build/ (synthesis scripts), host/ (C code)
   - Files are copied from/symlinked to `$HDK_DIR/cl/examples/cl_satswarm/` during setup
@@ -240,11 +240,11 @@ The solver has been validated against **UF50 (SAT)** and **UUF50 (UNSAT)** bench
 This documentation has been split into focused chunks to make navigation easier:
 
 - **[README.md](README.md)** (You are here): Architecture overview, repository structure, and quick-start instructions.
-- **[Deploy.md](Deploy.md)**: Details the AWS HDK synthesis methodology. Includes Vivado settings, quick-check steps, and DDR/clock domain crossing setup.
-- **[FPGA.md](FPGA.md)**: Final bitstream details and Amazon FPGA Image (AFI) creation instructions.
-- **[Verification.md](Verification.md)**: Testing and debugging guide. Details Verilator simulation targets, regression scripts, XSim integration sweeps, and Vivado BRAM inference checks.
-- **[Changes.md](Changes.md)**: Historical log of bug fixes, synthesis attempts, memory profiling, and major architectural design shifts over time.
-- **[HANDOFF.md](HANDOFF.md)**: Living document updating the current state of the design, latest development blockers, key parameters, and actionable next steps. Must be updated by any departing developer (or AI agent).
+- **[Deploy.md](docs/Deploy.md)**: Details the AWS HDK synthesis methodology. Includes Vivado settings, quick-check steps, and DDR/clock domain crossing setup.
+- **[FPGA.md](docs/FPGA.md)**: Final bitstream details and Amazon FPGA Image (AFI) creation instructions.
+- **[Verification.md](docs/Verification.md)**: Testing and debugging guide. Details Verilator simulation targets, regression scripts, XSim integration sweeps, and Vivado BRAM inference checks.
+- **[Changes.md](docs/Changes.md)**: Historical log of bug fixes, synthesis attempts, memory profiling, and major architectural design shifts over time.
+- **[HANDOFF.md](docs/HANDOFF.md)**: Living document updating the current state of the design, latest development blockers, key parameters, and actionable next steps. Must be updated by any departing developer (or AI agent).
 
 ---
 

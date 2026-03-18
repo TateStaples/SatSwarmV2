@@ -16,13 +16,20 @@ The repository's documentation has been modularized:
 
 ---
 
-## 2. Last Agent Session (2026-03-18, continued — bigger_ladder timing fix)
+## 2. Last Agent Session (2026-03-18, continued — strategy change to A2/15.625 MHz)
 
 **Primary objectives completed this session:**
 1. Identified root cause of all prior AFI failures: DRC REQP-123 (fixed).
 2. Discovered and fixed timing failure at 150 MHz in `vde_heap.sv` (bigger_ladder).
 3. Verified RTL fix via Verilator simulation: `run_bigger_ladder.sh` 98/98 PASSED.
-4. Launched new 1×1 build at 150 MHz (A1 recipe) with the pipeline fix — **currently running**.
+4. Killed failing A1 (150 MHz) build — phys_opt showed WNS = -18.820 ns on a *second* ~25 ns path in `pos_mem`/bubble logic beyond the one already fixed. 150 MHz requires more RTL pipelining work.
+5. **Strategy change**: switched to A2 (15.625 MHz) which met timing cleanly (WNS = +0.711 ns) — get a working AFI deployed first, tackle 150 MHz timing closure separately.
+6. A2 build completed but failed with **WNS = -1.627 ns** due to CDC violation: `solver_done/sat/unsat` (user clock domain) → `cl_sh_status_vled` (shell `clk_main_a0` domain) with no synchronizer.
+7. **CDC fix** (commit `ef79614`): added `xpm_cdc_single` synchronizers for 3 status bits in `cl_satswarm.sv:840-848`.
+8. Machine crashed (OOM — Claude process grew to ~30 GB RSS while Vivado used ~7 GB, exhausting 30 GB RAM).
+9. After reboot: launched new A2 build with CDC fix — **completed** (WNS=+0.711 ns).
+10. Uploaded tar to S3, submitted AFI — **afi-08366141b8a92b36f** now **available**.
+11. Kicked off 2×2 A2 build (GRID_X=2, GRID_Y=2) — **completed** (WNS=+0.711 ns). Uploaded tar, created **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4).
 
 ### REQP-123 DRC Root Cause & Fix
 
@@ -50,9 +57,12 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 
 ## 3. Current Project State
 
-- **Design configuration**: 1×1 grid (1 solver core) — `GRID_X=1, GRID_Y=1`
-- **Build process**: ⏳ **RUNNING** — PID 35679, log `/home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log`
-- **Clock**: A1 recipe (`clk_out1_clk_mmcm_a` = 150 MHz, 6.667 ns)
+- **Design configuration**: Design files currently set to 2×2 (`GRID_X=2, GRID_Y=2`). Revert to 1×1 for 1×1 builds.
+- **1×1 build**: ✅ **COMPLETE** — log `/home/ubuntu/buildall_1x1_a2_cdc_20260318_163435.log`
+- **1×1 AFI**: ✅ **available** — afi-08366141b8a92b36f (agfi-0f933cb959906a494)
+- **2×2 build**: ✅ **COMPLETE** — log `/home/ubuntu/buildall_2x2_a2_20260318_171846.log`, tag `2026_03_18-171846`, WNS=+0.711 ns
+- **2×2 AFI**: ✅ **submitted** — afi-01ef63d452c8940a2 (agfi-0193eda3eade22ae4); poll for `available` then load with `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+- **Clock**: A2 recipe (`clk_main_a0` = 15.625 MHz, 64 ns) — switched from A1 due to unresolved 150 MHz timing
 
 ### Build Artifacts
 
@@ -61,7 +71,10 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 1×1 A2 | `2026_03_18-004125` | WNS=+0.711 ns ✅ | ✅ | ✅ | ❌ REQP-123 fail | Pre-fix, **do not resubmit** |
 | 2×2 A2 | `2026_03_18-020509` | WNS=+0.711 ns ✅ | ✅ | ✅ | ⏳ `afi-0a3e524ae986734e5` | Pre-fix, **do not resubmit** |
 | 1×1 A1 | `2026_03_18-120815` | WNS=-18.135 ns ❌ | ✅ | ❌ | — | Timing fail, **do not submit** |
-| 1×1 A1 pipelined | in progress | — | — | — | — | **This build** |
+| 1×1 A1 pipelined | `2026_03_18-142140` | WNS=-18.820 ns ❌ | ✅ | ❌ | — | 2nd timing fail (pos_mem/bubble), killed |
+| 1×1 A2 (REQP+pipe fixed) | `2026_03_18-151300` | WNS=-1.627 ns ❌ | ✅ | ❌ | — | CDC fail: vled crossing user→shell clk, fixed in commit ef79614 |
+| 1×1 A2 (CDC fixed) | `2026_03_18-163435` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **available** | afi-08366141b8a92b36f, agfi-0f933cb959906a494 |
+| 2×2 A2 (CDC fixed) | `2026_03_18-171846` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **submitted** | afi-01ef63d452c8940a2, agfi-0193eda3eade22ae4 |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -79,72 +92,42 @@ All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints
 
 | Parameter | Value | Files |
 |---|---|---|
-| `GRID_X` × `GRID_Y` | **1×1** | `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv` |
+| `GRID_X` × `GRID_Y` | **2×2** (for 2×2 build; revert to 1×1 for 1×1) | `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv`, `solver_core.sv` |
 | `DDR_PRESENT` | 0 | `cl_satswarm.sv` |
 | `RESTART_CONFLICT_THRESHOLD` | 65535 (Disabled) | `satswarmv2_pkg.sv` |
-| Clock Recipe | **A1 (150 MHz)** | build command |
+| Clock Recipe | **A2 (15.625 MHz)** | build command |
 | `i_clk_hbm_ref` | `clk_hbm_ref` (fixed) | `cl_satswarm.sv:94` |
 
 ---
 
 ## 4. Immediate Next Steps (For Next Agent)
 
-### Priority 1: Confirm Build Passes Timing
+### Priority 1: Load 1×1 AFI and Test (Ready Now)
 
-Check the running build log (PID 35679):
-```bash
-tail -20 /home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log
-```
-
-Once it completes, verify timing:
-```bash
-grep "WNS\|Build completes\|ERROR" /home/ubuntu/buildall_1x1_150mhz_pipelined_20260318_142140.log | tail -10
-```
-
-Pass criteria: `WNS >= 0` and `Build completes` in log. If timing still fails, check `build/reports/cl_satswarm.<tag>.post_route_timing.rpt` for the new critical path.
-
-### Priority 2: Upload and Submit AFI
-
-Once timing is met:
-```bash
-# Upload
-TAG=<new-tag>  # from build log
-aws s3 cp \
-  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/${TAG}.Developer_CL.tar \
-  s3://satswarm-v2-afi-624824941978/dcp/${TAG}.Developer_CL.tar
-
-# Submit
-aws ec2 create-fpga-image \
-  --name "SatSwarmV2-1x1-150MHz" \
-  --description "SatSwarm V2 CDCL solver, 1x1 grid, 150 MHz (A1), REQP-123+timing fixed" \
-  --input-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=dcp/${TAG}.Developer_CL.tar" \
-  --logs-storage-location "Bucket=satswarm-v2-afi-624824941978,Key=logs/" \
-  --region us-east-1
-```
-
-### Priority 3: Build 2×2 at 150 MHz
-
-After 1×1 AFI is submitted, switch to 2×2 and rebuild:
-- Change `GRID_X=1, GRID_Y=1` → `GRID_X=2, GRID_Y=2` in four files (see previous session)
-- Rerun the same build command with the same clock recipe (A1)
-- Verify timing, upload, submit
-
-### Priority 4: Poll and Load
-
-```bash
-aws ec2 describe-fpga-images \
-  --fpga-image-ids <afi-id> \
-  --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' \
-  --region us-east-1
-```
-
-Once `available`:
+The 1×1 AFI is **available**. Load and verify on an F2 instance:
 ```bash
 source /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/sdk_setup.sh
 sudo fpga-clear-local-image -S 0
-sudo fpga-load-local-image -S 0 -l <agfi-id>
+sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
 sudo fpga-describe-local-image -S 0 -H
 ```
+
+### Priority 2: Poll 2×2 AFI and Load When Available
+
+2×2 tar uploaded and AFI created (afi-01ef63d452c8940a2). Poll until available (10–30 min):
+```bash
+aws ec2 describe-fpga-images --fpga-image-ids afi-01ef63d452c8940a2 \
+  --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' --region us-east-1
+```
+Then load on F2: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+
+### Priority 3: Revert to 1×1 for Future 1×1 Builds
+
+Design files were changed to GRID_X=2, GRID_Y=2 for the 2×2 build. To build 1×1 again, revert those parameters in: `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv`, `solver_core.sv`.
+
+### Deferred: 150 MHz Timing Closure
+
+The `BUMP_UPDATE_PIPE` fix alone is insufficient. Phys_opt with A1 shows WNS = -18.820 ns on a second ~25 ns path in `pos_mem`/bubble-up/down logic. The entire heap FSM has multiple long combinational chains (~25 ns each). This requires dedicated RTL pipelining work — do not attempt until the A2 working AFI is confirmed deployed.
 
 ---
 
@@ -189,4 +172,8 @@ There are two copies of the CL design files with **different inodes** — only o
 
 ---
 
-**Note to next agent**: Update this file after your session with final AFI IDs (1×1 retry and 2×2), their states, and any new issues encountered.
+**AFI (2026-03-18)**:
+- **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — SatSwarmV2-1x1-15MHz, tag `2026_03_18-163435` — **available**. Load: `sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494`
+- **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4) — SatSwarmV2-2x2-15MHz, tag `2026_03_18-171846` — **submitted**; poll for `available`, then load: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+
+**Note to next agent**: 2×2 build completed and AFI submitted; update HANDOFF when 2×2 AFI state becomes `available` if you poll it.
