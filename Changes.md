@@ -4,6 +4,28 @@ This document serves as an archive of major architectural pivots, difficult bugs
 
 ---
 
+## Session Log: 2026-03-18 (continued — bigger_ladder timing fix)
+
+### REQP-123 DRC Fix
+Root cause of all prior AFI failures: `cl_satswarm.sv:94` passed `1'b0` to `i_clk_hbm_ref`, which feeds `MMCME4_ADV.CLKIN1`. With `CLKINSEL=1'b1` hardcoded in the MMCM wizard, AWS ingest.tcl's DRC check fires REQP-123 (constant input to active-clock pin) and aborts bitgen. Fix: `.i_clk_hbm_ref(clk_hbm_ref)`.
+
+### Timing Failure at 150 MHz — bigger_ladder
+
+Post-fix build `2026_03_18-120815` (A1 recipe, `clk_out1_clk_mmcm_a` = 150 MHz / 6.667 ns period) failed timing with WNS = -18.135 ns.
+
+**Critical path analysis** (`post_route_timing.rpt`):
+- Source: `u_vde/u_heap/max_var_init_q_reg[1]` (FDCE)
+- Destination: `u_heap/heap_mem_reg_bram_0/DINBDIN[8]` (RAMB36E2 port B write data)
+- Data path delay: 24.575 ns (logic 10.462 ns, route 14.113 ns)
+- Logic levels: 176 (CARRY8=145, LUT1=1, LUT2=1, LUT3=24, LUT4=2, LUT5=3)
+- Vivado synthesis warning: "no optional output register could be merged into the ram block"
+
+**Root cause**: In `BUMP_UPDATE_WRITE` state (`vde_heap.sv:578-582`), `rdata_h1` (BRAM A read output) flows directly into a 32-bit adder → mux → BRAM B write data port in a single combinational path. The synthesizer merges all state-machine mux cases into one logic cone, creating the 176-level chain.
+
+**Fix**: Insert `BUMP_UPDATE_PIPE` state between `BUMP_UPDATE_READ` and `BUMP_UPDATE_WRITE`. The new state registers `rdata_h1` into `bump_rdata_q`. `BUMP_UPDATE_WRITE` then uses `bump_rdata_q` instead of the raw BRAM output, breaking the long combinational path to ≤1 register stage.
+
+---
+
 ## Session Log: 2026-03-18
 
 ### 1×1 BuildAll — Completed

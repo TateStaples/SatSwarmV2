@@ -16,7 +16,33 @@ The repository's documentation has been modularized:
 
 ---
 
-## 2. Last Agent Session (2026-03-18)
+## 2. Last Agent Session (2026-03-18, continued — bigger_ladder timing fix)
+
+### REQP-123 DRC Root Cause & Fix
+
+All prior AFI submissions failed with `UNKNOWN_BITSTREAM_GENERATE_ERROR`. AWS backend Vivado logs revealed the true cause: **DRC REQP-123** — `MMCME4_ADV.CLKIN1` was driven by `1'b0` (constant) instead of a real toggling clock.
+
+**Fix** (1 line, `cl_satswarm.sv:94`):
+```diff
+- .i_clk_hbm_ref (1'b0),
++ .i_clk_hbm_ref (clk_hbm_ref),
+```
+
+### Timing Failure at 150 MHz (A1 Recipe)
+
+After fixing REQP-123, a new 1×1 build (tag `2026_03_18-120815`) completed but has **timing failure**: WNS = -18.135 ns at 150 MHz.
+
+**Critical path**: `vde_heap.sv`, `BUMP_UPDATE_WRITE` state — reads BRAM, adds `bump_increment_q`, writes result back to BRAM in one cycle. The combinational path is 24.6 ns (176 logic levels, 145 CARRY8). Clock period is 6.667 ns.
+
+**Do NOT submit tag `2026_03_18-120815` to AWS** — timing failure means the design will malfunction.
+
+**Fix**: Add a `BUMP_UPDATE_PIPE` state between `BUMP_UPDATE_READ` and `BUMP_UPDATE_WRITE` to register the BRAM output before the adder. See `Changes.md` for details.
+
+**Verification gate**: must pass `sim/scripts/run_bigger_ladder.sh` (98 CNF regression tests via Verilator) before launching FPGA rebuild.
+
+---
+
+## 3. Last Agent Session (2026-03-18)
 
 This handoff supersedes all prior snapshots for active work status.
 

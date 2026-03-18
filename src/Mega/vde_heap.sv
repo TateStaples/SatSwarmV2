@@ -69,7 +69,7 @@ module vde_heap #(
         UNHIDE_BUBBLE_UP_READ_1, UNHIDE_BUBBLE_UP_CMP, UNHIDE_BUBBLE_UP_WRITE,
         
         BUMP_READ_POS, BUMP_CHECK_POS,
-        BUMP_UPDATE_READ, BUMP_UPDATE_WRITE,
+        BUMP_UPDATE_READ, BUMP_UPDATE_PIPE, BUMP_UPDATE_WRITE,
         BUMP_BUBBLE_UP_READ_1, BUMP_BUBBLE_UP_CMP, BUMP_BUBBLE_UP_WRITE,
         
         RESCALE_READ, RESCALE_WRITE
@@ -125,6 +125,10 @@ module vde_heap #(
 
     // Lazy decay: bump increment
     logic [ACT_W-1:0] bump_increment_q, bump_increment_d;
+
+    // Pipeline register: captures rdata_h1 in BUMP_UPDATE_PIPE, breaking the
+    // BRAM-output → adder → BRAM-DIN combinational path (timing fix: bigger_ladder)
+    logic [ENTRY_W-1:0] bump_rdata_q;
     localparam logic [ACT_W-1:0] INITIAL_BUMP = 32'd10000;
     localparam logic [ACT_W-1:0] RESCALE_THRESHOLD = {ACT_W{1'b1}} - 32'd1000000; // Near overflow
 
@@ -572,12 +576,18 @@ module vde_heap #(
 
             BUMP_UPDATE_READ: begin
                 raddr_h1 = idx_q;
+                state_d = BUMP_UPDATE_PIPE;
+            end
+
+            // Pipeline stage: register rdata_h1 before the adder to break the
+            // BRAM-output → adder → BRAM-DIN combinational path (bigger_ladder fix)
+            BUMP_UPDATE_PIPE: begin
                 state_d = BUMP_UPDATE_WRITE;
             end
-            
+
             BUMP_UPDATE_WRITE: begin
-                wdata_h1 = rdata_h1;
-                wdata_h1[ENTRY_W-1:IDX_W] = rdata_h1[ENTRY_W-1:IDX_W] + bump_increment_q;
+                wdata_h1 = bump_rdata_q;
+                wdata_h1[ENTRY_W-1:IDX_W] = bump_rdata_q[ENTRY_W-1:IDX_W] + bump_increment_q;
                 
                 we_h1 = 1'b1; waddr_h1 = idx_q; 
                 
@@ -726,6 +736,13 @@ module vde_heap #(
             // uses a stable value even when max_var grows during CNF loading.
             if (state_q == IDLE && state_d == INIT_WRITE) begin
                 max_var_init_q <= max_var;
+            end
+
+            // Pipeline register: break BRAM-output → adder → BRAM-DIN path.
+            // Latches rdata_h1 during BUMP_UPDATE_PIPE so BUMP_UPDATE_WRITE
+            // sees a registered value, reducing the combinational path to ≤1 stage.
+            if (state_q == BUMP_UPDATE_PIPE) begin
+                bump_rdata_q <= rdata_h1;
             end
 
 `ifndef SYNTHESIS
