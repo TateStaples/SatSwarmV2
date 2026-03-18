@@ -10,6 +10,10 @@
 //
 // Interfaces tied off:
 //   - SDA, PCIM, HBM, PCIe EP/RP, JTAG
+//
+// Clock note: All CL logic runs on clk_main_a0/rst_main_n_sync (the shell
+// main clock, always present). aws_clk_gen is instantiated as required by
+// the HDK elaboration flow but its extra-clock outputs are unused.
 
 `timescale 1ns/1ps
 
@@ -70,9 +74,9 @@ module cl_satswarm #(
     logic [31:0] ddr_write_addr, ddr_write_data;
 
     // =========================================================================
-
-    // =========================================================================
     // Clocking IP (AWS_CLK_GEN)
+    // Instantiated as required by HDK/sh_ddr elaboration; extra-clock outputs
+    // are unused — all CL logic runs on the shell's clk_main_a0.
     // =========================================================================
     logic gen_clk_main_a0;
     logic gen_clk_extra_a1;
@@ -113,6 +117,7 @@ module cl_satswarm #(
 
     // =========================================================================
     // AXI CDC for OCL (AXI-Lite)
+    // Both sides run on clk_main_a0 — the IP operates in pass-through mode.
     // =========================================================================
     logic        slv_ocl_awvalid, slv_ocl_awready;
     logic [31:0] slv_ocl_awaddr;
@@ -150,8 +155,8 @@ module cl_satswarm #(
         .s_axi_rvalid  (cl_ocl_rvalid),
         .s_axi_rready  (ocl_cl_rready),
 
-        .m_axi_aclk    (gen_clk_extra_a1),
-        .m_axi_aresetn (gen_rst_a1_n),
+        .m_axi_aclk    (clk_main_a0),
+        .m_axi_aresetn (rst_main_n_sync),
         .m_axi_awaddr  (slv_ocl_awaddr),
         .m_axi_awprot  (),
         .m_axi_awvalid (slv_ocl_awvalid),
@@ -175,6 +180,7 @@ module cl_satswarm #(
 
     // =========================================================================
     // AXI CDC for PCIS (512-bit)
+    // Both sides run on clk_main_a0 — the IP operates in pass-through mode.
     // =========================================================================
     logic        slv_pcis_awvalid, slv_pcis_awready;
     logic [63:0] slv_pcis_awaddr;
@@ -232,8 +238,8 @@ module cl_satswarm #(
         .s_axi_rvalid  (cl_sh_dma_pcis_rvalid),
         .s_axi_rready  (sh_cl_dma_pcis_rready),
 
-        .m_axi_aclk    (gen_clk_extra_a1),
-        .m_axi_aresetn (gen_rst_a1_n),
+        .m_axi_aclk    (clk_main_a0),
+        .m_axi_aresetn (rst_main_n_sync),
         .m_axi_awid    (slv_pcis_awid),
         .m_axi_awaddr  (slv_pcis_awaddr),
         .m_axi_awlen   (slv_pcis_awlen),
@@ -279,6 +285,7 @@ module cl_satswarm #(
 
     // =========================================================================
     // AXI CDC for DDR
+    // Both sides run on clk_main_a0 — the IP operates in pass-through mode.
     // =========================================================================
     logic        m_ddr_axi_awvalid, m_ddr_axi_awready;
     logic [63:0] m_ddr_axi_awaddr;
@@ -286,28 +293,36 @@ module cl_satswarm #(
     logic [7:0]  m_ddr_axi_awlen;
     logic [2:0]  m_ddr_axi_awsize;
     logic [1:0]  m_ddr_axi_awburst;
+    logic        m_ddr_axi_awuser;
+
     logic         m_ddr_axi_wvalid, m_ddr_axi_wready;
     logic [511:0] m_ddr_axi_wdata;
     logic [63:0]  m_ddr_axi_wstrb;
     logic         m_ddr_axi_wlast;
+
     logic [15:0] m_ddr_axi_bid;
     logic [1:0]  m_ddr_axi_bresp;
     logic        m_ddr_axi_bvalid, m_ddr_axi_bready;
+
     logic        m_ddr_axi_arvalid, m_ddr_axi_arready;
     logic [63:0] m_ddr_axi_araddr;
     logic [15:0] m_ddr_axi_arid;
     logic [7:0]  m_ddr_axi_arlen;
     logic [2:0]  m_ddr_axi_arsize;
     logic [1:0]  m_ddr_axi_arburst;
+    logic        m_ddr_axi_aruser;
+
     logic [15:0]  m_ddr_axi_rid;
     logic [511:0] m_ddr_axi_rdata;
     logic [1:0]   m_ddr_axi_rresp;
     logic         m_ddr_axi_rlast;
     logic         m_ddr_axi_rvalid, m_ddr_axi_rready;
 
+    logic         ddr_is_ready;
+
     cl_axi_clock_converter DDR_CDC (
-        .s_axi_aclk    (gen_clk_extra_a1),
-        .s_axi_aresetn (gen_rst_a1_n),
+        .s_axi_aclk    (clk_main_a0),
+        .s_axi_aresetn (rst_main_n_sync),
         .s_axi_awid    (m_ddr_axi_awid),
         .s_axi_awaddr  (m_ddr_axi_awaddr),
         .s_axi_awlen   (m_ddr_axi_awlen),
@@ -403,8 +418,8 @@ module cl_satswarm #(
     logic [31:0] ocl_wr_addr_q;
     logic [31:0] ocl_wr_data_q;
 
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             ocl_wr_pending   <= 1'b0;
             axil_wr_valid    <= 1'b0;
             ocl_wr_addr_q    <= 32'h0;
@@ -428,13 +443,13 @@ module cl_satswarm #(
         end
     end
 
-    assign slv_ocl_awready = gen_rst_a1_n;
-    assign slv_ocl_wready  = gen_rst_a1_n;
+    assign slv_ocl_awready = rst_main_n_sync;
+    assign slv_ocl_wready  = rst_main_n_sync;
 
     // B channel
     logic ocl_bvalid_q;
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n)
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync)
             ocl_bvalid_q <= 1'b0;
         else if (axil_wr_valid)
             ocl_bvalid_q <= 1'b1;
@@ -445,8 +460,8 @@ module cl_satswarm #(
     assign slv_ocl_bresp  = 2'b00;
 
     // Read Channel
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             axil_rd_valid <= 1'b0;
             axil_rd_addr  <= 32'h0;
         end else begin
@@ -459,12 +474,12 @@ module cl_satswarm #(
     end
 
     logic ocl_rd_pending;
-    assign slv_ocl_arready = gen_rst_a1_n && !ocl_rd_pending;
+    assign slv_ocl_arready = rst_main_n_sync && !ocl_rd_pending;
 
     logic ocl_rvalid_q;
     logic [31:0] ocl_rdata_q;
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             ocl_rvalid_q   <= 1'b0;
             ocl_rdata_q    <= 32'h0;
             ocl_rd_pending <= 1'b0;
@@ -492,10 +507,10 @@ module cl_satswarm #(
     logic [63:0] pcis_aw_addr_q;
     logic [7:0]  pcis_aw_len_q;
 
-    assign slv_pcis_awready = gen_rst_a1_n && !pcis_aw_pending;
+    assign slv_pcis_awready = rst_main_n_sync && !pcis_aw_pending;
 
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             pcis_aw_pending <= 1'b0;
             pcis_aw_addr_q  <= 64'h0;
             pcis_aw_len_q   <= 8'h0;
@@ -510,10 +525,10 @@ module cl_satswarm #(
         end
     end
 
-    assign slv_pcis_wready = gen_rst_a1_n && pcis_aw_pending && pcis_wr_ready;
+    assign slv_pcis_wready = rst_main_n_sync && pcis_aw_pending && pcis_wr_ready;
 
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             pcis_wr_valid <= 1'b0;
             pcis_wr_data  <= 32'h0;
             pcis_wr_addr  <= 32'h0;
@@ -530,8 +545,8 @@ module cl_satswarm #(
     // PCIS B response
     logic pcis_bvalid_q;
     logic [15:0] pcis_bid_q;
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             pcis_bvalid_q <= 1'b0;
             pcis_bid_q    <= 16'h0;
         end else begin
@@ -559,38 +574,6 @@ module cl_satswarm #(
     // =========================================================================
     // DDR4 via sh_ddr -- Bridge solver simple DDR interface to AXI4
     // =========================================================================
-    logic        m_ddr_axi_awvalid, m_ddr_axi_awready;
-    logic [63:0] m_ddr_axi_awaddr;
-    logic [15:0] m_ddr_axi_awid;
-    logic [7:0]  m_ddr_axi_awlen;
-    logic [2:0]  m_ddr_axi_awsize;
-    logic [1:0]  m_ddr_axi_awburst;
-    logic        m_ddr_axi_awuser;
-
-    logic         m_ddr_axi_wvalid, m_ddr_axi_wready;
-    logic [511:0] m_ddr_axi_wdata;
-    logic [63:0]  m_ddr_axi_wstrb;
-    logic         m_ddr_axi_wlast;
-
-    logic [15:0] m_ddr_axi_bid;
-    logic [1:0]  m_ddr_axi_bresp;
-    logic        m_ddr_axi_bvalid, m_ddr_axi_bready;
-
-    logic        m_ddr_axi_arvalid, m_ddr_axi_arready;
-    logic [63:0] m_ddr_axi_araddr;
-    logic [15:0] m_ddr_axi_arid;
-    logic [7:0]  m_ddr_axi_arlen;
-    logic [2:0]  m_ddr_axi_arsize;
-    logic [1:0]  m_ddr_axi_arburst;
-    logic        m_ddr_axi_aruser;
-
-    logic [15:0]  m_ddr_axi_rid;
-    logic [511:0] m_ddr_axi_rdata;
-    logic [1:0]   m_ddr_axi_rresp;
-    logic         m_ddr_axi_rlast;
-    logic         m_ddr_axi_rvalid, m_ddr_axi_rready;
-
-    logic         ddr_is_ready;
 
     // DDR AXI4 bridge FSM
     typedef enum logic [2:0] {
@@ -607,8 +590,8 @@ module cl_satswarm #(
     logic [7:0]  ddr_rd_len_q;
     logic [7:0]  ddr_rd_cnt;
 
-    always_ff @(posedge gen_clk_extra_a1) begin
-        if (!gen_rst_a1_n) begin
+    always_ff @(posedge clk_main_a0) begin
+        if (!rst_main_n_sync) begin
             ddr_state       <= DDR_IDLE;
             ddr_read_grant  <= 1'b0;
             ddr_read_valid  <= 1'b0;
@@ -897,8 +880,8 @@ module cl_satswarm #(
         .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
         .MAX_LITS           (MAX_LITS)
     ) u_core_bridge (
-        .clk             (gen_clk_extra_a1),
-        .rst_n_in        (gen_rst_a1_n),
+        .clk             (clk_main_a0),
+        .rst_n_in        (rst_main_n_sync),
 
         .axil_wr_valid   (axil_wr_valid),
         .axil_wr_addr    (axil_wr_addr),
