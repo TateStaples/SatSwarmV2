@@ -4,6 +4,67 @@ This document serves as an archive of major architectural pivots, difficult bugs
 
 ---
 
+## Session Log: 2026-03-19 — MMCM Lock Failure on Real F2 Hardware (clk_main_a0 Direct)
+
+### What Went Wrong
+
+On real F2 instances, the Custom Logic (CL) never came out of reset: `gen_rst_a1_n` stayed deasserted, so the entire CL remained held in reset. In XSim and Verilator, the design worked because the testbench BFMs drive clocks directly and never exercise the MMCM lock path.
+
+**Root cause**: The MMCM inside `aws_clk_gen` (`clk_mmcm_a.xci`) is configured with **PLL_CLKIN_PERIOD = 10.000 ns** (100 MHz input). Across all A-recipes, the shell drives **clk_main_a0 at 250 MHz** (4 ns period) — this was confirmed by examining `aws_gen_clk_constraints.tcl`, which hardcodes `clk_main_a0_period = 4` for A0, A1, and A2 (the 64 ns variant is marked `#NOT SUPPORTED`). The MMCM therefore receives a 250 MHz input into a cell configured for 100 MHz, pushing the VCO to ~3750 MHz (far above the valid range). It **never locks**. The HDK ties `gen_rst_a1_n` to the MMCM lock status, so the CL reset never releases on real hardware. (The previous passing builds appeared correct because `gen_clk_extra_a1` — the MMCM output — had **no timing constraint** in Vivado; the solver logic was technically unconstrained and "met timing" trivially.)
+
+### Changes Made
+
+- **All CL logic** (OCL AXI-Lite, PCIS DMA, DDR FSM, and `satswarm_core_bridge` / solver) now runs on **clk_main_a0** directly instead of **gen_clk_extra_a1** (the MMCM output).
+- The three AXI clock-converter IPs (OCL_CDC, PCIS_CDC, DDR_CDC) are kept for HDK compatibility but now see **the same clock on both sides** (clk_main_a0); they operate in pass-through mode.
+- `aws_clk_gen` remains instantiated (required by HDK/sh_ddr elaboration); its extra-clock outputs are no longer used to drive any logic.
+- **clk_main_a0 = 250 MHz** — Despite being recipe A2, `clk_main_a0` is always 250 MHz (4 ns); `aws_gen_clk_constraints.tcl` hardcodes `clk_main_a0_period = 4` for all A-recipes. Only the clock source wire changed from unconstrained `gen_clk_extra_a1` to constrained `clk_main_a0`, which exposed a pre-existing timing violation (see below).
+
+Files touched: `hdk_cl_satswarm/design/cl_satswarm.sv` (commit 68ad813). The build-used copy is `src/aws-fpga/hdk/cl/examples/cl_satswarm/design/cl_satswarm.sv` (must be synced before Vivado build).
+
+### Why This Fix Works
+
+1. **clk_main_a0 is always valid** — It is driven by the shell’s clock infrastructure and does not depend on the user MMCM locking. The CL no longer waits on a lock that never occurs.
+2. **clk_main_a0 is properly constrained** — `gen_clk_extra_a1` (MMCM CLKOUT0) had no timing constraint in Vivado (no `create_generated_clock` in MMCM IP XDC; constraint script only writes `clk_main_a0`). Solver FFs were unconstrained; 24 ns paths had infinite slack. Moving to `clk_main_a0` subjects the solver to real 250 MHz analysis and exposed the vde_heap modulo path (fixed in commit 295bb4f — see below).
+3. **No new clock domains** — No divider, no CDC boundary. Only the source wire changed; MMCM bypassed for logic while remaining for elaboration.
+
+---
+
+## Session Log: 2026-03-19 (continued) — INIT_WRITE Timing Violation in vde_heap.sv (250 MHz)
+
+### What Went Wrong
+
+After the clk_main_a0 fix (68ad813), build `2026_03_19-003427` **failed timing** with WNS = **-20.723 ns** (required 4 ns, got 24.685 ns). Critical path:
+
+- **Source**: `u_vde/u_heap/max_var_init_q_reg[0]` (FDCE, clk_main_a0)
+- **Destination**: `u_vde/u_heap/pos_mem_reg_bram_0/ADDRARDADDR[7]` (RAMB18E2, clk_main_a0)
+- **Data path**: 24.685 ns, **180 logic levels** (CARRY8=149 + LUTs=31)
+
+Root cause: the `INIT_WRITE` state in `vde_heap.sv` uses a **runtime modulo** in combinational logic:
+
+```systemverilog
+k = (idx_q + (max_var_init_q >> 2) * phase_offset[3:2]) % max_var_init_q;
+```
+
+`max_var_init_q` is a runtime variable, so Vivado synthesizes `%` as a full hardware integer divider → 149 CARRY8 chains → 24.685 ns path. This path existed in all prior builds but had infinite slack because the solver was clocked on unconstrained `gen_clk_extra_a1`.
+
+### Changes Made
+
+**`src/Mega/vde_heap.sv`** (commit 295bb4f): Replace the combinational modulo with a registered counter `k_q`.
+
+- `k_q` initialized at IDLE→INIT_WRITE using `k_init` (phase-offset start = multiples of `max_var/4`; computed as shifts+add, no `%`).
+- During INIT_WRITE, `k_q` increments with modular wrap (`k_q <= (k_q+1 >= max_var_init_q) ? '0 : k_q+1`).
+- INIT_WRITE comb block uses `k_q` directly — `%` is gone entirely.
+
+Same pipeline-register strategy as commit `bab99f4` (BUMP_UPDATE_PIPE).
+
+### Why This Fix Works
+
+- `max_var_init_q` is constant for the whole INIT_WRITE loop. The wrapping counter produces the same `k` sequence as the modulo formula.
+- New critical path for INIT_WRITE: `k_q + 1 ≥ max_var_init_q` (~0.5 ns, one 32-bit compare), well within 4 ns.
+- No functional change.
+
+---
+
 ## Session Log: 2026-03-18 (continued — bigger_ladder timing fix)
 
 ### REQP-123 DRC Fix
@@ -50,7 +111,7 @@ Note: `satswarmv2_pkg.sv` was already `GRID_X=2, GRID_Y=2` by default.
 - Tar on disk, not yet uploaded to S3 or submitted as AFI.
 
 ### HDK Environment Workaround Discovered
-`hdk_setup.sh` cannot be sourced from this project directory. `set_common_env_vars.sh` calls `git rev-parse --show-toplevel` to set `repo_root`; since this is not a git repo, `repo_root` is empty and `AWS_FPGA_REPO_DIR` gets zeroed out, causing Vivado's `build_all.tcl` to fail with "HDK_SHELL_DIR not set". Fix: export all HDK env vars manually in the same shell/bash-c block as the build command. See `Deploy.md` and `HANDOFF.md` for the complete export block.
+`hdk_setup.sh` cannot be sourced from this project directory. `set_common_env_vars.sh` calls `git rev-parse --show-toplevel` to set `repo_root`; since this is not a git repo, `repo_root` is empty and `AWS_FPGA_REPO_DIR` gets zeroed out, causing Vivado's `build_all.tcl` to fail with "HDK_SHELL_DIR not set". Fix: export all HDK env vars manually in the same shell/bash-c block as the build command. See `Synth.md` and `HANDOFF.md` for the complete export block.
 
 ---
 
