@@ -2,7 +2,7 @@
 
 Welcome. This document captures the **current state** of SatSwarmV2 development, passing context from the previous agent to you.
 
-**Quick status (2026-03-19, continued):** PCIS byte-lane bug discovered and fixed in RTL. A new **2x2 BuildAll** with the fix (tag `2026_03_19-171700`, Default directives) completed and AFI submission was created: **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`). Poll until `available`, then validate UNSAT on F2. See §2b and `docs/bugs/pcis_byte_lane_bug.md`.
+**Quick status (2026-03-19, VALIDATED):** PCIS byte-lane bug fix confirmed working for 1×1. AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) loaded and tested on F2 — `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles), `unsat_50v_215c_1.cnf` → **UNSAT ✓** (56,310 cycles). A new 2×2 PCIS-fix BuildAll (tag `2026_03_19-171700`) was submitted as `afi-037e5d7f209df2123` (`agfi-022074a3e1f323966`) and is pending availability.
 
 ---
 
@@ -17,6 +17,40 @@ The repository's documentation has been modularized:
 - **[FPGA.md](FPGA.md)**: Loading an existing AFI on F2 and collecting hardware-side data.
 - **[Model.md](Model.md)**: Practical modeling flow for turning measured CSVs into scaling projections.
 - **HANDOFF.md (This File)**: Living state of the project.
+
+---
+
+## 2d. This Session (2026-03-19 — PCIS byte-lane fix CONFIRMED, AFI afi-0d8e504d573195da8)
+
+**What was done:**
+- Loaded new AFI `agfi-0aa0b1b8ec26f6b5d` (afi-0d8e504d573195da8, name: SatSwarmV2-1x1) on F2 slot 0: `loaded` / `ok`.
+- Ran `sat_20v_80c_1.cnf` → **SAT ✓**, 5,366 cycles.
+- Ran `unsat_50v_215c_1.cnf` → **UNSAT ✓**, 56,310 cycles.
+
+**Conclusion: PCIS byte-lane bug is fixed.** Previous buggy AFIs returned SAT on the UNSAT instance; this one returns UNSAT correctly. This AFI is now the **preferred 1×1** for all testing.
+
+**What still needs to be done:**
+- 2×2 build with the PCIS fix (see Priority 1 below).
+- Larger-scale correctness sweep (SATLIB uf50/uuf50) to validate beyond the two smoke-test instances.
+
+---
+
+## 2c. This Session (2026-03-19 — AFI afi-09a915f455297380f validation, fix NOT confirmed)
+
+**What was done:**
+- Loaded new AFI `agfi-0a1f52695eab415b2` on F2, status: loaded OK.
+- Rebuilt `satswarm_host` with correct `AWS_FPGA_REPO_DIR` env var.
+- Ran `sat_20v_80c_1.cnf` → SAT, 3,302 cycles (old buggy AFI: 3,267 cycles).
+- Ran `unsat_50v_215c_1.cnf` → **SAT ✗**, 12,889 cycles (old buggy AFI: 12,877 cycles).
+
+**Conclusion: AFI afi-09a915f455297380f still has the PCIS byte-lane bug.**
+Cycle counts within 0.1% of old AFI — hardware is receiving the same corrupted formula. The RTL fix (commit `1c7c51b`, 07:21:50 UTC) is in `hdk_cl_satswarm/design/cl_satswarm.sv:604` but the build-used path `src/aws-fpga/hdk/cl/examples/cl_satswarm/` does not exist in this F2 repo clone. The build machine either: (a) used a pre-fix DCP/tar, or (b) built from a copy that did not have the fix. Note: AFI creation timestamp is 08:12:49 UTC — only 51 min after the fix commit, which is borderline for a full Vivado build.
+
+**What still needs to be done:**
+1. On a build machine: verify `src/aws-fpga/hdk/cl/examples/cl_satswarm/design/cl_satswarm.sv` line 601 reads `slv_pcis_wdata[{pcis_aw_addr_q[5:2], 5'h0} +: 32]` (not `[31:0]`).
+2. Run a fresh full BuildAll from that verified source.
+3. Submit new tar to S3/AFI.
+4. Load on F2 and validate with `unsat_50v_215c_1.cnf` — must return UNSAT.
 
 ---
 
@@ -111,10 +145,11 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 ## 4. Current Project State
 
 - **Design configuration**: **1×1** (`GRID_X=1, GRID_Y=1`) in all design files. Change to 2×2 in the eight files only when starting a 2×2 build.
-- **1×1 MMCM build (2026-03-19)**: Full BuildAll tag `2026_03_19-051231` — WNS=+0.711 ns. AFI **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f) created; **pending** availability. This is the preferred 1×1 AFI (CL-owned MMCM for clk_solver, CLK_GRP_A_EN=0).
+- **Current preferred 1×1 AFI (PCIS-fixed, VALIDATED)**: `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) — **available**, validated on F2 2026-03-19. SAT ✓, UNSAT ✓. Load: `sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d`
+- **Previous 1×1 MMCM build**: afi-0520f5f8b8900def7 (agfi-0b41689a08b4d4d5f) — PCIS bug NOT fixed (built before fix reached build machine). Do not use for correctness testing.
 - **Previous 1×1 AFI** (fabric divider): afi-064b74577e3b2f258 — **FAILED** REQP-123 during AWS bitgen. Do not use.
-- **Older 1×1 AFI** (pre–clock-divide): afi-08366141b8a92b36f (agfi-0f933cb959906a494) — **available** but uses `gen_clk_extra_a1`; on real F2 the aws_clk_gen MMCM may never lock.
-- **Existing 2×2 AFI** (pre–clock-divide): afi-01ef63d452c8940a2 (agfi-0193eda3eade22ae4) — **available**; same MMCM caveat.
+- **Older 1×1 AFI** (pre–clock-divide): afi-08366141b8a92b36f (agfi-0f933cb959906a494) — **available** but uses `gen_clk_extra_a1`; PCIS bug present; on real F2 the aws_clk_gen MMCM may never lock.
+- **Existing 2×2 AFI** (pre–clock-divide): afi-01ef63d452c8940a2 (agfi-0193eda3eade22ae4) — **available**; PCIS bug present; same MMCM caveat.
 - **Clock**: A2 recipe; solver runs on **clk_solver** (15.625 MHz, 64 ns) from CL-owned MMCME4_ADV (clk_main_a0 × 5 / 80); shell-facing logic on **clk_main_a0** (250 MHz).
 
 ### Build Artifacts
@@ -161,32 +196,30 @@ All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints
 
 ## 5. Immediate Next Steps (For Next Agent)
 
-### Priority 0: Poll and validate the new PCIS-fix AFI
+### ~~Priority 0: Rebuild AFI with PCIS Byte-Lane Fix~~ — DONE ✓
 
-Build + submission are done for 2x2 PCIS-fix RTL:
+**RESOLVED 2026-03-19.** AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) validated on F2:
+- `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles)
+- `unsat_50v_215c_1.cnf` → UNSAT ✓ (56,310 cycles)
 
-- Build tag: `2026_03_19-171700`
-- AFI: `afi-037e5d7f209df2123`
-- AGFI: `agfi-022074a3e1f323966`
+### Priority 0: Run 2×2 Build with PCIS Fix
 
-Next step is to poll until `available` and validate UNSAT behavior on F2. See `docs/bugs/pcis_byte_lane_bug.md` and `docs/FPGA.md`.
+Build + submission are now done for 2×2 PCIS-fix RTL:
+1. Build tag: `2026_03_19-171700` (BuildAll, Default directives, WNS=+0.711 ns)
+2. AFI: `afi-037e5d7f209df2123`
+3. AGFI: `agfi-022074a3e1f323966`
 
-When available, validate with `unsat_50v_215c_1.cnf` — it must return UNSAT.
+Next step: poll until `available`, then validate with `unsat_50v_215c_1.cnf` on F2 (must return UNSAT).
 
-### Priority 1: Poll AFI and Validate on F2 (CL-owned MMCM build)
+### Priority 1: Broader Correctness Sweep
 
-1. **Poll until AFI is available**:
-   ```bash
-   aws ec2 describe-fpga-images --fpga-image-ids afi-0520f5f8b8900def7 \
-     --query 'FpgaImages[*].{Id:FpgaImageId,State:State.Code}' --region us-east-1
-   ```
-   When `State` is `available`, the 1×1 CL-owned MMCM AFI is ready.
-2. **Load and test on F2** (see [FPGA.md](FPGA.md)):
-   ```bash
-   sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f
-   sudo fpga-describe-local-image -S 0 -H
-   ```
-   Run the host app and confirm the CL comes out of reset and returns correct results. Update this HANDOFF and FPGA.md with "validated on F2" once confirmed.
+Now that 1×1 is validated, run the SATLIB uf50/uuf50 suite to confirm correctness across more instances before scaling experiments.
+
+```bash
+bash hdk_cl_satswarm/scripts/run_fpga_suite.sh \
+  --suite-dir sim/tests/satlib/sat \
+  --out logs/hw_satlib_uf50.csv --slot 0 --timeout 30
+```
 
 ### Priority 2: (Optional) Run 2×2 Build After 1×1 Completes
 
@@ -198,7 +231,7 @@ Once the new 1×1 AFI (from clock-divide build) is available, load it on an F2 i
 ```bash
 source /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/sdk_setup.sh
 sudo fpga-clear-local-image -S 0
-sudo fpga-load-local-image -S 0 -l <new-agfi-id>
+sudo fpga-load-local-image -S 0 -I <new-agfi-id>
 sudo fpga-describe-local-image -S 0 -H
 ```
 Existing AFIs (agfi-0f933cb959906a494, agfi-0193eda3eade22ae4) may leave the CL in reset on real F2 due to the MMCM lock issue.
@@ -259,8 +292,9 @@ Design files: ensure both copies are synced before building:
 ---
 
 **AFIs**:
-- **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **submitted / pending**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load when available: `sudo fpga-load-local-image -S 0 -l agfi-022074a3e1f323966`
-- **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f) — 1×1, tag `2026_03_19-051231` — **pending** (CL-owned MMCM, CLK_GRP_A_EN=0). **Preferred 1×1** once available. Load: `sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f`
+- **afi-0d8e504d573195da8** (agfi-0aa0b1b8ec26f6b5d) — 1×1, name `SatSwarmV2-1x1` — **available, VALIDATED 2026-03-19**. PCIS byte-lane fix confirmed. **Preferred 1×1.** Load: `sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d`
+- **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **submitted / pending**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load when available: `sudo fpga-load-local-image -S 0 -I agfi-022074a3e1f323966`
+- afi-0520f5f8b8900def7 (agfi-0b41689a08b4d4d5f) — 1×1, tag `2026_03_19-051231` — **available** but PCIS bug not confirmed fixed (build timing uncertain). Do not use for correctness testing.
 - afi-064b74577e3b2f258 — 1×1, tag `2026_03_19-031457` — **FAILED** REQP-123. Do not use.
-- **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — 1×1, tag `2026_03_18-163435` — **available**. Uses gen_clk_extra_a1; may stay in reset on real F2 (MMCM lock). Load: `sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494`
-- **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4) — 2×2, tag `2026_03_18-171846` — **available**. Same MMCM caveat. Load: `sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4`
+- **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — 1×1, tag `2026_03_18-163435` — **available**. PCIS bug present. Uses gen_clk_extra_a1; may stay in reset on real F2.
+- **afi-01ef63d452c8940a2** (agfi-0193eda3eade22ae4) — 2×2, tag `2026_03_18-171846` — **available**. PCIS bug present. Same MMCM caveat.

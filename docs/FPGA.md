@@ -7,17 +7,15 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 ## Available AFIs
 
 
-| AFI                     | agfi                     | Grid | Tag                 | Clock           | Notes                    |
+| AFI                     | agfi                     | Grid | Tag/Name            | Clock           | Notes                    |
 | ----------------------- | ------------------------ | ---- | ------------------- | --------------- | ------------------------ |
 | `afi-037e5d7f209df2123` | `agfi-022074a3e1f323966` | 2×2  | `2026_03_19-171700` | A2 / 15.625 MHz | **Newest 2×2** BuildAll (Default directives), PCIS byte-lane fix |
-| `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | `2026_03_19-102818` | A2 / 15.625 MHz | **Preferred** CL-owned MMCM, PCIS byte-lane fix |
+| `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | `2026_03_19-102818` | A2 / 15.625 MHz | **Preferred** PCIS-fixed, validated on F2 2026-03-19 ✓ |
 | `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | `2026_03_19-051231` | A2 / 15.625 MHz | CL-owned MMCM, CLK_GRP_A_EN=0; has PCIS bug |
-| `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | CDC-fixed; gen_clk_extra_a1, may not lock on F2 |
-| `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | CDC-fixed; same MMCM caveat |
+| `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | PCIS bug present; gen_clk_extra_a1, may not lock on F2 |
+| `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | PCIS bug present; same MMCM caveat |
 
-In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: use `agfi-0aa0b1b8ec26f6b5d` (PCIS byte-lane fix). **Preferred 2×2**: use `agfi-022074a3e1f323966` (PCIS byte-lane fix, tag `2026_03_19-171700`) once `available`. Older AFIs have the PCIS bug or use `gen_clk_extra_a1` and may have MMCM lock issues on real F2.
-
-> **Preferred AFI** `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) includes the PCIS byte-lane fix; use it for correctness testing once `available`. **Older AFIs** (all others in the table) have a PCIS AXI4 byte-lane bug: clause-end literals load as zero, UNSAT returns SAT, cycle counts wrong. See `docs/bugs/pcis_byte_lane_bug.md`.
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`) once `available`.
 
 > Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
 
@@ -33,20 +31,20 @@ source sdk_setup.sh
 
 sudo fpga-clear-local-image -S 0
 
-# 1×1 AFI (preferred: PCIS byte-lane fix, tag 2026_03_19-102818)
-sudo fpga-load-local-image -S 0 -l agfi-0aa0b1b8ec26f6b5d
+# 1×1 AFI (preferred: PCIS-fixed, validated 2026-03-19)
+sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d
 
 # 2×2 AFI (preferred 2×2: PCIS byte-lane fix, tag 2026_03_19-171700)
-# sudo fpga-load-local-image -S 0 -l agfi-022074a3e1f323966
+# sudo fpga-load-local-image -S 0 -I agfi-022074a3e1f323966
 
 # Fallback: older 1×1 (CL-owned MMCM but has PCIS bug)
-# sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f
+# sudo fpga-load-local-image -S 0 -I agfi-0b41689a08b4d4d5f
 
-# Older 1×1 (gen_clk_extra_a1; may not lock on F2)
-# sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
+# Older 1×1 (gen_clk_extra_a1; PCIS bug present; may not lock on F2)
+# sudo fpga-load-local-image -S 0 -I agfi-0f933cb959906a494
 
-# Optional: 2×2 AFI
-# sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4
+# Optional: 2×2 AFI (PCIS bug present)
+# sudo fpga-load-local-image -S 0 -I agfi-0193eda3eade22ae4
 
 sudo fpga-describe-local-image -S 0 -H
 ```
