@@ -119,6 +119,13 @@ module vde_heap #(
     // live input is still changing during CNF loading.
     logic [31:0] max_var_init_q;
 
+    // Registered k for INIT_WRITE: avoids combinational % (hardware divider)
+    // in the critical path. k_q is initialized once at IDLE→INIT_WRITE and
+    // increments with modular wrap each cycle.
+    logic [31:0] k_q;
+    // Phase-offset starting value: multiples of max_var/4, no % needed.
+    logic [31:0] k_init;
+
     // Bump queue for multi-bump
     logic [$clog2(BUMP_Q_SIZE+1)-1:0] bump_queue_count_q, bump_queue_count_d;
     logic [BUMP_Q_SIZE-1:0][31:0] bump_queue_q, bump_queue_d;
@@ -185,14 +192,26 @@ module vde_heap #(
         rdata_p2 <= pos_mem[addr_p2];
     end
 
+    // k_init: phase-offset starting index for INIT_WRITE, avoids runtime %.
+    // offset = (max_var >> 2) * phase_offset[3:2], always < max_var, so no wrap.
+    always_comb begin
+        case (phase_offset[3:2])
+            2'd0: k_init = '0;
+            2'd1: k_init = max_var >> 2;
+            2'd2: k_init = max_var >> 1;
+            2'd3: k_init = (max_var >> 2) + (max_var >> 1);
+            default: k_init = '0;
+        endcase
+    end
+
     // =========================================================================
     // Combinational Logic
     // =========================================================================
     always_comb begin
-        integer k, v;
+        integer v;
         state_d = state_q;
         heap_size_d = heap_size_q;
-        k = 0; v = 0;
+        v = 0;
         idx_d = idx_q;
         pending_var_d = pending_var_q;
         pending_value_d = pending_value_q;
@@ -287,10 +306,9 @@ module vde_heap #(
             INIT_WRITE: begin
                 // Loop i=0 to MAX_VARS-1
                     if (idx_q < max_var_init_q) begin
-                     // Active
-                         k = (idx_q + (max_var_init_q >> 2) * phase_offset[3:2]) % max_var_init_q;
-                         if (phase_offset[1]) v = max_var_init_q - k;
-                     else v = k + 1;
+                     // Active — use registered k_q (no combinational %, timing fix)
+                         if (phase_offset[1]) v = max_var_init_q - k_q;
+                     else v = k_q + 1;
                      
                      wdata_h1[ENTRY_W-1:IDX_W] = '0; 
                      wdata_h1[IDX_W-1:0] = v[IDX_W-1:0];
@@ -736,6 +754,11 @@ module vde_heap #(
             // uses a stable value even when max_var grows during CNF loading.
             if (state_q == IDLE && state_d == INIT_WRITE) begin
                 max_var_init_q <= max_var;
+                // Initialize k_q to phase-offset start (no % needed: multiples of max_var/4).
+                k_q <= k_init;
+            end else if (state_q == INIT_WRITE) begin
+                // Modular increment: replaces combinational % in INIT_WRITE comb block.
+                k_q <= (k_q + 1 >= max_var_init_q) ? '0 : k_q + 1;
             end
 
             // Pipeline register: break BRAM-output → adder → BRAM-DIN path.
