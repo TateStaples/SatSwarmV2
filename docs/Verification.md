@@ -1,188 +1,340 @@
-# Testing & Debugging (Verification.md)
+# Verification And Debugging
 
-SatSwarmV2 debugging workflows utilize native Verilator flows coupled with AWS-FPGA integration tools. To catch logic errors before they trigger hardware OOM bugs, these testbenches and simulations must be run prior to hitting Vivado CLI.
+This document is the guide for proving the RTL still behaves correctly and for deciding which verification step is worth the time. Use it before synthesis and whenever a change touches solver behavior, clause movement, host loading, or shell integration.
+
+For HDK-specific simulation details (protocol checkers, wave dumping, SV/C test API), see [RTL_Simulation_Guide_for_HDK_Design_Flow.md](../src/aws-fpga/hdk/docs/RTL_Simulation_Guide_for_HDK_Design_Flow.md). See [HDK.md](HDK.md) for the full HDK doc index.
+
+---
+
+## Verification Ladder
+
+Use the lightest check that answers your current question.
+
+
+| Goal                                    | Best tool                                       | Typical cost            | When to use                                                                                                          |
+| --------------------------------------- | ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Understand expected solver behavior     | `sim/mega_sim.py` or `sim/scripts/gen_trace.py` | seconds                 | First pass when logic looks wrong and you need a readable golden trace                                               |
+| Check one RTL scenario quickly          | single Verilator CNF run                        | seconds                 | Fast local iteration after a focused RTL change                                                                      |
+| Validate one subsystem                  | `make test_vde_heap` or `run_unit_tests.sh`     | seconds to low minutes  | After changes isolated to a specific block                                                                           |
+| Recheck single-core correctness broadly | `run_bigger_ladder.sh`                          | minutes                 | Before declaring a solver change safe                                                                                |
+| Recheck multi-core soundness            | `make build_2x2` + one or more CNFs             | minutes                 | After touching NoC, clause sharing, or top-level wiring                                                              |
+| Check shell bridge only                 | `run_xsim_bridge_test.sh`                       | about 30s after compile | When Verilator passes and you changed `satswarm_core_bridge` / shell-side load or status wiring                      |
+| Check full AWS shell regression         | `run_aws_regression.sh`                         | slowest (hours)         | Final confidence before Vivado or after shell-facing changes. Use selectively when `run_bigger_ladder.sh has issues` |
+
+
+If you are iterating quickly, stay on the first three rows. If you are already confident the change is probably correct, jump to `run_bigger_ladder.sh` and then XSim as appropriate.
 
 ---
 
 ## Verilator Development Loop
 
-The primary testing methodology relies heavily on Verilator. Run testing workflows from `/sim`.
+Run these workflows from `sim/`.
 
-> **Prerequisite**: Verilator is not pre-installed on this machine. Install once with:
+> **Prerequisite**: install Verilator once if needed.
+>
 > ```bash
 > sudo apt-get install -y verilator
 > ```
-> Version 5.020 confirmed working.
+
+Most common setup:
 
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/sim
-
-# 1. Clean generated files
-make clean
-
-# 2. Compile RTL wrapper into Verilator binary
 make build_1x1
-
-# 3. Simulate specific SAT test cases
-./obj_dir_1x1/Vtb_satswarmv2 +CNF=tests/generated_instances/sat_50v_215c_1.cnf +EXPECT=SAT +TIMEOUT=5000000 +DEBUG=0
+ln -sfn obj_dir_1x1 obj_dir
 ```
 
-*CRITICAL WARNING: The macro argument is `+EXPECT=`, NOT `+EXPECTED=`. A typo here implicitly assigns `SAT`.*
+Then run a single CNF directly:
 
-### Setting Debug Output
+```bash
+./obj_dir_1x1/Vtb_satswarmv2 \
+  +CNF=tests/generated_instances/sat_50v_215c_1.cnf \
+  +EXPECT=SAT \
+  +TIMEOUT=5000000 \
+  +DEBUG=0
+```
 
-Pass the `+DEBUG` parameter to view Verilator cycle-by-cycle logging:
+> **Critical**: the macro is `+EXPECT=`, not `+EXPECTED=`.
 
-- `+DEBUG=0`: No trace output (fastest).
-- `+DEBUG=1`: Log FSM state changes, conflict variables, deciding paths, and learned-clauses.
-- `+DEBUG=2`: Full verbosity. Emits watch list replacements internally.
+### Debug levels
 
-### Regression Ladder
+- `+DEBUG=0` - fastest, no trace
+- `+DEBUG=1` - FSM state changes, conflicts, decisions, learned clauses
+- `+DEBUG=2` - full verbosity, including watch-list replacements
 
-Run the core testing suite (98 distinct test-files, ranging from 4v to 75v setups).
+Use `+DEBUG=1` first. Only step up to `+DEBUG=2` when you already know roughly where the mismatch is.
+
+---
+
+## Golden-Trace Debugging With `mega_sim.py`
+
+When the RTL looks wrong, start by establishing what the solver should be doing on the same CNF.
+
+### Direct Python golden run
 
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+python3 mega_sim.py tests/generated_instances/sat_20v_80c_1.cnf
+```
 
-# run_bigger_ladder.sh expects the binary at obj_dir/Vtb_satswarmv2.
-# Create the symlink once after building:
+`mega_sim.py` is useful because it emits a readable software trace of:
+
+- assignments
+- unit propagations
+- conflicts
+- learned clauses
+- backtracks
+- final result
+
+It is not a cycle-accurate model of the RTL, but it is a good statement of intended solver behavior.
+
+### Normalized trace output
+
+If you want a more structured trace for comparison, use:
+
+```bash
+python3 scripts/gen_trace.py tests/generated_instances/sat_20v_80c_1.cnf
+```
+
+`gen_trace.py` emits a `mega_sim`-style tagged trace (`[mega_sim] [VDE] ...`, `[mega_sim] [PSE] ...`) that is often easier to diff against RTL debug logs than the raw `mega_sim.py` output.
+
+### How to use it with RTL logs
+
+Recommended pattern:
+
+1. Run `mega_sim.py` or `gen_trace.py` on the CNF.
+2. Run the RTL on the same CNF with `+DEBUG=1`.
+3. Compare:
+  - first decision
+  - first propagation sequence
+  - first conflict clause
+  - learned clause and backtrack level
+  - final SAT / UNSAT result
+
+When the first mismatch appears, the responsible block is usually obvious:
+
+- wrong first decision -> `vde.sv` / `vde_heap.sv`
+- wrong unit propagation or missed conflict -> `pse.sv` / watch handling
+- wrong learned clause or bad backtrack -> `cae.sv` / trail interaction
+
+### Older helper
+
+`sim/scripts/golden_trace.py` exists, but it is a simpler expectation generator. For most debugging, prefer `mega_sim.py` or `gen_trace.py`.
+
+---
+
+## Focused Fast Checks
+
+### Single-CNF run
+
+Best for fast iteration after a targeted change:
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+bash scripts/run_cnf.sh tests/unit_tests/simple_sat1.cnf SAT
+```
+
+Or with more visibility:
+
+```bash
+bash scripts/run_cnf.sh tests/unit_tests/simple_unsat1.cnf UNSAT 2000000 +DEBUG=1
+```
+
+### Unit-test subset
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+bash scripts/run_unit_tests.sh
+```
+
+Use this when the change is local and you do not want to pay for the whole ladder yet.
+
+### Heap unit test
+
+After any `vde_heap.sv` change:
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+make test_vde_heap
+```
+
+---
+
+## Full Single-Core Correctness
+
+`run_bigger_ladder.sh` is the main "I think this change is correct" gate.
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
 ln -sfn obj_dir_1x1 obj_dir
-
-# Run the full regression:
 bash scripts/run_bigger_ladder.sh
 ```
 
-> **Note**: The `BIN=` env var override works for `run_cnf.sh` but **not** for `run_bigger_ladder.sh`, which hardcodes `$SIM_DIR/obj_dir/Vtb_satswarmv2`. The symlink above is the correct workaround.
+Expected ending:
 
-To run an exhaustive parameter/instance sweep across all small-tests:
+```text
+Total Tests: 98
+Passed:      98
+Failed:      0
+ALL TESTS PASSED
+```
+
+> **Note**: `run_bigger_ladder.sh` hardcodes `obj_dir/Vtb_satswarmv2`, so the symlink matters.
+
+For a wider sweep across small tests:
+
 ```bash
 bash scripts/find_failures.sh
 ```
 
 ---
 
-## AWS Shell Integration (XSim)
+## Multi-Core Soundness
 
-To ensure that the AWS Shell interconnect wrapper module connects AXI successfully, run a mock BFM (Bus Functional Model) test prior to synthesis.
+When the change could affect top-level wiring, mesh behavior, or clause sharing, build the 2×2 config and run at least a few representative CNFs.
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+make build_2x2
+
+./obj_dir_2x2/Vtb_satswarmv2 \
+  +CNF=tests/generated_instances/sat_50v_215c_1.cnf \
+  +EXPECT=SAT \
+  +TIMEOUT=5000000 \
+  +DEBUG=0
+```
+
+Do this after touching:
+
+- `satswarm_top.sv`
+- `mesh_interconnect.sv`
+- clause sharing / injection logic
+- host aggregation behavior
+
+---
+
+## AWS Shell Checks (XSim)
+
+Verilator does not exercise the full AWS shell path. Use XSim once the solver itself already looks healthy. The HDK [RTL Simulation Guide](../src/aws-fpga/hdk/docs/RTL_Simulation_Guide_for_HDK_Design_Flow.md) covers protocol checkers, wave dumping, and the SV/C test API in detail.
+
+### AWS BFM smoke test
 
 ```bash
 cd $CL_DIR/verif/scripts
 make TEST=test_satswarm_aws
-# Alternatively: make C_TEST=test_satswarm_aws
 ```
 
-A successful output resembles:
-`TEST: test_satswarm_aws    RESULT: *** TEST PASSED ***    Time: 11380 ns`
+Expected:
 
----
+`TEST: test_satswarm_aws    RESULT: *** TEST PASSED ***`
 
-## XSim AXI Bridge Smoke Test
+### XSim AXI bridge smoke test
 
-Run this when the Verilator regression is 98/98 and you have high confidence the RTL is ready. It verifies that `satswarm_core_bridge` — the AXI-Lite / PCIS DMA bridge between the AWS shell and `satswarm_top` — is correctly wired for both SAT and UNSAT cases. This layer is completely bypassed by Verilator.
-
-The test compiles once (xvlog + xelab, ~5-10 seconds), then runs xsim on **6 fixed instances** (3 SAT + 3 UNSAT, ~30 seconds total). It is not a correctness suite; correctness over the full instance set is the Verilator ladder's job.
+This is the best "medium-cost" shell check.
 
 ```bash
-# From the project root (hdk_setup.sh cannot be sourced — the script sets env vars manually):
 bash /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts/run_xsim_bridge_test.sh
 ```
 
-Expected output:
-```
-=============================================
- SatSwarm XSim AXI Bridge Smoke Test
-=============================================
-[1/3] Compiling RTL (xvlog)...
-[2/3] Elaborating snapshot (xelab)...
-[3/3] Running 6 bridge tests...
+Use it when:
 
-  sat_5v_10c_1.cnf     [SAT]    PASS (cycles=1568)
-  sat_20v_80c_1.cnf    [SAT]    PASS (cycles=5219)
-  sat_50v_215c_1.cnf   [SAT]    PASS (cycles=30209)
-  unsat_5v_10c_1.cnf   [UNSAT]  PASS (cycles=1875)
-  unsat_20v_80c_1.cnf  [UNSAT]  PASS (cycles=8011)
-  unsat_32v_136c_1.cnf [UNSAT]  PASS (cycles=19322)
+- `run_bigger_ladder.sh` already passes
+- you changed `satswarm_core_bridge`
+- you changed shell-side control / status / load wiring
+- you want confidence before Vivado
 
-=============================================
- Bridge Test Results
-=============================================
-  6/6 PASSED — AXI bridge OK
-```
+If the snapshot already exists:
 
-If the snapshot already exists from a prior run, skip recompile with `--skip-compile`:
 ```bash
-bash .../run_xsim_bridge_test.sh --skip-compile
+bash /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts/run_xsim_bridge_test.sh --skip-compile
 ```
 
-> **Note**: The testbench instantiates `satswarm_core_bridge` (simplified AXI port interface) directly — not `cl_satswarm` (full AWS `cl_ports.vh` interface). This correctly exercises the AXI bridge and solver logic without the AWS shell BFM overhead. The `MAX_LITS=1024` parameter keeps simulation memory low; the larger 50v UNSAT instances are excluded from this test for that reason.
+### Full AWS shell regression
+
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2
+bash sim/scripts/run_aws_regression.sh
+```
+
+This is the most thorough shell-level check and the slowest. Use it sparingly.
+
+> `run_aws_regression.sh` requires `$HDK_DIR` to be set. See `Synth.md`. The script calls `make_sim_dir` before compile and uses the `run` target (with `PLUSARGS` passed through) for xsim. The script calls `make_sim_dir` before compile and uses the `run` target (not `simulate_only`) so `PLUSARGS` are passed to xsim. If the script fails at compile, ensure `make_sim_dir` runs first; the Makefile uses target `run` (not `simulate_only`) so `PLUSARGS` are passed to xsim.
 
 ---
 
-## BRAM / LUTRAM Inference Validation
+## Inference Validation
 
-Often, Vivado fails Technology Mapping due to RAM being dissolved into excessive Flip-Flops. Validate inference early on any modification to `pse.sv` or `trail_manager.sv` using check-scripts instead of large syntheses:
+If you touched `pse.sv` or `trail_manager.sv`, check that memories still infer correctly instead of dissolving into flip-flops.
 
 ```bash
-# Run foreground inference check
+cd /home/ubuntu/src/project_data/SatSwarmV2
 bash deploy/check_inference.sh pse
+```
 
-# Background iterative development (returns terminal control, kills vivado upon fail)
+For iterative work:
+
+```bash
 bash deploy/check_inference.sh -b -k pse
 ```
 
-Refer to `/tmp/synth_pse.log` internally, looking for:
-`Distributed RAM: Final Mapping Report`
-Any absent arrays were converted into Flip-Flops and indicate a failed implementation requiring rewrite.
+Look for the `Distributed RAM: Final Mapping Report`. Missing target arrays usually means inference regressed.
 
 ---
 
-## Debugging
+## Common Failure Modes
 
-**Wrong Answer / UNSAT for SAT:**
-1. Check Backtrack computation in `cae.sv` (Should correctly traverse back across non-UIP variables).
-2. Trace the arbitration logic. A dropped literal write can cause missing knowledge in `lit_mem`.
+### Wrong answer / UNSAT for SAT
 
-**Waveform Hanging:**
-1. Review TIMEOUT threshold limits (`SIM_CYCLES`). Ensure instances <256 variables parse within 5 Million cycles.
-2. Confirm the Infinite-Loop protections inside the Pipelined `CAE` logic.
+Start with:
 
-**Vivado Synthesis Process Monitoring:**
-```bash
-# Check running background processes
-ps aux | grep "unwrapped.*vivado" | grep -v grep | awk '{printf "PID=%s CPU=%s RSS_MB=%.0f\n", $2, $3, $6/1024}'
+1. `mega_sim.py` or `gen_trace.py` on the same CNF
+2. RTL single-file run with `+DEBUG=1`
 
-# Monitor the active build log (logs go to /home/ubuntu/buildall_*.log)
-tail -20 /home/ubuntu/buildall_*.log | tail -20
+Then inspect:
 
-# Check major phase milestones and errors
-grep -E "^AWS FPGA:|ERROR|WNS" /home/ubuntu/buildall_*.log | tail -20
-```
+- `cae.sv` for wrong backtrack or learned-clause behavior
+- `pse.sv` / watch updates for lost propagation
+- trail / reason handling when assignments are undone
+
+### Hangs / timeouts
+
+Check:
+
+- timeout settings (`+TIMEOUT` / `+MAXCYCLES`)
+- repeated propagation / conflict loops
+- whether the first mismatch vs `mega_sim.py` is actually much earlier than the timeout
+
+### Shell-only failures
+
+If Verilator passes but XSim fails, suspect:
+
+- `satswarm_core_bridge.sv`
+- shell register decode
+- status / reset / load-path wiring
+- clock-domain crossing in the AWS wrapper
+
+On real hardware, if the host hangs or gets no response, check for shell timeouts: run `fpga-describe-local-image -S 0 --metrics` and inspect `ocl-slave-timeout`, `dma-pcis-timeout`. See [How_To_Detect_Shell_Timeout.md](../src/aws-fpga/hdk/docs/How_To_Detect_Shell_Timeout.md).
 
 ---
 
-## Pre-Synthesis Verification Workflow
+## Recommended Pre-Synthesis Gate
 
-Run these gates in order before every Vivado build. Each step catches different classes of errors in seconds-to-minutes vs the hours a Vivado build costs.
+When you want a strong but still practical gate before BuildAll:
 
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/sim
 
-# 1. Build Verilator binary (once, or after any RTL change)
+# 1. Build the binary you need
 make build_1x1 && ln -sfn obj_dir_1x1 obj_dir
 
-# 2. Heap unit test (after any vde_heap.sv change)
+# 2. Focused unit test if relevant
 make test_vde_heap
 
-# 3. Full correctness regression — 98 files (seconds each)
-bash scripts/run_bigger_ladder.sh              # must be 98/98
+# 3. Main correctness gate
+bash scripts/run_bigger_ladder.sh
 
-# 4. BRAM inference check (after any pse.sv / trail_manager.sv change)
-bash /home/ubuntu/src/project_data/SatSwarmV2/deploy/check_inference.sh pse
-
-# 5. AXI bridge smoke test — 6 fixed instances via XSim (~30s)
-#    Run this when Verilator is 98/98 and you're ready to commit to Vivado.
-#    Exercises satswarm_core_bridge AXI path that Verilator bypasses.
+# 4. If shell-facing logic changed
 bash /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts/run_xsim_bridge_test.sh
-
-# All pass → proceed to Vivado BuildAll (see Deploy.md)
 ```
+
+Then switch to `Synth.md` for the synthesis / AFI flow.

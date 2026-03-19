@@ -513,6 +513,7 @@ def main() -> int:
         print(f"[INFO] [{idx}/{len(selected)}] {cnf.name}")
         for cfg, bin_path in bins.items():
             cores = config_to_cores(cfg)
+            print(f"[START] {cnf.name} {cfg}", flush=True)
             rec = run_one(
                 bin_path=bin_path,
                 cnf_file=cnf,
@@ -525,6 +526,10 @@ def main() -> int:
             rec.cores = cores
             rec.run_idx = 1
             records.append(rec)
+            print(
+                f"[DONE]  {cnf.name} {cfg} -> {rec.result} cycles={rec.cycles} wall={rec.wall_sec:.1f}s",
+                flush=True,
+            )
 
     raw_csv = out_dir / "raw_runs.csv"
     write_csv(

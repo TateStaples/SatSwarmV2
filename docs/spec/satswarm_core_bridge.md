@@ -37,6 +37,8 @@ The bridge maps AWS shell interfaces (AXI-Lite, AXI4-PCIS DMA, DDR4) to `satswar
 
 - `pcis_wr_ready` = `host_load_ready` (backpressure from satswarm_top)
 
+The OCL register map lives in AppPF BAR0; DMA writes use PCIS (BAR4). See [AWS_Fpga_Pcie_Memory_Map.md](../../src/aws-fpga/hdk/docs/AWS_Fpga_Pcie_Memory_Map.md).
+
 ## Interface
 
 ### AXI-Lite (from cl_satswarm)
@@ -114,3 +116,5 @@ All host_*, ddr_* ports connected to u_satswarm.
 
 - [satswarm_top](satswarm_top.md)
 - [cl_satswarm](cl_satswarm.md)
+- [AWS Shell Interface Specification](../../src/aws-fpga/hdk/docs/AWS_Shell_Interface_Specification.md)
+- [HDK.md](../HDK.md) — index of HDK docs

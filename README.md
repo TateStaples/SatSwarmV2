@@ -240,7 +240,12 @@ The solver has been validated against **UF50 (SAT)** and **UUF50 (UNSAT)** bench
 This documentation has been split into focused chunks to make navigation easier:
 
 - **[README.md](README.md)** (You are here): Architecture overview, repository structure, and quick-start instructions.
-- **[Deploy.md](docs/Deploy.md)**: Details the AWS HDK synthesis methodology. Includes Vivado settings, quick-check steps, and DDR/clock domain crossing setup.
+- **[Synth.md](docs/Synth.md)**: AWS HDK environment, synthesis quick-checks, BuildAll, and AFI creation.
+- **[HDK.md](docs/HDK.md)**: Pointers to relevant AWS HDK docs (shell spec, clocks, timeouts, simulation, AFI).
+- **[Design.md](docs/Design.md)**: High-level architecture, invariants, and design intent.
+- **[Verification.md](docs/Verification.md)**: Simulation, golden-trace debugging, and verification tradeoffs.
+- **[FPGA.md](docs/FPGA.md)**: Loading an existing AFI on F2 and collecting hardware-side results.
+- **[Model.md](docs/Model.md)**: Turning measured CSVs into scaling projections; see `Scaling.md` for theory.
 - **[FPGA.md](docs/FPGA.md)**: Final bitstream details and Amazon FPGA Image (AFI) creation instructions.
 - **[Verification.md](docs/Verification.md)**: Testing and debugging guide. Details Verilator simulation targets, regression scripts, XSim integration sweeps, and Vivado BRAM inference checks.
 - **[Changes.md](docs/Changes.md)**: Historical log of bug fixes, synthesis attempts, memory profiling, and major architectural design shifts over time.

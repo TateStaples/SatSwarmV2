@@ -60,7 +60,6 @@ ${CL_ROOT}/../../../../../Mega/trail_manager.sv
 ${CL_ROOT}/../../../../../Mega/watch_manager.sv
 ${CL_ROOT}/../../../../../Mega/clause_store.sv
 ${CL_ROOT}/../../../../../Mega/shared_clause_buffer.sv
-${CL_ROOT}/../../../../../Mega/resync_controller.sv
 ${CL_ROOT}/../../../../../Mega/stats_manager.sv
 ${CL_ROOT}/../../../../../Mega/utils/sfifo.sv
 ${CL_ROOT}/../../../../../Mega/utils/stack.sv

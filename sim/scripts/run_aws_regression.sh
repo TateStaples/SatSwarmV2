@@ -43,8 +43,12 @@ fi
 # Set the Custom Logic directory if not already set
 export CL_DIR="$(realpath "$AWS_FPGA_SIM_DIR/../..")"
 
-# Precompile the regression testbench once (saves ~40s per test)
+# Create sim dir and precompile the regression testbench once (saves ~40s per test)
 echo "Precompiling regression testbench..."
+if ! make TEST=test_satswarm_regression make_sim_dir > /tmp/aws_regression_make_sim_dir.log 2>&1; then
+    echo "Error: make_sim_dir failed! See /tmp/aws_regression_make_sim_dir.log"
+    exit 1
+fi
 if ! make TEST=test_satswarm_regression compile > /tmp/aws_regression_compile.log 2>&1; then
     echo "Error: Precompilation failed! See /tmp/aws_regression_compile.log"
     exit 1
@@ -83,7 +87,7 @@ for file in $FILES; do
     LOG_FILE="/tmp/aws_regression_${BASENAME}.log"
     
     # Timeout after 180s (XSIM is slower than Verilator)
-    if timeout 180s make TEST=test_satswarm_regression simulate_only PLUSARGS="+CNF=$file +EXPECT=$EXPECTED +DEBUG=0" > "$LOG_FILE" 2>&1; then
+    if timeout 180s make TEST=test_satswarm_regression run PLUSARGS="+CNF=$file +EXPECT=$EXPECTED +DEBUG=0" > "$LOG_FILE" 2>&1; then
         
         # Double check the pass was printed
         if grep -q "TEST PASSED" "$LOG_FILE"; then

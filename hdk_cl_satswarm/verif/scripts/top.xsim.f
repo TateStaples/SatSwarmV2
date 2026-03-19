@@ -28,7 +28,6 @@ ${CL_DIR}/../../../../../Mega/trail_manager.sv
 ${CL_DIR}/../../../../../Mega/watch_manager.sv
 ${CL_DIR}/../../../../../Mega/clause_store.sv
 ${CL_DIR}/../../../../../Mega/shared_clause_buffer.sv
-${CL_DIR}/../../../../../Mega/resync_controller.sv
 ${CL_DIR}/../../../../../Mega/stats_manager.sv
 ${CL_DIR}/../../../../../Mega/utils/sfifo.sv
 ${CL_DIR}/../../../../../Mega/utils/stack.sv
