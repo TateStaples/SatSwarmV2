@@ -1405,6 +1405,15 @@ module solver_core #(
                     cae_direct_append_len  = cae_learned_len;
                     cae_direct_append_lits = cae_learned_lits;
 
+                    // 1a. Share binary learned clauses with all neighbors via NoC.
+                    // Binary clauses (len=2) are the highest-quality learned clauses and
+                    // are small enough to fit in a single NoC packet payload.
+                    if (cae_learned_len == 2) begin
+                        iface_clause_bcast_req = 1'b1;
+                        iface_clause_lbd       = 8'd2; // Binary clauses span at most 2 decision levels
+                        iface_clause_ptr       = {cae_learned_lits[0], cae_learned_lits[1]};
+                    end
+
                     // 2. Use pre-captured asserting literal (stable register, avoids delta-cycle hazard)
                     final_assert_lit = assert_lit_q;
                     decision_lit_d   = final_assert_lit;
