@@ -9,13 +9,14 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 
 | AFI                     | agfi                     | Grid | Tag                 | Clock           | Notes                    |
 | ----------------------- | ------------------------ | ---- | ------------------- | --------------- | ------------------------ |
-| `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | `2026_03_19-051231` | A2 / 15.625 MHz | **Preferred** CL-owned MMCM, CLK_GRP_A_EN=0 |
+| `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | `2026_03_19-102818` | A2 / 15.625 MHz | **Preferred** CL-owned MMCM, PCIS byte-lane fix |
+| `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | `2026_03_19-051231` | A2 / 15.625 MHz | CL-owned MMCM, CLK_GRP_A_EN=0; has PCIS bug |
 | `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | CDC-fixed; gen_clk_extra_a1, may not lock on F2 |
 | `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | CDC-fixed; same MMCM caveat |
 
-In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: use `agfi-0b41689a08b4d4d5f`; poll `aws ec2 describe-fpga-images --fpga-image-ids afi-0520f5f8b8900def7` until `State` is `available`. Older AFIs use `gen_clk_extra_a1` and may have MMCM lock issues on real F2.
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: use `agfi-0aa0b1b8ec26f6b5d` (PCIS byte-lane fix); poll `aws ec2 describe-fpga-images --fpga-image-ids afi-0d8e504d573195da8` until `State` is `available`. Older AFIs have the PCIS bug or use `gen_clk_extra_a1` and may have MMCM lock issues on real F2.
 
-> **⚠️ Critical correctness bug in all existing AFIs**: A PCIS AXI4 byte-lane mismatch causes every clause-end literal to be loaded as zero, corrupting the formula. UNSAT instances return SAT. SAT instances return correct results but with wrong cycle counts (formula is easier than intended). The RTL fix is committed but no new AFI has been built yet. **Do not use hardware results from any existing AFI for correctness testing.** See `docs/bugs/pcis_byte_lane_bug.md`.
+> **Preferred AFI** `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) includes the PCIS byte-lane fix; use it for correctness testing once `available`. **Older AFIs** (all others in the table) have a PCIS AXI4 byte-lane bug: clause-end literals load as zero, UNSAT returns SAT, cycle counts wrong. See `docs/bugs/pcis_byte_lane_bug.md`.
 
 > Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
 
@@ -31,10 +32,13 @@ source sdk_setup.sh
 
 sudo fpga-clear-local-image -S 0
 
-# 1×1 AFI (preferred: CL-owned MMCM build, once available)
-sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f
+# 1×1 AFI (preferred: PCIS byte-lane fix, tag 2026_03_19-102818)
+sudo fpga-load-local-image -S 0 -l agfi-0aa0b1b8ec26f6b5d
 
-# Fallback: older 1×1 (gen_clk_extra_a1; may not lock on F2)
+# Fallback: older 1×1 (CL-owned MMCM but has PCIS bug)
+# sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f
+
+# Older 1×1 (gen_clk_extra_a1; may not lock on F2)
 # sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
 
 # Optional: 2×2 AFI

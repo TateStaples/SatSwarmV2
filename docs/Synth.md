@@ -305,7 +305,7 @@ These warnings have historically been non-blocking:
 
 ## Future Work
 
-- **Validate CL-owned MMCM AFI on F2** (highest priority): BuildAll tag `2026_03_19-051231` passed (WNS=+0.711 ns, 0 DRC errors). AFI **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f) created; poll until `available` then load and test on F2 per [FPGA.md](FPGA.md).
+- **Validate PCIS-fix AFI on F2** (highest priority): Fast BuildAll (Default directives) tag `2026_03_19-102818` passed (WNS=+0.711 ns). AFI **afi-0d8e504d573195da8** (agfi-0aa0b1b8ec26f6b5d) created with PCIS byte-lane fix; poll until `available` then load and test on F2 per [FPGA.md](FPGA.md).
 - Re-enable / validate larger external-memory flows for bigger clause sets.
 - Close timing at higher clock recipes (A1, 150 MHz) once A2 deployment is stable.
 - Reduce remaining overlap between synthesis status tracking and `HANDOFF.md`.
