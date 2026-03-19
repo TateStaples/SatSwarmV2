@@ -12,8 +12,8 @@ package satswarmv2_pkg;
   // parameter real DECAY_FACTOR  = 0.95; // Non-synthesizable, unused in RTL
 
   // Swarm architecture parameters
-  parameter int GRID_X         = 2;    // 2x2 grid default
-  parameter int GRID_Y         = 2;
+  parameter int GRID_X         = 1;    // 1x1 grid for initial verification
+  parameter int GRID_Y         = 1;
   parameter int CORE_ID_W      = 4;    // max 16 cores per grid
   parameter int VC_BITS        = 2;    // 4 virtual channels for deadlock avoidance
 

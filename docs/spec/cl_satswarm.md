@@ -34,15 +34,22 @@
 
 ### Clocking (AWS_CLK_GEN)
 
-- `aws_clk_gen` — CLK_GRP_A_EN=1, others 0, HBM_EN=0
-- Outputs: `gen_clk_main_a0`, `gen_clk_extra_a1/a2/a3`, `gen_rst_main_n`, `gen_rst_a1_n` etc.
-- `i_clk_hbm_ref` = `clk_hbm_ref` (REQP-123 fix)
+- `aws_clk_gen` — Instantiated for HDK elaboration with **all groups disabled** (`CLK_GRP_A_EN=0`, `CLK_GRP_B_EN=0`, `CLK_GRP_C_EN=0`, `CLK_HBM_EN=0`). No MMCMs are active; extra-clock outputs are tied to 0.
+- `i_clk_hbm_ref` = `1'b0` (safe because no MMCM groups are enabled)
+
+See [AWS_CLK_GEN_spec.md](../../src/aws-fpga/hdk/docs/AWS_CLK_GEN_spec.md) and [Clock_Recipes_User_Guide.md](../../src/aws-fpga/hdk/docs/Clock_Recipes_User_Guide.md).
+
+### Solver Clock (CL-owned MMCM)
+
+- **MMCME4_ADV** (`u_mmcm_solver`) — Takes `clk_main_a0` (250 MHz), produces 15.625 MHz via VCO=1250 MHz, CLKOUT0_DIVIDE_F=80. Output drives BUFG → `clk_solver`.
+- Solver domain runs on `clk_solver`; shell-facing logic on `clk_main_a0`.
+- Solver reset (`rst_solver_n`) is gated on `mmcm_solver_locked` — solver stays in reset until the MMCM locks.
 
 ### AXI Clock Domain Crossing
 
-- **OCL_CDC:** clk_main_a0 → gen_clk_extra_a1 (AXI-Lite)
-- **PCIS_CDC:** clk_main_a0 → gen_clk_extra_a1 (DMA 512-bit)
-- **DDR_CDC:** gen_clk_extra_a1 → clk_main_a0 (DDR to shell)
+- **OCL_CDC:** clk_main_a0 (shell) ↔ clk_solver (solver)
+- **PCIS_CDC:** clk_main_a0 (shell) ↔ clk_solver (solver)
+- **DDR_CDC:** clk_solver (solver) ↔ clk_main_a0 (shell)
 
 ### OCL AXI-Lite Handling
 
@@ -55,12 +62,12 @@
 ### Status LED (cl_sh_status_vled)
 
 - `solver_done`, `solver_sat`, `solver_unsat` from bridge status (host_done, host_sat, host_unsat)
-- **CDC:** `xpm_cdc_single` (DEST_SYNC_FF=2) for each bit: user clock (gen_clk_extra_a1) → clk_main_a0
+- **CDC:** 2-FF synchronizer per bit: clk_solver → clk_main_a0
 - `cl_sh_status_vled` = {13'b0, solver_unsat_sync, solver_sat_sync, solver_done_sync}
 
 ### satswarm_core_bridge
 
-- Instantiated with `gen_clk_extra_a1`, `gen_rst_a1_n`
+- Instantiated with `clk_solver`, `rst_solver_n`
 - Connects to OCL, PCIS, DDR interfaces
 
 ## Behavior (RTL Specification)
@@ -69,25 +76,27 @@
 lib_pipe (4 stages) synchronizes rst_main_n to clk_main_a0 → rst_main_n_sync.
 
 ### Clocking
-aws_clk_gen: i_clk_main_a0, i_rst_main_n, i_clk_hbm_ref (must be toggling; REQP-123). Outputs gen_clk_main_a0, gen_clk_extra_a1/a2/a3, gen_rst_main_n, gen_rst_a1_n, etc.
+aws_clk_gen: all groups disabled (CLK_GRP_A_EN=0). CL-owned MMCME4_ADV (`u_mmcm_solver`): clk_main_a0 (250 MHz) -> VCO 1250 MHz -> CLKOUT0/80 = 15.625 MHz -> BUFG -> clk_solver. Solver reset gated on MMCM lock.
 
 ### OCL CDC
-cl_axi_clock_converter_light: clk_main_a0 → gen_clk_extra_a1. Maps ocl_cl_* to slv_ocl_*.
+cl_axi_clock_converter_light: clk_main_a0 ↔ clk_solver. Maps ocl_cl_* to slv_ocl_*.
 
 ### PCIS CDC
-cl_axi_clock_converter_light: clk_main_a0 → gen_clk_extra_a1. Maps DMA write channel to pcis_wr_*.
+cl_axi_clock_converter_light: clk_main_a0 ↔ clk_solver. Maps DMA write channel to pcis_wr_*.
 
 ### DMA address decode
 Writes to 0x1000: literal, clause_end=0. Writes to 0x1004: literal, clause_end=1. pcis_wr_data → host_load_literal (signed).
 
 ### Status LED
-solver_done/sat/unsat from bridge. xpm_cdc_single (DEST_SYNC_FF=2) per bit: gen_clk_extra_a1 → clk_main_a0. cl_sh_status_vled = {13'b0, solver_unsat_sync, solver_sat_sync, solver_done_sync}.
+solver_done/sat/unsat from bridge. 2-FF synchronizer per bit: clk_solver → clk_main_a0. cl_sh_status_vled = {13'b0, solver_unsat_sync, solver_sat_sync, solver_done_sync}.
 
 ### satswarm_core_bridge
-Instantiated with gen_clk_extra_a1, gen_rst_a1_n. Connects axil_*, pcis_*, ddr_* to bridge ports.
+Instantiated with clk_solver, rst_solver_n. Connects axil_*, pcis_*, ddr_* to bridge ports.
 
 ## References
 
 - [satswarm_core_bridge](satswarm_core_bridge.md)
 - AWS HDK cl_ports.vh, cl_id_defines.vh
 - [HANDOFF.md](../HANDOFF.md) — REQP-123, CDC fix
+- [AWS Shell Interface Specification](../../src/aws-fpga/hdk/docs/AWS_Shell_Interface_Specification.md)
+- [HDK.md](../HDK.md) — index of HDK docs

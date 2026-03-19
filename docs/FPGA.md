@@ -1,282 +1,271 @@
-# FPGA Deployment Instructions
+# Using SatSwarm On An F2 Instance
 
-This document outlines the final steps to deploy SatSwarm V2 to an AWS F2 instance.
+This document assumes an AFI already exists and is `available`. It covers loading that AFI on an AWS F2 instance, building the host app, running a single DIMACS file on hardware, and collecting hardware-side CSVs. For synthesis and AFI creation, see `Synth.md`. For HDK reference material, see [HDK.md](HDK.md).
 
 ---
 
-## Quick Start (AFIs Ready)
+## Available AFIs
 
-1×1 and 2×2 CDC-fixed AFIs are **available**. To load on an F2 instance:
+
+| AFI                     | agfi                     | Grid | Tag                 | Clock           | Notes                    |
+| ----------------------- | ------------------------ | ---- | ------------------- | --------------- | ------------------------ |
+| `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | `2026_03_19-051231` | A2 / 15.625 MHz | **Preferred** CL-owned MMCM, CLK_GRP_A_EN=0 |
+| `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | CDC-fixed; gen_clk_extra_a1, may not lock on F2 |
+| `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | CDC-fixed; same MMCM caveat |
+
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: use `agfi-0b41689a08b4d4d5f`; poll `aws ec2 describe-fpga-images --fpga-image-ids afi-0520f5f8b8900def7` until `State` is `available`. Older AFIs use `gen_clk_extra_a1` and may have MMCM lock issues on real F2.
+
+> Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
+
+---
+
+## Load The AFI On F2
+
+On the F2 instance:
 
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
 source sdk_setup.sh
+
 sudo fpga-clear-local-image -S 0
-# 1×1: 4 solver cores
-sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
-# 2×2: 16 solver cores
+
+# 1×1 AFI (preferred: CL-owned MMCM build, once available)
+sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f
+
+# Fallback: older 1×1 (gen_clk_extra_a1; may not lock on F2)
+# sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494
+
+# Optional: 2×2 AFI
 # sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4
+
 sudo fpga-describe-local-image -S 0 -H
 ```
 
-| AFI | agfi | Grid | Tag | Clock |
-|-----|------|------|-----|-------|
-| afi-08366141b8a92b36f | agfi-0f933cb959906a494 | 1×1 | 2026_03_18-163435 | A2 / 15.625 MHz |
-| afi-01ef63d452c8940a2 | agfi-0193eda3eade22ae4 | 2×2 | 2026_03_18-171846 | A2 / 15.625 MHz |
+Confirm `StatusName: loaded` before doing anything else.
 
 ---
 
-## 1. Bitstream Artifacts
+## Build The Host App
 
-All artifacts are under:
-`/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
+The host executable is:
 
-> **Important**: All builds prior to commit `fd6a0a3` (REQP-123 fix) will fail AWS bitgen with `UNKNOWN_BITSTREAM_GENERATE_ERROR`. Do not submit those tars.
+`hdk_cl_satswarm/host/satswarm_host`
 
-### Build History
+It:
 
-| Tag | Grid | Clock | WNS | Tar on disk | S3 | AFI | Notes |
-|---|---|---|---|---|---|---|---|
-| `2026_03_18-004125` | 1×1 | A2 / 15.625 MHz | +0.711 ns | ✅ | ✅ | ❌ | Pre-REQP-123-fix |
-| `2026_03_18-020509` | 2×2 | A2 / 15.625 MHz | +0.711 ns | ✅ | ✅ | ❌ | Pre-REQP-123-fix |
-| `2026_03_18-120815` | 1×1 | A1 / 150 MHz | -18.135 ns | ✅ | ❌ | — | Timing failure |
-| `2026_03_18-142140` | 1×1 | A1 / 150 MHz | -18.820 ns | ✅ | ❌ | — | 2nd timing fail (pos_mem/bubble), killed |
-| `2026_03_18-151300` | 1×1 | A2 / 15.625 MHz | -1.627 ns | ✅ | ❌ | — | CDC fail (pre-ef79614) |
-| **`2026_03_18-163435`** | **1×1** | **A2 / 15.625 MHz** | **+0.711 ns** | **✅** | **✅** | **✅ available** | **CDC fixed, use this** |
-| **`2026_03_18-171846`** | **2×2** | **A2 / 15.625 MHz** | **+0.711 ns** | **✅** | **✅** | **✅ available** | **CDC fixed, 2×2 grid** |
+- checks the AFI status on the selected slot
+- waits for the version register to come out of reset
+- parses a DIMACS CNF
+- uploads literals via DMA or MMIO
+- starts the solver
+- polls for done
+- prints `Result:` and `Cycles:`
 
----
-
-## 2. Amazon FPGA Image (AFI) Creation Workflow
-
-### Step 2a: Upload Tarball to S3
+### Build
 
 ```bash
-# Replace <tag> with the actual build tag (e.g. 2026_03_18-142140)
-TAG=<tag>
-aws s3 cp \
-  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/${TAG}.Developer_CL.tar \
-  s3://satswarm-v2-afi-624824941978/dcp/${TAG}.Developer_CL.tar
-```
-
-### Step 2b: Request AFI Creation
-
-```bash
-TAG=<tag>
-aws ec2 create-fpga-image \
-    --region us-east-1 \
-    --name "SatSwarmV2-1x1-15MHz" \
-    --description "SatSwarm V2 CDCL solver, 1x1 grid, A2/15.625 MHz, REQP-123+CDC fixed" \
-    --input-storage-location Bucket=satswarm-v2-afi-624824941978,Key=dcp/${TAG}.Developer_CL.tar \
-    --logs-storage-location Bucket=satswarm-v2-afi-624824941978,Key=logs/
-```
-
-Each command returns `FpgaImageId` (`afi-*`, for polling) and `FpgaImageGlobalId` (`agfi-*`, for loading). **Save both.**
-
-### Step 2c: Poll for Availability (10–30 min)
-
-```bash
-aws ec2 describe-fpga-images \
-  --fpga-image-ids afi-08366141b8a92b36f \
-  --query 'FpgaImages[*].{Id:FpgaImageId,State:State}' \
-  --region us-east-1
-```
-
-Wait until `{"Code": "available"}` for the AFI you want to load.
-
----
-
-## 3. Load onto the F2 Instance
-
-Once an AFI is `available`, connect to your F2 instance:
-
-```bash
-# Source the AWS SDK (not HDK)
 cd /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga
 source sdk_setup.sh
 
-# Clear the current slot 0 image
-sudo fpga-clear-local-image -S 0
-
-# Load the AFI (use the agfi-* GlobalId; 1×1 or 2×2)
-sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494   # 1×1
-# sudo fpga-load-local-image -S 0 -l agfi-0193eda3eade22ae4  # 2×2
-
-# Verify loaded successfully
-sudo fpga-describe-local-image -S 0 -H
+cd /home/ubuntu/src/project_data/SatSwarmV2/hdk_cl_satswarm/host
+make
 ```
 
-Verify `StatusName: loaded` in the output. The solver is now running on the FPGA.
+If the AWS SDK is visible, this builds `./satswarm_host`.
 
 ---
 
-## 4. AFI History
+## Run A Single CNF On Hardware
 
-| AFI ID | Grid | Tag | Clock | Status | Notes |
-|---|---|---|---|---|---|
-| `afi-0edbf121d0cabe2b3` | 1×1 | `2026_03_18-004125` | A2 / 15.625 MHz | FAILED | `UNKNOWN_BITSTREAM_GENERATE_ERROR` — root cause: REQP-123 (pre-fix tar) |
-| `afi-033c546a9698c9134` | 1×1 | `2026_03_18-004125` | A2 / 15.625 MHz | cancelled/ignore | Same broken tar — do not use |
-| `afi-0a3e524ae986734e5` | 2×2 | `2026_03_18-020509` | A2 / 15.625 MHz | cancelled/ignore | Pre-fix tar — do not use |
-| **`afi-08366141b8a92b36f`** | **1×1** | **`2026_03_18-163435`** | **A2 / 15.625 MHz** | **available** | **agfi-0f933cb959906a494** |
-| **`afi-01ef63d452c8940a2`** | **2×2** | **`2026_03_18-171846`** | **A2 / 15.625 MHz** | **available** | **agfi-0193eda3eade22ae4** |
+Example:
 
-> AFIs from tars predating the REQP-123 fix (fd6a0a3) will fail bitgen. Use the CDC-fixed builds above (1×1 or 2×2).
+```bash
+cd /home/ubuntu/src/project_data/SatSwarmV2/hdk_cl_satswarm/host
+
+./satswarm_host \
+  /home/ubuntu/src/project_data/SatSwarmV2/sim/tests/generated_instances/sat_20v_80c_1.cnf \
+  --slot 0 \
+  --timeout 10 \
+  --debug 0
+```
+
+Expected output format includes:
+
+- `Result:    SAT` or `UNSAT`
+- `Cycles:    <count>`
+- `Status:    0x...`
+
+Use this first before trying any batch collection. It proves:
+
+- the AFI is really loaded
+- the core came out of reset
+- host-to-FPGA literal loading works
+- status and cycle reads work
 
 ---
 
-## 5. Hardware Testbenches & Data Collection
+## Collect A Small Hardware CSV
 
-These testbenches generate the cycle-count and speedup data used to characterize and project SatSwarm performance. Run them from the `sim/` directory on any machine where the Verilator binaries have been built.
+The repository does **not** yet contain a dedicated checked-in F2 batch-collector script. The host app is sufficient to collect real hardware CSVs today with shell loops.
 
----
-
-### 5a. Scaling Data Collection (Primary Benchmark)
-
-`run_aws_scaling_collection.sh` orchestrates the full data pipeline: it builds any missing Verilator configs, runs all selected CNFs across each config, fits a runtime distribution to the 1×1 baseline, and projects speedup to arbitrary core counts via Monte Carlo.
-
-**Minimum run (1×1 and 2×2, generated test suite):**
+### Example: generated instances -> CSV
 
 ```bash
-cd /home/ubuntu/src/project_data/SatSwarmV2/sim
-
-bash scripts/run_aws_scaling_collection.sh \
-  --configs 1x1,2x2 \
-  --benchmark-profile generated_instances \
-  --runs-per-test 1
-```
-
-**Broader benchmark covering SATLIB families (UF/UUF 20–150, QG, BMC, HOLE, etc.):**
-
-```bash
-bash scripts/run_aws_scaling_collection.sh \
-  --configs 1x1,2x2 \
-  --benchmark-profile verisat_full \
-  --runs-per-test 3 \
-  --min-baseline-samples 20
-```
-
-**All options:**
-
-| Flag | Default | Description |
-|---|---|---|
-| `--configs CSV` | `1x1,2x2` | Comma-separated grid configs; each must have a built binary (`obj_dir_<cfg>/Vtb_satswarmv2`) |
-| `--benchmark-profile` | `verisat_full` | `verisat_full` — SATLIB families; `generated_instances` — `tests/generated_instances/`; `custom_dir` — `--suite-dir` path |
-| `--runs-per-test N` | `10` | Repeated runs per CNF per config (for variance estimates) |
-| `--max-tests N` | `0` (all) | Limit number of CNF files sampled (useful for quick checks) |
-| `--timeout-sec N` | `180` | Wall-clock timeout per run |
-| `--max-cycles N` | `5000000` | `+MAXCYCLES` plusarg passed to the binary |
-| `--topology NAME` | `mesh` | Communication overhead model: `all_to_all`, `ring`, `tree`, `mesh` |
-| `--projection-cores CSV` | `1,2,4,…,512` | Core counts to project speedup to |
-| `--min-baseline-samples N` | `20` | Minimum 1×1 PASS samples required before fitting |
-| `--seed N` | `12345` | RNG seed for sampling and Monte Carlo |
-| `--skip-build` | off | Skip `make build_<cfg>` (if binaries already exist) |
-| `--suite-dir PATH` | `tests/generated_instances` | CNF directory (relative to `sim/`) for `custom_dir` profile |
-
-**Output files** (written to `sim/logs/benchmark_results/scaling_<timestamp>/`):
-
-| File | Content |
-|---|---|
-| `raw_runs.csv` | One row per CNF × config × run: benchmark, config, cores, expected, result, cycles, wall_sec, timed_out, command |
-| `aggregate_by_config.csv` | Per-config summary: mean/median cycles, mean wall time, success rate |
-| `fit_summary.json` | Distribution fit results (exponential, shifted-exponential, lognormal, Weibull ranked by AIC); best fit params; estimated mesh overhead `alpha`; measured speedups |
-| `scaling_projection.csv` | Projected speedup at each `--projection-cores` value: independent, sharing-adjusted, and overhead-corrected |
-| `summary.txt` | Human-readable summary of fit, alpha, measured speedups, and projection file paths |
-
-**Quick sanity check (10 CNFs only, skip build):**
-
-```bash
-cd /home/ubuntu/src/project_data/SatSwarmV2/sim
-ln -sfn obj_dir_1x1 obj_dir   # ensure symlink exists
-bash scripts/run_aws_scaling_collection.sh \
-  --configs 1x1,2x2 \
-  --max-tests 10 \
-  --runs-per-test 1 \
-  --benchmark-profile generated_instances \
-  --skip-build
-```
-
----
-
-### 5b. Full Regression (Correctness Gate)
-
-Run the 98-file ladder before any data collection run to confirm correctness:
-
-```bash
-cd /home/ubuntu/src/project_data/SatSwarmV2/sim
-ln -sfn obj_dir_1x1 obj_dir
-
-bash scripts/run_bigger_ladder.sh
-```
-
-Expected: `98/98 ALL TESTS PASSED`. Each failing file prints the command to reproduce it in isolation.
-
----
-
-### 5c. AWS HDK XSim Regression (Shell Integration)
-
-Verifies the AXI shell interface wiring using the AWS XSim BFM. Slower than Verilator (~10× per file; 180 s timeout per CNF).
-
-```bash
-# Requires HDK env vars (see Deploy.md "Initialize HDK Environment"):
-cd /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/verif/scripts
-
-# Single smoke test:
-make TEST=test_satswarm_aws
-# Expected: "RESULT: *** TEST PASSED ***"
-
-# Full regression over all generated instances:
 cd /home/ubuntu/src/project_data/SatSwarmV2
-bash sim/scripts/run_aws_regression.sh
+
+HOST=/home/ubuntu/src/project_data/SatSwarmV2/hdk_cl_satswarm/host/satswarm_host
+OUT=/home/ubuntu/src/project_data/SatSwarmV2/logs/f2_generated_$(date +%Y%m%d_%H%M%S).csv
+
+mkdir -p logs
+echo "benchmark,expected,result,cycles,slot,timeout_sec" > "$OUT"
+
+for cnf in sim/tests/generated_instances/*.cnf; do
+  name=$(basename "$cnf")
+  if [[ "$name" == *unsat* ]]; then
+    expected=UNSAT
+  else
+    expected=SAT
+  fi
+
+  output=$("$HOST" "$PWD/$cnf" --slot 0 --timeout 15 2>&1 || true)
+  result=$(printf "%s\n" "$output" | sed -n 's/^Result:[[:space:]]*//p' | head -1)
+  cycles=$(printf "%s\n" "$output" | sed -n 's/^Cycles:[[:space:]]*//p' | head -1)
+
+  [ -z "$result" ] && result=ERROR
+  [ -z "$cycles" ] && cycles=0
+
+  echo "$name,$expected,$result,$cycles,0,15" >> "$OUT"
+done
+
+echo "Wrote $OUT"
 ```
 
-> **Note**: `run_aws_regression.sh` checks for `$HDK_DIR` on entry and exits if unset. Set the manual env block from Deploy.md first.
-
----
-
-### 5d. SATLIB Corpus Validation
-
-Before running benchmarks against SATLIB instances, verify their SAT/UNSAT ground-truth labels using PySAT:
+### Example: SATLIB subset -> CSV
 
 ```bash
-cd /home/ubuntu/src/project_data/SatSwarmV2/sim
+cd /home/ubuntu/src/project_data/SatSwarmV2
 
-# Validate all instances under tests/satlib/ (sat/ and unsat/ subdirs):
-python3 tests/validate_satlib.py --root tests/satlib
+HOST=/home/ubuntu/src/project_data/SatSwarmV2/hdk_cl_satswarm/host/satswarm_host
+OUT=/home/ubuntu/src/project_data/SatSwarmV2/logs/f2_satlib_uf50_$(date +%Y%m%d_%H%M%S).csv
 
-# Validate a specific family:
-python3 tests/validate_satlib.py --root tests/satlib --pattern uf50 --log-every 1
+mkdir -p logs
+echo "benchmark,expected,result,cycles,slot,timeout_sec" > "$OUT"
 
-# Options:
-#   --solver g3|g4|m22|cadical124   PySAT solver (default: g3 / Glucose3)
-#   --limit N                        Stop after N files
-#   --quiet                          Suppress per-instance output except errors
+for cnf in sim/tests/satlib/sat/uf50*.cnf sim/tests/satlib/unsat/uuf50*.cnf; do
+  [ -f "$cnf" ] || continue
+  name=$(basename "$cnf")
+
+  if [[ "$name" == uuf* ]]; then
+    expected=UNSAT
+  else
+    expected=SAT
+  fi
+
+  output=$("$HOST" "$PWD/$cnf" --slot 0 --timeout 30 2>&1 || true)
+  result=$(printf "%s\n" "$output" | sed -n 's/^Result:[[:space:]]*//p' | head -1)
+  cycles=$(printf "%s\n" "$output" | sed -n 's/^Cycles:[[:space:]]*//p' | head -1)
+
+  [ -z "$result" ] && result=ERROR
+  [ -z "$cycles" ] && cycles=0
+
+  echo "$name,$expected,$result,$cycles,0,30" >> "$OUT"
+done
+
+echo "Wrote $OUT"
 ```
 
-Exit code 0 = all labels confirmed correct. Exit code 2 = mismatch or error found — do not run benchmarks until resolved.
+These CSVs are enough for spot analysis and later ingestion into the modeling workflow in `Model.md`.
 
 ---
 
-### Data Collection Workflow Summary
+## Practical Collection Advice
 
+### Start with the single-file run
+
+Always validate one CNF by hand before launching a batch. This catches:
+
+- wrong slot selection
+- stale or unloaded AFI
+- reset / version-register issues
+- broken host build
+
+### Prefer small suites first
+
+For early hardware validation, start with:
+
+- a handful of `generated_instances`
+- a few `uf50` / `uuf50` files
+
+Do not begin with a giant sweep until the host run is stable.
+
+### Keep the CSV schema simple
+
+At minimum, keep:
+
+- `benchmark`
+- `expected`
+- `result`
+- `cycles`
+- `slot`
+- `timeout_sec`
+
+If you later want to feed those results into the same projection machinery used by the simulation pipeline, you will eventually want a converter into the `raw_runs.csv` schema described in `Model.md`.
+
+---
+
+## Troubleshooting
+
+**Host hangs or no response:** The shell enforces an 8 µs timeout on OCL and DMA transactions. If the CL does not respond in time, the interface may stop working. Run `fpga-describe-local-image -S 0 --metrics` and check `ocl-slave-timeout`, `dma-pcis-timeout`, and the offending address. After a timeout, reload the AFI. See [How_To_Detect_Shell_Timeout.md](../src/aws-fpga/hdk/docs/How_To_Detect_Shell_Timeout.md).
+
+---
+
+## Checked-In FPGA Scripts
+
+All four previously-missing wrappers are now in `hdk_cl_satswarm/scripts/`:
+
+| Script | Purpose |
+| ------ | ------- |
+| `run_fpga_single.sh` | Wrapper around `satswarm_host` for a single CNF file |
+| `run_fpga_suite.sh` | Runs a CNF directory and emits a CSV |
+| `run_fpga_scaling_collection.sh` | Multi-AFI scaling collector (mirrors `sim/scripts/run_aws_scaling_collection.sh`) |
+
+Two modeling helpers live in `sim/scripts/`:
+
+| Script | Purpose |
+| ------ | ------- |
+| `convert_fpga_csv.py` | Converts host-side CSVs into the `raw_runs.csv` schema |
+| `refit_project.py` | Fits distributions and projects scaling from an existing `raw_runs.csv` |
+
+### Quick Start
+
+```bash
+# 1. Validate a single CNF first
+bash hdk_cl_satswarm/scripts/run_fpga_single.sh \
+  sim/tests/generated_instances/sat_20v_80c_1.cnf --slot 0 --timeout 15
+
+# 2. Run a full suite and get a CSV
+bash hdk_cl_satswarm/scripts/run_fpga_suite.sh \
+  --suite-dir sim/tests/generated_instances \
+  --out logs/hw_generated.csv \
+  --slot 0 --timeout 30
+
+# 3. Full scaling collection across two AFIs (requires sudo for fpga-load-local-image)
+source src/aws-fpga/sdk_setup.sh
+bash hdk_cl_satswarm/scripts/run_fpga_scaling_collection.sh \
+  --afis "1x1:agfi-0f933cb959906a494,2x2:agfi-0193eda3eade22ae4" \
+  --suite-dir sim/tests/generated_instances \
+  --timeout-sec 30
+
+# 4. Convert a manually-collected CSV into raw_runs.csv and then refit
+python3 sim/scripts/convert_fpga_csv.py \
+  --input 1x1:logs/hw_1x1.csv \
+  --input 2x2:logs/hw_2x2.csv \
+  --clock-mhz 15.625 \
+  --output logs/raw_runs.csv
+
+python3 sim/scripts/refit_project.py \
+  --input logs/raw_runs.csv \
+  --output-dir logs/refit_out
 ```
-# 1. Build Verilator configs (once, or after RTL changes)
-cd sim
-make build_1x1 && make build_2x2
-ln -sfn obj_dir_1x1 obj_dir
 
-# 2. Correctness gate
-bash scripts/run_bigger_ladder.sh              # must be 98/98
-
-# 3. Optional: validate SATLIB labels
-python3 tests/validate_satlib.py --root tests/satlib --quiet
-
-# 4. Collect scaling data
-bash scripts/run_aws_scaling_collection.sh \
-  --configs 1x1,2x2 \
-  --benchmark-profile verisat_full \
-  --runs-per-test 3
-
-# 5. Inspect outputs
-ls logs/benchmark_results/scaling_*/
-cat logs/benchmark_results/scaling_*/summary.txt
-```
+For the theory behind the fitting and projection outputs, see `Model.md`.

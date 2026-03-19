@@ -65,6 +65,72 @@ Same pipeline-register strategy as commit `bab99f4` (BUMP_UPDATE_PIPE).
 
 ---
 
+## Session Log: 2026-03-19 (continued) — CL-owned MMCM solver clock (tag `2026_03_19-051231`)
+
+### Context
+
+The fabric-based `solver_clk_div` build (tag `2026_03_19-031457`) passed local timing but its AFI (`afi-064b74577e3b2f258`) **failed** with DRC REQP-123 during AWS bitstream generation. Root cause: `CLK_GRP_A_EN(1)` kept the Group A MMCM inside `aws_clk_gen` instantiated, but `.i_clk_hbm_ref(1'b0)` fed it a dead clock. This was a regression of the fix in commit `fd6a0a3`, inadvertently reverted when the clk_main_a0-direct approach was introduced.
+
+### Fix
+
+Replaced `solver_clk_div` with a **CL-owned MMCME4_ADV** producing `clk_solver` from `clk_main_a0`:
+- CLKFBOUT_MULT_F=5, CLKOUT0_DIVIDE_F=80, VCO=1250 MHz → 15.625 MHz output
+- BUFG on CLKOUT0 drives `clk_solver` on the global clock network
+- Solver reset gated on `mmcm_solver_locked` + `rst_main_n_sync`
+- `CLK_GRP_A_EN(0)` in aws_clk_gen — removes the offending Group A MMCM entirely
+- XDC: removed `create_clock` workaround; Vivado auto-propagates generated clock through MMCM; `set_false_path` references MMCM output pin
+
+### Verification
+
+run_bigger_ladder **98/98 PASSED**; run_xsim_bridge_test **6/6 PASSED**.
+
+### Build
+
+Full BuildAll (tag `2026_03_19-051231`), 1×1 grid, 37 minutes. WNS=+0.711 ns. 0 DRC errors (REQP-123 not triggered — CL-owned MMCM uses always-active `clk_main_a0`, and disabled aws_clk_gen has no MMCMs). Tar uploaded to S3, AFI created: **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f).
+
+---
+
+## Session Log: 2026-03-19 (continued) — Clock divide: solver_clk_div + BUFG (superseded)
+
+### Context
+
+The clk_main_a0-direct approach failed timing at 250 MHz (solver paths ~10–24 ns need 4 ns period). Switched to a local divide-by-16 instead of using `gen_clk_extra_a1` (MMCM never locks on real F2).
+
+### RTL
+
+**`solver_clk_div`** module in `cl_satswarm.sv`: 4-bit counter divides `clk_main_a0` (250 MHz) by 16; `div_pre` FF drives BUFG output → **clk_solver** (15.625 MHz, 64 ns). OCL_CDC, PCIS_CDC, DDR_CDC cross clk_main_a0 ↔ clk_solver. satswarm_core_bridge runs on clk_solver, rst_solver_n.
+
+### XDC
+
+**`cl_timing_user.xdc`**: `create_generated_clock` -source `u_solver_clk_div/u_bufg/I` -divide_by 16 target `u_solver_clk_div/u_bufg/O`; `set_false_path` both directions for CDC.
+
+### Verification
+
+run_bigger_ladder **98/98 PASSED**; run_xsim_bridge_test **6/6 PASSED**.
+
+### Build
+
+SynthCL completed (tag `2026_03_19-031457`); post_synth.dcp written. Full BuildAll deferred.
+
+### Failed BuildAll (tag `2026_03_19-020552`)
+
+Full BuildAll with clk_main_a0-direct RTL failed timing (WNS=-6.66). Solver at 250 MHz; paths ~10.6 ns. Log: `build/scripts/2026_03_19-020552.vivado.log`. Do not use that RTL for full builds.
+
+### clk_solver XDC fix and full flow (tag `2026_03_19-031457`)
+
+**Problem**: `create_generated_clock` in `cl_timing_user.xdc` used `u_solver_clk_div/u_bufg/I` (counter FF Q-output) as source. Vivado does not establish a generated-clock relationship from a data signal; solver FFs were analyzed at 250 MHz (4 ns) → WNS ≈ -6.7 ns.
+
+**Fix**: Replaced with `create_clock -period 64.000 -name clk_solver [get_pins u_solver_clk_div/u_bufg/O]` in both `cl_timing_user.xdc` copies. Post_synth DCP from `2026_03_19-031457` had the old XDC baked in; the DCP was patched (cl_satswarm_late.xdc inside the zip) and ImplCL was run from that checkpoint.
+
+**Result**: Place + route passed (WNS=+0.711 ns). Solver paths analyzed at 64 ns; clk_main_a0 remains critical. Tar generated, uploaded to S3, AFI created: **afi-064b74577e3b2f258** (agfi-0876bddc3d80f37f5). AFI pending availability; F2 validation deferred. See [Synth.md](Synth.md) § clk_solver constraint history and [HANDOFF.md](HANDOFF.md).
+
+### Misc fixes
+
+- Removed `resync_controller.sv` from top.xsim.f / top.vivado.f (file does not exist in Mega).
+- Fixed OCL_CDC illegal output port connections: `.m_axi_arready`, `.m_axi_rready` changed from constants to `()`.
+
+---
+
 ## Session Log: 2026-03-18 (continued — bigger_ladder timing fix)
 
 ### REQP-123 DRC Fix
