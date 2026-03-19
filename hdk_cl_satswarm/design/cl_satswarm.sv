@@ -598,7 +598,10 @@ module cl_satswarm #(
             pcis_wr_valid <= 1'b0;
             if (slv_pcis_wvalid && slv_pcis_wready) begin
                 pcis_wr_valid <= 1'b1;
-                pcis_wr_data  <= slv_pcis_wdata[31:0];
+                // AXI4 byte-lane steering: a 32-bit write to byte address A places data in
+                // wdata[32*(A[5:2]) +: 32].  Always reading [31:0] silently zeroed the
+                // last literal of every clause (0x1004 writes landed in [63:32]).
+                pcis_wr_data  <= slv_pcis_wdata[{pcis_aw_addr_q[5:2], 5'h0} +: 32];
                 pcis_wr_addr  <= pcis_aw_addr_q[31:0];
             end
         end

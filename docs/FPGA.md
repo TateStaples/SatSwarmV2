@@ -15,6 +15,8 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 
 In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: use `agfi-0b41689a08b4d4d5f`; poll `aws ec2 describe-fpga-images --fpga-image-ids afi-0520f5f8b8900def7` until `State` is `available`. Older AFIs use `gen_clk_extra_a1` and may have MMCM lock issues on real F2.
 
+> **⚠️ Critical correctness bug in all existing AFIs**: A PCIS AXI4 byte-lane mismatch causes every clause-end literal to be loaded as zero, corrupting the formula. UNSAT instances return SAT. SAT instances return correct results but with wrong cycle counts (formula is easier than intended). The RTL fix is committed but no new AFI has been built yet. **Do not use hardware results from any existing AFI for correctness testing.** See `docs/bugs/pcis_byte_lane_bug.md`.
+
 > Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
 
 ---

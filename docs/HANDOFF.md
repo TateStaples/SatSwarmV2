@@ -2,7 +2,7 @@
 
 Welcome. This document captures the **current state** of SatSwarmV2 development, passing context from the previous agent to you.
 
-**Quick status (2026-03-19):** CL-owned MMCM solver clock build complete (tag `2026_03_19-051231`). Replaced fabric `solver_clk_div` with MMCME4_ADV; set `CLK_GRP_A_EN(0)` in aws_clk_gen to fix REQP-123. BuildAll passed (WNS=+0.711 ns, 0 DRC errors). AFI created: **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Poll until `available`, then load on F2 per FPGA.md. See §2 and §5.
+**Quick status (2026-03-19, continued):** PCIS byte-lane bug discovered and fixed in RTL. **All existing AFIs produce wrong answers for UNSAT instances (return SAT).** RTL fix committed; AFI rebuild required. See §2b and `docs/bugs/pcis_byte_lane_bug.md`.
 
 ---
 
@@ -34,6 +34,38 @@ The repository's documentation has been modularized:
 **Not done yet (for next agent):**
 - Poll `aws ec2 describe-fpga-images --fpga-image-ids afi-0520f5f8b8900def7` until `State.Code == available`; then load on F2 and validate per [FPGA.md](FPGA.md).
 - Run **2×2** build after 1×1 AFI is validated (change GRID_X/GRID_Y in the eight files; do not run in parallel with another build).
+
+---
+
+## 2b. This Session (2026-03-19 — PCIS byte-lane bug + host BAR4 fix)
+
+**What was discovered:**
+- Loaded AFI `agfi-0b41689a08b4d4d5f` on F2; host version register read correctly (`0x53415431`).
+- Host binary failed to load literals: `fpga_pci_poke` for literals was targeting BAR0 (OCL) instead of BAR4 (PCIS). Fixed by attaching BAR4 separately; literals now reach the FPGA.
+- After BAR4 fix, SAT instances returned correct results with non-zero cycle counts. UNSAT instances returned SAT — revealing a deeper RTL bug.
+
+**Root cause (PCIS byte-lane mismatch):**
+- `cl_satswarm.sv:601` always reads `slv_pcis_wdata[31:0]` from the 512-bit PCIS data bus.
+- AXI4 byte-lane steering places a 32-bit write to address `0x1004` (clause-end) in `wdata[63:32]`, not `[31:0]`.
+- Result: every last literal of every clause is silently replaced with `0`. Corrupted formula; UNSAT becomes SAT.
+- XSim BFM packed data into `[31:0]` regardless of address, masking the bug in simulation.
+
+**Evidence:**
+| CNF | Expected | Hardware | XSim cycles | HW cycles |
+|-----|----------|----------|-------------|-----------|
+| `sat_20v_80c_1.cnf` | SAT | SAT ✓ | 5,219 | 3,267 |
+| `unsat_50v_215c_1.cnf` | UNSAT | SAT ✗ | — | 12,877 |
+
+Hardware solved faster than XSim on the same SAT instance (corrupted formula is easier). UNSAT flipped to SAT (missing constraints make it satisfiable).
+
+**Fixes committed (no rebuild yet):**
+1. `hdk_cl_satswarm/design/cl_satswarm.sv:601` — byte-lane-aware extraction: `slv_pcis_wdata[{pcis_aw_addr_q[5:2], 5'h0} +: 32]`
+2. `hdk_cl_satswarm/verif/tests/test_satswarm_aws.sv` — BFM data placement corrected to match hardware (`{448'h0, lit, 32'h0}` for `0x1004` writes)
+3. `hdk_cl_satswarm/host/satswarm_host.c` — BAR4 attached separately for MMIO literal loading
+
+**Full writeup**: `docs/bugs/pcis_byte_lane_bug.md`
+
+**Status: RTL fix is in tree but no AFI has been built with it yet.**
 
 ---
 
@@ -127,6 +159,12 @@ All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints
 ---
 
 ## 5. Immediate Next Steps (For Next Agent)
+
+### Priority 0: Rebuild AFI with PCIS Byte-Lane Fix
+
+**All existing AFIs have a critical correctness bug** — UNSAT instances return SAT. The RTL fix is already committed (`cl_satswarm.sv:601`). The next step is a Vivado rebuild on a build instance (not F2) followed by a new AFI submission. See `docs/bugs/pcis_byte_lane_bug.md` for full details and `docs/Synth.md` for build instructions.
+
+After the new AFI is built and available, validate with `unsat_50v_215c_1.cnf` — it must return UNSAT.
 
 ### Priority 1: Poll AFI and Validate on F2 (CL-owned MMCM build)
 

@@ -4,6 +4,52 @@ This document serves as an archive of major architectural pivots, difficult bugs
 
 ---
 
+## Session Log: 2026-03-19 (F2 Hardware) — PCIS Byte-Lane Bug + Host BAR4 Fix
+
+### Bug 1: Host MMIO literal loading used wrong BAR (BAR0 instead of BAR4)
+
+`satswarm_host.c` fell back to MMIO when xdma was unavailable, but incorrectly wrote
+literal data via `ocl_bar_handle` (BAR0/OCL). OCL addresses `0x1000`/`0x1004` hit the
+default case in `satswarm_core_bridge`'s AXI-Lite decoder and were silently dropped.
+Result: solver started with an empty clause database, returned SAT in 0 cycles.
+
+**Fix**: Attach BAR4 (`APP_PF_BAR4`) separately in `fpga_init`; use `pcis_bar_handle`
+for all literal writes. Cycles became non-zero after this fix; SAT instances returned
+correct results.
+
+### Bug 2 (Critical): PCIS AXI4 byte-lane mismatch — UNSAT instances return SAT
+
+After the BAR4 fix, UNSAT instances still returned SAT. Investigation:
+
+- `cl_satswarm.sv:601` always extracts `slv_pcis_wdata[31:0]` from the 512-bit PCIS bus.
+- AXI4 byte-lane steering: a 32-bit write to `0x1004` (clause-end address) places data
+  in `wdata[63:32]`, not `[31:0]`. Hardware drives `[31:0]` = 0 for that write.
+- Every last literal of every clause is loaded as `0` instead of the true value.
+- XSim BFM always packed data into `[31:0]` regardless of address — bug invisible in sim.
+
+**Evidence**: `unsat_50v_215c_1.cnf` returned SAT on hardware; `sat_20v_80c_1.cnf`
+returned SAT in 3,267 cycles vs XSim's 5,219 (corrupted formula is strictly easier).
+
+**Fix** (`cl_satswarm.sv:601`):
+```systemverilog
+// Before (wrong):
+pcis_wr_data <= slv_pcis_wdata[31:0];
+// After (correct):
+pcis_wr_data <= slv_pcis_wdata[{pcis_aw_addr_q[5:2], 5'h0} +: 32];
+```
+
+**XSim testbench** (`test_satswarm_aws.sv`): corrected BFM data placement for `0x1004`
+writes to `{448'h0, literal, 32'h0}` so simulation now exercises the same byte-lane
+extraction path as real hardware.
+
+**No host-only workaround exists** — the literal is stored (not ignored) on clause_end
+beats (`pse.sv:980`), so any two-write scheme corrupts the clause data.
+
+**Status: RTL fix committed; AFI rebuild required.** All existing AFIs are affected.
+Full analysis: `docs/bugs/pcis_byte_lane_bug.md`.
+
+---
+
 ## Session Log: 2026-03-19 — MMCM Lock Failure on Real F2 Hardware (clk_main_a0 Direct)
 
 ### What Went Wrong

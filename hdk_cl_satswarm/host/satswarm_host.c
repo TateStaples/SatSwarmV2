@@ -47,7 +47,8 @@
 // Global state
 // =============================================================================
 static int slot_id = 0;
-static pci_bar_handle_t ocl_bar_handle = PCI_BAR_HANDLE_INIT;
+static pci_bar_handle_t ocl_bar_handle  = PCI_BAR_HANDLE_INIT;
+static pci_bar_handle_t pcis_bar_handle = PCI_BAR_HANDLE_INIT;
 static int dma_write_fd = -1;
 
 // =============================================================================
@@ -125,9 +126,17 @@ static int fpga_init(void) {
     // Open DMA write channel
     dma_write_fd = fpga_dma_open_queue(FPGA_DMA_XDMA, slot_id, 0, true);
     if (dma_write_fd < 0) {
-        fprintf(stderr, "WARNING: DMA open failed (%d), will use MMIO for loading\n",
+        fprintf(stderr, "WARNING: DMA open failed (%d), will use MMIO (BAR4) for loading\n",
                 dma_write_fd);
-        // Fall back to MMIO writes via OCL BAR
+        // Fall back to MMIO writes via PCIS BAR4
+        int bar_rc = fpga_pci_attach(slot_id, FPGA_APP_PF, APP_PF_BAR4, 0, &pcis_bar_handle);
+        if (bar_rc) {
+            fprintf(stderr, "WARNING: BAR4 attach failed (%d), literal loading will not work\n",
+                    bar_rc);
+            pcis_bar_handle = PCI_BAR_HANDLE_INIT;
+        } else {
+            fprintf(stderr, "INFO: BAR4 attached for MMIO literal loading\n");
+        }
     }
 
     return 0;
@@ -138,6 +147,8 @@ static void fpga_cleanup(void) {
         close(dma_write_fd);
     if (ocl_bar_handle != PCI_BAR_HANDLE_INIT)
         fpga_pci_detach(ocl_bar_handle);
+    if (pcis_bar_handle != PCI_BAR_HANDLE_INIT)
+        fpga_pci_detach(pcis_bar_handle);
     fpga_mgmt_close();
 }
 
@@ -226,8 +237,8 @@ static int upload_cnf(void) {
             // DMA write (faster for large CNFs)
             rc = fpga_dma_burst_write(dma_write_fd, (uint8_t *)&data, 4, addr);
         } else {
-            // MMIO fallback via OCL BAR (PCIS address space mapped to BAR4)
-            rc = fpga_pci_poke(ocl_bar_handle, addr, data);
+            // MMIO fallback via PCIS BAR4
+            rc = fpga_pci_poke(pcis_bar_handle, addr, data);
         }
 
         if (rc) {

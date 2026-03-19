@@ -29,17 +29,20 @@ initial begin
     // Let's write a small CNF directly using DMA PCIS (BAR4)
     // The SatSwarm expects writes to offset 0x1000 for normal literals
     // and 0x1004 for the last literal in a clause.
-    // Note: The PCIS interface in the CL is 512-bit wide, but we defined our wrapper to
-    // extract the lower 32-bits for literal streaming.
-    
+    //
+    // AXI4 byte-lane steering: a 32-bit write to byte address A places data in
+    // wdata[32*(A[5:2]) +: 32].  A write to 0x1000 (offset 0) → [31:0].
+    // A write to 0x1004 (offset 4) → [63:32].  The BFM must match this so
+    // that simulation exercises the same extraction path as real hardware.
+
     $display("[%0t] Streaming CNF clauses via PCIS DMA", $time);
     // Clause 1: {1, 2}
-    tb.poke_pcis(.slot_id(0), .addr(64'h1000), .data({480'h0, 32'd1}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
-    tb.poke_pcis(.slot_id(0), .addr(64'h1004), .data({480'h0, 32'd2}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
-    
+    tb.poke_pcis(.slot_id(0), .addr(64'h1000), .data({480'h0, 32'd1}),        .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
+    tb.poke_pcis(.slot_id(0), .addr(64'h1004), .data({448'h0, 32'd2, 32'h0}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
+
     // Clause 2: {-1, 2}
-    tb.poke_pcis(.slot_id(0), .addr(64'h1000), .data({480'h0, -32'sd1}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
-    tb.poke_pcis(.slot_id(0), .addr(64'h1004), .data({480'h0, 32'd2}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
+    tb.poke_pcis(.slot_id(0), .addr(64'h1000), .data({480'h0, -32'sd1}),      .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
+    tb.poke_pcis(.slot_id(0), .addr(64'h1004), .data({448'h0, 32'd2, 32'h0}), .id(AXI_ID), .strb(64'hFFFF_FFFF_FFFF_FFFF));
 
     // Start solver (Write 1 to Control Register at Offset 0x00)
     $display("[%0t] Starting Solver...", $time);
