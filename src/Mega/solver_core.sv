@@ -5,8 +5,8 @@ module solver_core #(
     parameter int MAX_CLAUSES = 256,
     parameter int MAX_LITS = 4096,
     parameter int MAX_CLAUSE_LEN = 32,
-    parameter int GRID_X = 1,
-    parameter int GRID_Y = 1
+    parameter int GRID_X = 2,
+    parameter int GRID_Y = 2
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock

@@ -1,11 +1,39 @@
-# Understaning the Priorities of the Project
+# Agent Driven Priorities (bugs and issues)
+- need to build more scripts for specific data collection items for analysis
+- [x] add a checked-in FPGA single-file wrapper around `hdk_cl_satswarm/host/satswarm_host` → `hdk_cl_satswarm/scripts/run_fpga_single.sh`
+- [x] add a checked-in FPGA DIMACS suite runner that emits CSV on F2 → `hdk_cl_satswarm/scripts/run_fpga_suite.sh`
+- [x] add a checked-in FPGA scaling collector mirroring `sim/scripts/run_aws_scaling_collection.sh` → `hdk_cl_satswarm/scripts/run_fpga_scaling_collection.sh`
+- [x] add a helper that converts host-side CSVs into the `raw_runs.csv` schema expected by the modeling flow → `sim/scripts/convert_fpga_csv.py`
+- [x] add a modeling helper that can fit/project directly from an existing raw CSV without rerunning benchmarks → `sim/scripts/refit_project.py`
 
+
+# Person Driven Priorities
 ## 1. Hardware Deployment
 
 ## 1.1 Meeting Timing
 - [x]Meet the low 15 MHz timing constraint
 - [ ] Meet the moderate 150 MHz timing constraint
 - [ ] Meet the high end strech goal of 250 MHz
+
+### 1.1.1 Timing Details (1x1 build `2026_03_19-051231`)
+
+**Slack per clock** (post-route, from `build/reports/cl_satswarm.2026_03_19-051231.post_route_timing.rpt`):
+
+| Clock | Worst slack | Period |
+|-------|-------------|--------|
+| clk_main_a0 | 0.711 ns (limiting) | 4 ns (250 MHz) |
+| clk_solver_unbuf | 43.120 ns | 64 ns (15.625 MHz) |
+| clk_hbm_ref | 8.779 ns | 10 ns (100 MHz) |
+| clk_spi | 10.520 ns | — |
+
+**Solver critical path** (clk_solver_unbuf):
+- **Source:** `u_cae/active_in_buf_q_reg[187]` (CAE active-in buffer)
+- **Destination:** `u_pse/append_lits_q_reg[11][27]/CE` (PSE append-lits register CE)
+- **Data path delay:** 20.564 ns (logic 3.534 ns, route 17.030 ns)
+- **Logic levels:** 37 (CARRY8=2, LUT3=2, LUT4=1, LUT5=4, LUT6=17, MUXF7=5, MUXF8=2, RAMD64E=4)
+- **Implication:** ~48 MHz max solver clock (critical path ≈ 20.9 ns); routing ≈ 83% of delay
+
+**References:** [Synth.md](Synth.md) § clk_solver constraint history; [HANDOFF.md](HANDOFF.md) build artifacts table.
 ## 1.2 Testing the AFI Creation
 - [x] Test the AFI creation process (get into the S3 bucket)
 ## 1.3 Deploying the AFI

@@ -16,8 +16,8 @@
 `timescale 1ns/1ps
 
 module satswarm_core_bridge #(
-    parameter int GRID_X              = 1,
-    parameter int GRID_Y              = 1,
+    parameter int GRID_X              = 2,
+    parameter int GRID_Y              = 2,
     parameter int MAX_VARS_PER_CORE   = 256,
     parameter int MAX_CLAUSES_PER_CORE= 512,
     parameter int MAX_LITS            = 1024
