@@ -149,8 +149,9 @@ debug_8v:
 
 test_vde_heap:
 	@echo "Building VDE Heap testbench..."
-	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_vde_heap.sv cpp/sim_tb_vde_heap.cpp \
+	$(VERILATOR) $(VERILATOR_FLAGS) \
 		../src/Mega/satswarmv2_pkg.sv ../src/Mega/vde_heap.sv \
+		sv/tb_vde_heap.sv cpp/sim_tb_vde_heap.cpp \
 		--top-module tb_vde_heap \
 		-CFLAGS "-std=c++17" \
 		-I../src/Mega \

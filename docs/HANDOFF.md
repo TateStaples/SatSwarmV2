@@ -2,7 +2,7 @@
 
 Welcome. This document captures the **current state** of SatSwarmV2 development, passing context from the previous agent to you.
 
-**Quick status (2026-03-19, continued):** PCIS byte-lane bug discovered and fixed in RTL. **All existing AFIs produce wrong answers for UNSAT instances (return SAT).** RTL fix committed; AFI rebuild required. See §2b and `docs/bugs/pcis_byte_lane_bug.md`.
+**Quick status (2026-03-19, continued):** PCIS byte-lane bug discovered and fixed in RTL. A new **2x2 BuildAll** with the fix (tag `2026_03_19-171700`, Default directives) completed and AFI submission was created: **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`). Poll until `available`, then validate UNSAT on F2. See §2b and `docs/bugs/pcis_byte_lane_bug.md`.
 
 ---
 
@@ -65,7 +65,7 @@ Hardware solved faster than XSim on the same SAT instance (corrupted formula is 
 
 **Full writeup**: `docs/bugs/pcis_byte_lane_bug.md`
 
-**Status: RTL fix is in tree but no AFI has been built with it yet.**
+**Status (updated):** RTL fix is in tree and a new **2x2** AFI request has been submitted from build tag `2026_03_19-171700`: **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`). Awaiting `available`.
 
 ---
 
@@ -131,6 +131,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 1×1 A2 (full BuildAll, clk_main_a0 direct) | `2026_03_19-020552` | WNS=-6.66 ns ❌ | ✅ | ❌ | — | **FAILED** timing; solver at 250 MHz. Do not use. Log: `build/scripts/2026_03_19-020552.vivado.log`. |
 | 1×1 A2 (clock-divide, clk_solver XDC fix) | `2026_03_19-031457` | WNS=+0.711 ns ✅ | ✅ | ✅ | ❌ REQP-123 fail | afi-064b74577e3b2f258 — FAILED. `.i_clk_hbm_ref(1'b0)` with `CLK_GRP_A_EN(1)`. |
 | **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)** | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1. |
+| **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ submitted** | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -160,11 +161,17 @@ All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints
 
 ## 5. Immediate Next Steps (For Next Agent)
 
-### Priority 0: Rebuild AFI with PCIS Byte-Lane Fix
+### Priority 0: Poll and validate the new PCIS-fix AFI
 
-**All existing AFIs have a critical correctness bug** — UNSAT instances return SAT. The RTL fix is already committed (`cl_satswarm.sv:601`). The next step is a Vivado rebuild on a build instance (not F2) followed by a new AFI submission. See `docs/bugs/pcis_byte_lane_bug.md` for full details and `docs/Synth.md` for build instructions.
+Build + submission are done for 2x2 PCIS-fix RTL:
 
-After the new AFI is built and available, validate with `unsat_50v_215c_1.cnf` — it must return UNSAT.
+- Build tag: `2026_03_19-171700`
+- AFI: `afi-037e5d7f209df2123`
+- AGFI: `agfi-022074a3e1f323966`
+
+Next step is to poll until `available` and validate UNSAT behavior on F2. See `docs/bugs/pcis_byte_lane_bug.md` and `docs/FPGA.md`.
+
+When available, validate with `unsat_50v_215c_1.cnf` — it must return UNSAT.
 
 ### Priority 1: Poll AFI and Validate on F2 (CL-owned MMCM build)
 
@@ -252,6 +259,7 @@ Design files: ensure both copies are synced before building:
 ---
 
 **AFIs**:
+- **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **submitted / pending**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load when available: `sudo fpga-load-local-image -S 0 -l agfi-022074a3e1f323966`
 - **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f) — 1×1, tag `2026_03_19-051231` — **pending** (CL-owned MMCM, CLK_GRP_A_EN=0). **Preferred 1×1** once available. Load: `sudo fpga-load-local-image -S 0 -l agfi-0b41689a08b4d4d5f`
 - afi-064b74577e3b2f258 — 1×1, tag `2026_03_19-031457` — **FAILED** REQP-123. Do not use.
 - **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — 1×1, tag `2026_03_18-163435` — **available**. Uses gen_clk_extra_a1; may stay in reset on real F2 (MMCM lock). Load: `sudo fpga-load-local-image -S 0 -l agfi-0f933cb959906a494`
