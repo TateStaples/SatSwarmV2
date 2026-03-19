@@ -230,7 +230,7 @@ for cfg in "${CONFIGS[@]}"; do
     echo "[LOAD] Clearing slot $SLOT ..."
     sudo fpga-clear-local-image -S "$SLOT"
     echo "[LOAD] Loading $agfi on slot $SLOT ..."
-    sudo fpga-load-local-image -S "$SLOT" -l "$agfi"
+    sudo fpga-load-local-image -S "$SLOT" -I "$agfi"
     wait_for_loaded "$SLOT" "$agfi"
     sudo fpga-describe-local-image -S "$SLOT" -H
   else
