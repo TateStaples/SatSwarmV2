@@ -222,7 +222,7 @@ module solver_core #(
     logic        restart_pending_q, restart_pending_d;
 
     // Simple conflict-triggered restart threshold (tunable)
-    localparam int RESTART_CONFLICT_THRESHOLD = 16'd65535; // DISABLED: Set to max to test without restarts
+    localparam int RESTART_CONFLICT_THRESHOLD = 16'd64; // Restart after 64 conflicts
     
     // Loop counter for QUERY_CONFLICT_LEVELS state
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  query_index_q, query_index_d;

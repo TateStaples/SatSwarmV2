@@ -186,7 +186,7 @@ All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints
 |---|---|---|
 | `GRID_X` × `GRID_Y` | **1×1** (current). Set to 2×2 only for a 2×2 build, in the five files below. | `cl_satswarm.sv`, `satswarm_core_bridge.sv`, `satswarm_top.sv`, `mesh_interconnect.sv`, `solver_core.sv` (build-used paths: `src/aws-fpga/.../design/` and `src/Mega/`) |
 | `DDR_PRESENT` | 0 | `cl_satswarm.sv` |
-| `RESTART_CONFLICT_THRESHOLD` | 65535 (Disabled) | `satswarmv2_pkg.sv` |
+| `RESTART_CONFLICT_THRESHOLD` | 64 | `solver_core.sv` |
 | Clock Recipe | **A2 (15.625 MHz)** | build command |
 | `i_clk_hbm_ref` | `1'b0` (safe: all groups disabled) | `cl_satswarm.sv` |
 | `CLK_GRP_A_EN` | `0` (MMCM disabled) | `cl_satswarm.sv` |

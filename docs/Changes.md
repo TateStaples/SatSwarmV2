@@ -264,7 +264,7 @@ Early attempts (1–5) were killed by the OS due to Out-Of-Memory during Vivado'
 The original Conflict Analysis Engine used bulk combinatorial loops (64-wide parallel scans over the trail buffer). This resulted in **489 logic levels** on the critical path, guaranteeing timing failure. It was rewritten into a pipelined, incremental sequential FSM processing one trail entry per cycle.
 
 ### RESYNC_PSE Elimination
-An old FSM state designed to wipe the PSE assignment shadow caused complete test failures upon solver restarts (restarts broke the trail assumptions). The logic was deleted, and three entry paths were rewritten to perform iterative backward backtracking instead. (Restarts currently disabled via `RESTART_CONFLICT_THRESHOLD = 16'd65535`).
+An old FSM state designed to wipe the PSE assignment shadow caused complete test failures upon solver restarts (restarts broke the trail assumptions). The logic was deleted, and three entry paths were rewritten to perform iterative backward backtracking instead. Restarts re-enabled with `RESTART_CONFLICT_THRESHOLD = 64` after full regression passed (all small_tests 3v–10v).
 
 ### Sizing Audit (2026-02-26)
 16 hard-coded loop bounds were truncating variables. Fixed parameters in `solver_core.sv` to use `$clog2(MAX_CLAUSE_LEN+1)`.
