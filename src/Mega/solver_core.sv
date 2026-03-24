@@ -1482,7 +1482,8 @@ module solver_core #(
                         cae_learned_len <= SHARE_MAX_LEN) begin
                         share_pending_d     = 1'b1;
                         share_pending_len_d = cae_learned_len[2:0];
-                        share_pending_lbd_d = cae_learned_len[7:0];
+                        // Learned-clause LBD proxy is clause length; zero-extend to 8 bits.
+                        share_pending_lbd_d = {5'b0, cae_learned_len[2:0]};
                         // Pack literals as 16-bit signed (sufficient for MAX_VARS up to 32767)
                         share_pending_payload_d = '0;
                         for (int i = 0; i < 4; i++) begin

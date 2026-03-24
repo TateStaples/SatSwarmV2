@@ -285,6 +285,36 @@ When the state becomes `available`, the AFI is ready to load on F2.
 
 For the actual on-instance load / run workflow after the AFI exists, switch to `FPGA.md`. For AFI lifecycle and manifest details, see [Amazon_FPGA_Images_Afis_Guide.md](../src/aws-fpga/hdk/docs/Amazon_FPGA_Images_Afis_Guide.md) and [AFI_Manifest.md](../src/aws-fpga/hdk/docs/AFI_Manifest.md).
 
+### 4. Recent 2x2 sharing-mode AFI submissions (2026-03-24)
+
+Run: `sharing_2x2_20260324_161553`
+
+Submitted from completed `Developer_CL.tar` artifacts:
+
+| Mode | Tag | AFI | AGFI | Current State |
+| ---- | --- | --- | ---- | ------------- |
+| `none` | `2026_03_24-161553` | `afi-0070486be9cca64bb` | `agfi-06be2426aa615503a` | submitted (poll until `available`) |
+| `2clz` | `2026_03_24-173923` | `afi-0cce87e15db5a8c58` | `agfi-028e6419bce2d9003` | submitted (poll until `available`) |
+| `3clz` | `2026_03_24-190133` | `afi-0c9157a0d6d10ac9b` | `agfi-03c4ec38595841774` | submitted (poll until `available`) |
+
+Creation responses are saved under:
+
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
+
+Use this to poll all three AFIs in one command:
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids \
+    afi-0070486be9cca64bb \
+    afi-0cce87e15db5a8c58 \
+    afi-0c9157a0d6d10ac9b \
+  --query 'FpgaImages[*].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
+
 ---
 
 ## Known Warnings

@@ -15,6 +15,34 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 | `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | PCIS bug present; gen_clk_extra_a1, may not lock on F2 |
 | `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | PCIS bug present; same MMCM caveat |
 
+## Recently Submitted AFIs (Pending Availability)
+
+These came from 2×2 sharing-mode builds in run `sharing_2x2_20260324_161553`.
+
+| Mode | AFI | agfi | Tag | Notes |
+| ---- | --- | ---- | --- | ----- |
+| `none` | `afi-0070486be9cca64bb` | `agfi-06be2426aa615503a` | `2026_03_24-161553` | Submission accepted; poll until `available` |
+| `2clz` | `afi-0cce87e15db5a8c58` | `agfi-028e6419bce2d9003` | `2026_03_24-173923` | Submission accepted; poll until `available` |
+| `3clz` | `afi-0c9157a0d6d10ac9b` | `agfi-03c4ec38595841774` | `2026_03_24-190133` | Submission accepted; poll until `available` |
+
+Creation responses are logged in:
+
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
+
+Quick poll command:
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids \
+    afi-0070486be9cca64bb \
+    afi-0cce87e15db5a8c58 \
+    afi-0c9157a0d6d10ac9b \
+  --query 'FpgaImages[*].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
+
 In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`) once `available`.
 
 > Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
