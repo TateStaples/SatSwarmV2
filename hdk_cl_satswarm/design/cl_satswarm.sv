@@ -750,7 +750,7 @@ module cl_satswarm #(
         // The solver uses on-chip BRAM (lit_mem) and never drives global_read_req/
         // global_write_req, so DDR is functionally unused. Restore to 1 when
         // migrating to VeriSAT-style external literal storage (see HANDOFF §5).
-        .DDR_PRESENT(0)
+        .DDR_PRESENT(1)
     ) SH_DDR (
         .clk                       (clk_main_a0),
         .rst_n                     (rst_main_n_sync),
