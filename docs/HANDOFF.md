@@ -165,7 +165,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 2×2 A2 (CDC fixed) | `2026_03_18-171846` | WNS=+0.711 ns ✅ | ✅ | ✅ | ✅ **available** | afi-01ef63d452c8940a2, agfi-0193eda3eade22ae4 |
 | 1×1 A2 (full BuildAll, clk_main_a0 direct) | `2026_03_19-020552` | WNS=-6.66 ns ❌ | ✅ | ❌ | — | **FAILED** timing; solver at 250 MHz. Do not use. Log: `build/scripts/2026_03_19-020552.vivado.log`. |
 | 1×1 A2 (clock-divide, clk_solver XDC fix) | `2026_03_19-031457` | WNS=+0.711 ns ✅ | ✅ | ✅ | ❌ REQP-123 fail | afi-064b74577e3b2f258 — FAILED. `.i_clk_hbm_ref(1'b0)` with `CLK_GRP_A_EN(1)`. |
-| **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)** | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1. |
+| **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)** | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ submitted** | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1. |
 | **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ submitted** | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`

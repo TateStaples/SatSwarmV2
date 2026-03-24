@@ -34,10 +34,17 @@ module mesh_interconnect #(
                     core_rx_valid[y][x][1] = 1'b0;
                     core_rx_valid[y][x][2] = 1'b0;
                     core_rx_valid[y][x][3] = 1'b0;
-                    core_tx_ready[y][x][0] = 1'b0;
-                    core_tx_ready[y][x][1] = 1'b0;
-                    core_tx_ready[y][x][2] = 1'b0;
-                    core_tx_ready[y][x][3] = 1'b0;
+                    // Unused edge ports default to "ready" (no neighbor = trivially accepted).
+                    // This prevents senders from stalling on edges that don't exist.
+                    // Tracing the mesh routing to determine which edges have no receiver:
+                    //   Port 3 (N) TX of (y,x) is received by (y+1,x) → no receiver when y==GRID_Y-1
+                    //   Port 2 (S) TX of (y,x) is received by (y-1,x) → no receiver when y==0
+                    //   Port 1 (E) TX of (y,x) is received by (y,x-1) → no receiver when x==0
+                    //   Port 0 (W) TX of (y,x) is received by (y,x+1) → no receiver when x==GRID_X-1
+                    core_tx_ready[y][x][3] = (y == GRID_Y-1) ? 1'b1 : 1'b0;
+                    core_tx_ready[y][x][2] = (y == 0)         ? 1'b1 : 1'b0;
+                    core_tx_ready[y][x][1] = (x == 0)         ? 1'b1 : 1'b0;
+                    core_tx_ready[y][x][0] = (x == GRID_X-1)  ? 1'b1 : 1'b0;
 
                     // Route North neighbor's North output to this core's South input
                     if (y > 0 && core_tx_valid[y-1][x][3]) begin

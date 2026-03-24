@@ -30,13 +30,17 @@ module tb_satswarmv2;
   parameter int MAX_CLAUSES_PER_CORE = 4096;  // Large to allow significant learned clause accumulation
   parameter int MAX_LITS = 65536;  // Large literal pool
 
+  // Clause sharing mode (overridable via Verilator -G)
+  parameter int CLAUSE_SHARING_MODE = 0;
+
   // DUT - SatSwarm Top Level
   satswarm_top #(
     .GRID_X(GRID_X),
     .GRID_Y(GRID_Y),
     .MAX_VARS_PER_CORE(MAX_VARS_PER_CORE),
     .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
-    .MAX_LITS(MAX_LITS)
+    .MAX_LITS(MAX_LITS),
+    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE)
   ) dut (
     .DEBUG(debug_level),
     .clk(clk),

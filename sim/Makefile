@@ -163,6 +163,8 @@ test_vde_heap:
 MAX_VARS ?= 256
 MAX_CLAUSES ?= 2048
 MAX_LITS ?= 16384
+CLAUSE_SHARING_MODE ?= 0
+SHARE_MAX_LEN ?= 4
 
 # Output executable targets
 OBJ_SINGLE := obj_dir/Vtb_regression_single
@@ -175,6 +177,8 @@ $(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_
 		-GMAX_VARS_PER_CORE=$(MAX_VARS) \
 		-GMAX_CLAUSES_PER_CORE=$(MAX_CLAUSES) \
 		-GMAX_LITS=$(MAX_LITS) \
+		-GCLAUSE_SHARING_MODE=$(CLAUSE_SHARING_MODE) \
+		-GSHARE_MAX_LEN=$(SHARE_MAX_LEN) \
 		-CFLAGS "-std=c++17 -Wno-unknown-warning-option" \
 		-I../src/Mega \
 		--build -j 8
@@ -184,6 +188,35 @@ regression_single: $(STAMP_SINGLE)
 
 regression_multi: $(STAMP_SINGLE)
 	@echo "Multi-core regression testbench build handled by $(STAMP_SINGLE) target"
+
+# Build 2x2 regression testbench for clause sharing benchmarks
+# Each config gets its own obj_dir to avoid rebuilds
+define SHARING_2x2_TEMPLATE
+obj_dir_sharing_2x2_m$(1)_l$(2)/Vtb_regression_single: sv/tb_regression_single.sv cpp/sim_regression_single.cpp $$(RTL_SRCS) Makefile
+	@echo "Building 2x2 sharing testbench (MODE=$(1), MAX_LEN=$(2))..."
+	@mkdir -p obj_dir_sharing_2x2_m$(1)_l$(2)
+	$$(VERILATOR) $$(VERILATOR_FLAGS) sv/tb_regression_single.sv cpp/sim_regression_single.cpp $$(RTL_SRCS) \
+		--top-module tb_regression_single \
+		-GGRID_X=2 -GGRID_Y=2 \
+		-GMAX_VARS_PER_CORE=$$(MAX_VARS) \
+		-GMAX_CLAUSES_PER_CORE=$$(MAX_CLAUSES) \
+		-GMAX_LITS=$$(MAX_LITS) \
+		-GCLAUSE_SHARING_MODE=$(1) \
+		-GSHARE_MAX_LEN=$(2) \
+		-DMULTICORE \
+		-CFLAGS "-std=c++17 -Wno-unknown-warning-option" \
+		-I../src/Mega \
+		-Mdir obj_dir_sharing_2x2_m$(1)_l$(2) \
+		--build -j 8
+endef
+
+# Generate build rules for each sharing configuration
+$(eval $(call SHARING_2x2_TEMPLATE,0,2))
+$(eval $(call SHARING_2x2_TEMPLATE,1,2))
+$(eval $(call SHARING_2x2_TEMPLATE,2,3))
+$(eval $(call SHARING_2x2_TEMPLATE,2,4))
+
+regression_sharing_2x2: $(STAMP_SHARING_2x2)
 
 # Mini DPLL target (pure DPLL without CAE)
 OBJ_MINI := obj_dir_mini/Vtb_mini

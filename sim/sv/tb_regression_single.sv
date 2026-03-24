@@ -32,13 +32,19 @@ module tb_regression_single;
 
   int debug_level = 0; // Default to 0 (Minimal)
 
+  // Clause sharing mode (overridable via Verilator -G)
+  parameter int CLAUSE_SHARING_MODE = 0;
+  parameter int SHARE_MAX_LEN = 4;  // Max clause length to share (mode 2)
+
   // DUT - SatSwarm Top Level
   satswarm_top #(
     .GRID_X(GRID_X),
     .GRID_Y(GRID_Y),
     .MAX_VARS_PER_CORE(MAX_VARS_PER_CORE),
     .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
-    .MAX_LITS(MAX_LITS)
+    .MAX_LITS(MAX_LITS),
+    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+    .SHARE_MAX_LEN(SHARE_MAX_LEN)
   ) dut (
     .DEBUG(debug_level),
     .clk(clk),

@@ -5,7 +5,9 @@ module satswarm_top #(
     parameter int MAX_VARS_PER_CORE = 256,
     parameter int MAX_CLAUSES_PER_CORE = 256,
     parameter int MAX_LITS = 4096,
-    parameter int NUM_CORES = GRID_X * GRID_Y
+    parameter int NUM_CORES = GRID_X * GRID_Y,
+    parameter int CLAUSE_SHARING_MODE = 0,
+    parameter int SHARE_MAX_LEN = 4
 )(
     input  logic [31:0]  DEBUG, // Runtime Debug Level
     input  logic clk,
@@ -199,7 +201,9 @@ module satswarm_top #(
                     .MAX_CLAUSES(MAX_CLAUSES_PER_CORE),
                     .MAX_LITS(MAX_LITS),
                     .GRID_X(GRID_X),
-                    .GRID_Y(GRID_Y)
+                    .GRID_Y(GRID_Y),
+                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
                 ) u_core (
                     .DEBUG(DEBUG),
                     .clk(clk),

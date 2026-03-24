@@ -6,7 +6,11 @@ module solver_core #(
     parameter int MAX_LITS = 4096,
     parameter int MAX_CLAUSE_LEN = 32,
     parameter int GRID_X = 2,
-    parameter int GRID_Y = 2
+    parameter int GRID_Y = 2,
+    // Clause sharing mode: 0=disabled, 1=binary clauses only (len==2),
+    //                      2=short clauses (len<=SHARE_MAX_LEN)
+    parameter int CLAUSE_SHARING_MODE = 0,
+    parameter int SHARE_MAX_LEN = 4   // Max clause length to share (mode 2)
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
@@ -194,11 +198,12 @@ module solver_core #(
     // to avoid checking stale conflict_detected from prior rounds
     logic        pse_started_q, pse_started_d;
 
-    // Registered capture of incoming NoC clause literals.
+    // Registered capture of incoming NoC clause payload.
     // Sampled in PSE_PHASE exit when iface_clause_rx_valid fires (one-cycle pulse);
     // held stable across the INJECT_RX_CLAUSE state so cae_direct_append can read them.
-    logic signed [31:0] rx_clause_lit1_q, rx_clause_lit1_d;
-    logic signed [31:0] rx_clause_lit2_q, rx_clause_lit2_d;
+    // Payload holds up to 4 literals packed as 16-bit signed values.
+    logic [63:0] rx_clause_payload_q, rx_clause_payload_d;
+    logic [2:0]  rx_clause_len_q, rx_clause_len_d;  // 2..4
     
     // Track if we're currently in final SAT verification
     logic        final_verify_mode_q, final_verify_mode_d;
@@ -223,6 +228,15 @@ module solver_core #(
 
     // Simple conflict-triggered restart threshold (tunable)
     localparam int RESTART_CONFLICT_THRESHOLD = 16'd64; // Restart after 64 conflicts
+
+    // Clause sharing state
+    logic [31:0] share_tx_attempts_q, share_tx_attempts_d;
+    logic [31:0] share_tx_sent_q, share_tx_sent_d;
+    logic [31:0] share_rx_injected_q, share_rx_injected_d;
+    logic        share_pending_q, share_pending_d;        // Waiting for bcast
+    logic [63:0] share_pending_payload_q, share_pending_payload_d; // Up to 4 x 16-bit packed lits
+    logic [2:0]  share_pending_len_q, share_pending_len_d;         // Clause length (2..4)
+    logic [7:0]  share_pending_lbd_q, share_pending_lbd_d;
     
     // Loop counter for QUERY_CONFLICT_LEVELS state
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  query_index_q, query_index_d;
@@ -774,6 +788,15 @@ module solver_core #(
              conflict_clause_d[k] = conflict_clause_q[k];
         end
         rescan_required_d       = rescan_required_q;
+
+        // Clause sharing defaults (hold counters, clear pending logic handled below)
+        share_tx_attempts_d  = share_tx_attempts_q;
+        share_tx_sent_d      = share_tx_sent_q;
+        share_rx_injected_d  = share_rx_injected_q;
+        share_pending_d         = share_pending_q;
+        share_pending_payload_d = share_pending_payload_q;
+        share_pending_len_d     = share_pending_len_q;
+        share_pending_lbd_d     = share_pending_lbd_q;
         restart_mode_d          = restart_mode_q;
 
         cae_start               = 1'b0; // Pulse default
@@ -859,8 +882,8 @@ module solver_core #(
         cae_direct_append_lits = '0;
 
         // Hold NoC literal capture registers stable by default
-        rx_clause_lit1_d = rx_clause_lit1_q;
-        rx_clause_lit2_d = rx_clause_lit2_q;
+        rx_clause_payload_d = rx_clause_payload_q;
+        rx_clause_len_d     = rx_clause_len_q;
 
         // Global memory stubs
         global_read_req        = 1'b0;
@@ -908,6 +931,22 @@ module solver_core #(
         iface_clause_bcast_req = 1'b0;
         iface_clause_lbd       = 8'h0;
         iface_clause_ptr       = 64'h0;
+
+        // Clause sharing: broadcast for exactly 1 cycle then clear.
+        // The mesh is combinational pass-through, so the clause reaches all neighbors
+        // in the same cycle. We don't rely on ack (combinational loop issues with Verilator).
+        if (share_pending_q) begin
+            iface_clause_bcast_req = 1'b1;
+            iface_clause_lbd       = {5'd0, share_pending_len_q}; // Length in low 3 bits
+            iface_clause_ptr       = share_pending_payload_q;
+            // Always clear after 1 cycle — clause is on the wire this cycle
+            share_pending_d = 1'b0;
+            share_tx_sent_d = share_tx_sent_q + 1;
+`ifndef SYNTHESIS
+            if (DEBUG > 0) $display("[CORE %0d] CLAUSE_SHARE TX: sent len=%0d clause to neighbors",
+                                    CORE_ID, share_pending_len_q);
+`endif
+        end
 
         // VDE defaults
         vde_request       = 1'b0;
@@ -1220,8 +1259,8 @@ module solver_core #(
                     // INJECT_RX_CLAUSE can use stable registers rather than re-checking valid.
                     if (iface_clause_rx_valid) begin
                         state_d               = INJECT_RX_CLAUSE;
-                        rx_clause_lit1_d      = $signed(iface_clause_rx_ptr[63:32]);
-                        rx_clause_lit2_d      = $signed(iface_clause_rx_ptr[31:0]);
+                        rx_clause_payload_d   = iface_clause_rx_ptr;
+                        rx_clause_len_d       = iface_clause_rx_lbd[2:0]; // Length from low 3 bits
                         iface_clause_rx_ready = 1'b1;  // consume NoC packet this cycle
                     end else if (final_verify_mode_q && !pse_conflict && !conflict_seen_q) begin
                         // Final verification passed: no conflicts during last PSE scan
@@ -1435,6 +1474,24 @@ module solver_core #(
                                            CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q, pse_clause_count);
 `endif
 
+                    // ---- Clause sharing: export learned clause to neighbors ----
+                    // Pack up to 4 literals as 16-bit signed values into 64-bit payload.
+                    // Slot layout: payload[63:48]=lit0, [47:32]=lit1, [31:16]=lit2, [15:0]=lit3
+                    // Mode 1: binary only (SHARE_MAX_LEN=2); Mode 2: up to SHARE_MAX_LEN (2..4)
+                    if (CLAUSE_SHARING_MODE > 0 && cae_learned_len >= 2 &&
+                        cae_learned_len <= SHARE_MAX_LEN) begin
+                        share_pending_d     = 1'b1;
+                        share_pending_len_d = cae_learned_len[2:0];
+                        share_pending_lbd_d = cae_learned_len[7:0];
+                        // Pack literals as 16-bit signed (sufficient for MAX_VARS up to 32767)
+                        share_pending_payload_d = '0;
+                        for (int i = 0; i < 4; i++) begin
+                            if (i < cae_learned_len)
+                                share_pending_payload_d[63-i*16 -: 16] = cae_learned_lits[i][15:0];
+                        end
+                        share_tx_attempts_d = share_tx_attempts_q + 1;
+                    end
+
                     // 4. Start PSE immediately (effective_clause_count in PSE handles this)
                     pse_start     = 1'b1;
                     pse_started_d = 1'b1;
@@ -1449,18 +1506,20 @@ module solver_core #(
             end
 
             INJECT_RX_CLAUSE: begin
-                // Append the received binary clause using the proven cae_direct_append path
-                // (same mechanism used for learned clauses after conflict analysis).
-                // Literals were captured and the NoC packet was consumed in PSE_PHASE exit,
-                // so no re-check of iface_clause_rx_valid is needed here.
-                // PSE will run INIT_WATCHES on its next start, making the clause visible to BCP.
-                cae_direct_append_en      = 1'b1;
-                cae_direct_append_len     = 5'd2;
-                cae_direct_append_lits[0] = rx_clause_lit1_q;
-                cae_direct_append_lits[1] = rx_clause_lit2_q;
+                // Append the received clause (2..4 lits) using the cae_direct_append path.
+                // Literals are packed as 16-bit signed values in rx_clause_payload_q.
+                // Slot layout: [63:48]=lit0, [47:32]=lit1, [31:16]=lit2, [15:0]=lit3
+                // Sign-extend each 16-bit literal back to 32-bit for the clause store.
+                cae_direct_append_en  = 1'b1;
+                cae_direct_append_len = {2'b0, rx_clause_len_q};
+                for (int i = 0; i < 4; i++) begin
+                    if (i < rx_clause_len_q)
+                        cae_direct_append_lits[i] = $signed(rx_clause_payload_q[63-i*16 -: 16]);
+                end
+                share_rx_injected_d = share_rx_injected_q + 1;
 `ifndef SYNTHESIS
-                $strobe("[CORE %0d] INJECT_RX_CLAUSE: appending {%0d, %0d} via cae_direct_append",
-                        CORE_ID, rx_clause_lit1_q, rx_clause_lit2_q);
+                $strobe("[CORE %0d] INJECT_RX_CLAUSE: appending len=%0d clause via cae_direct_append",
+                        CORE_ID, rx_clause_len_q);
 `endif
                 pse_start     = 1'b1;
                 pse_started_d = 1'b1;
@@ -1557,9 +1616,17 @@ module solver_core #(
             prop_fifo_reason_q <= '0;
             vde_check_var_q    <= '0;
             vde_check_phase_q  <= 1'b0;
-            // NoC literal capture registers
-            rx_clause_lit1_q   <= '0;
-            rx_clause_lit2_q   <= '0;
+            // NoC clause capture registers
+            rx_clause_payload_q  <= '0;
+            rx_clause_len_q      <= '0;
+            // Clause sharing registers
+            share_tx_attempts_q  <= '0;
+            share_tx_sent_q      <= '0;
+            share_rx_injected_q  <= '0;
+            share_pending_q      <= 1'b0;
+            share_pending_payload_q <= '0;
+            share_pending_len_q  <= '0;
+            share_pending_lbd_q  <= '0;
         end else begin
             state_q          <= state_d;
             cycle_count_q    <= cycle_count_d;
@@ -1595,9 +1662,17 @@ module solver_core #(
             prop_fifo_reason_q <= prop_fifo_reason_d;
             vde_check_var_q    <= vde_check_var_d;
             vde_check_phase_q  <= vde_check_phase_d;
-            // NoC literal capture registers
-            rx_clause_lit1_q   <= rx_clause_lit1_d;
-            rx_clause_lit2_q   <= rx_clause_lit2_d;
+            // NoC clause capture registers
+            rx_clause_payload_q  <= rx_clause_payload_d;
+            rx_clause_len_q      <= rx_clause_len_d;
+            // Clause sharing registers
+            share_tx_attempts_q  <= share_tx_attempts_d;
+            share_tx_sent_q      <= share_tx_sent_d;
+            share_rx_injected_q  <= share_rx_injected_d;
+            share_pending_q      <= share_pending_d;
+            share_pending_payload_q <= share_pending_payload_d;
+            share_pending_len_q  <= share_pending_len_d;
+            share_pending_lbd_q  <= share_pending_lbd_d;
 
             // PSE PROPAGATION CAPTURE FIFO
             // Handled by u_prop_fifo instance (including capture and pointers)
@@ -1650,6 +1725,11 @@ module solver_core #(
                 if (state_q == FINAL_VERIFY) $display("[CORE %0d] STATE: FINAL_VERIFY - Running final PSE verification", CORE_ID);
                 if (state_q == FINISH_SAT)   $display("[SYS] Result: SAT");
                 if (state_q == FINISH_UNSAT) $display("[SYS] Result: UNSAT");
+                if (state_q == FINISH_SAT || state_q == FINISH_UNSAT) begin
+                    if (CLAUSE_SHARING_MODE > 0)
+                        $display("[CORE %0d] SHARING STATS: tx_attempts=%0d tx_sent=%0d rx_injected=%0d",
+                                 CORE_ID, share_tx_attempts_q, share_tx_sent_q, share_rx_injected_q);
+                end
                 if (state_q == CONFLICT_ANALYSIS && final_verify_mode_q) 
                     $display("[CORE %0d] WARNING: Conflict during final SAT verification. Re-analyzing...", CORE_ID);
                 if (state_q == FINAL_VERIFY && vde_all_assigned)
