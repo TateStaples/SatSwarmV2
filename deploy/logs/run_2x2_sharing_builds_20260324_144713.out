@@ -1,0 +1,20 @@
+nohup: ignoring input
+=== [none] setting CLAUSE_SHARING_MODE=0 SHARE_MAX_LEN=2 ===
+9:    parameter int CLAUSE_SHARING_MODE = 0,
+10:    parameter int SHARE_MAX_LEN = 2
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [none] build start ===
+=== [none] build ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_144713/build_none_20260324_144713.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-144713.Developer_CL.tar
+=== [2clz] setting CLAUSE_SHARING_MODE=1 SHARE_MAX_LEN=2 ===
+9:    parameter int CLAUSE_SHARING_MODE = 1,
+10:    parameter int SHARE_MAX_LEN = 2
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [2clz] build start ===
+=== [2clz] build failed ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_144713/build_2clz_20260324_161053.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-144713.Developer_CL.tar
+Stopping after failure in mode '2clz'.

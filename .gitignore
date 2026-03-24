@@ -9,6 +9,8 @@ AGENTS.md
 logs/
 *.log
 sim/sv_trace.log
+!deploy/logs/
+!deploy/logs/**
 
 # Python
 __pycache__/
