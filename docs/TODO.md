@@ -60,9 +60,9 @@
 
 - [ ] Scale our design to the large scale instances (use the DDR)
 - [ ] Compare our design with VeriSAT and try to get some insights on how to improve our design
-- [ ] Maybe add in restarts
+- [x] Maybe add in restarts
 
 ## 5. More creative networking ideas
 
-- [ ] Develop a more creative networking ideas
+- [x] Develop a more creative networking ideas
 - [ ] Should we try our forking approach?
