@@ -2,7 +2,11 @@
 
 Welcome. This document captures the **current state** of SatSwarmV2 development, passing context from the previous agent to you.
 
-**Quick status (2026-03-19, VALIDATED):** PCIS byte-lane bug fix confirmed working for 1×1. AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) loaded and tested on F2 — `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles), `unsat_50v_215c_1.cnf` → **UNSAT ✓** (56,310 cycles). A new 2×2 PCIS-fix BuildAll (tag `2026_03_19-171700`) was submitted as `afi-037e5d7f209df2123` (`agfi-022074a3e1f323966`) and is pending availability.
+**Quick status (2026-03-19, VALIDATED):** PCIS byte-lane bug fix confirmed working for 1×1. AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) loaded and tested on F2 — `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles), `unsat_50v_215c_1.cnf` → **UNSAT ✓** (56,310 cycles). The 2×2 PCIS-fix BuildAll AFI (tag `2026_03_19-171700`) `afi-037e5d7f209df2123` (`agfi-022074a3e1f323966`) is **available**.
+
+**Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
+
+**Process update (2026-03-26):** `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for every successful run by default (`AUTO_CREATE_AFI=1`) and records `afi_status`, `afi_id`, `agfi_id`, and `afi_json` in the run summary CSV.
 
 ---
 
@@ -23,6 +27,31 @@ The repository's documentation has been modularized:
 ---
 
 ## 2d. This Session (2026-03-19 — PCIS byte-lane fix CONFIRMED, AFI afi-0d8e504d573195da8)
+
+## 2f. This Session (2026-03-26 — 1x1 MAX_LITS=16384 AFI submitted + auto-submit enabled)
+
+**What was done:**
+
+1. Uploaded `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_26-042416.Developer_CL.tar` to `s3://satswarm-v2-afi-624824941978/dcp/2026_03_26-042416.Developer_CL.tar`.
+2. Submitted AFI creation:
+  - AFI: `afi-08804376adf00f2ab`
+  - AGFI: `agfi-0ecd81ca9a8dd581c`
+  - Name: `SatSwarmV2-1x1-maxlits16384-2026_03_26-042416`
+  - Initial state: `pending`
+3. Persisted create response JSON:
+  - `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`
+4. Updated `deploy/run_grid_sharing_builds.sh` so every successful run automatically:
+  - uploads latest `Developer_CL.tar` to S3
+  - calls `aws ec2 create-fpga-image`
+  - records AFI metadata in summary CSV
+
+**Default automation knobs (can override via env):**
+
+- `AUTO_CREATE_AFI=1`
+- `AWS_REGION=us-east-1`
+- `AFI_S3_BUCKET=satswarm-v2-afi-624824941978`
+- `AFI_S3_DCP_PREFIX=dcp`
+- `AFI_S3_LOGS_PREFIX=logs`
 
 **What was done:**
 
@@ -62,6 +91,41 @@ Cycle counts within 0.1% of old AFI — hardware is receiving the same corrupted
 
 ## 2. Last Agent Session (2026-03-19 — CL-owned MMCM solver clock + REQP-123 fix)
 
+## 2e. This Session (2026-03-24 — 2x2 sharing builds completed, AFIs submitted)
+
+**What was done:**
+
+1. Monitored the full 2x2 sharing-mode run `sharing_2x2_20260324_161553` to completion (`none`, `2clz`, `3clz`, `4clz` all `ok` in `deploy/logs/sharing_2x2_20260324_161553/summary.csv`).
+2. Uploaded completed `Developer_CL.tar` artifacts and created AFIs for each mode:
+  - `none`: `afi-0070486be9cca64bb` (`agfi-06be2426aa615503a`)
+  - `2clz`: `afi-0cce87e15db5a8c58` (`agfi-028e6419bce2d9003`)
+  - `3clz`: `afi-0c9157a0d6d10ac9b` (`agfi-03c4ec38595841774`)
+  - `4clz`: `afi-0db4c324dc633940e` (`agfi-0197eb8028efe5692`)
+3. Verified AFI states via AWS:
+  - `none`, `2clz`, `3clz` are `available`
+  - `4clz` is `pending` (submitted 2026-03-24 21:51 UTC)
+4. Updated documentation to track this run and AFI lifecycle:
+  - `docs/Synth.md` (new 2026-03-24 sharing AFI table + 4clz entry)
+  - `docs/FPGA.md` (deploy-facing AFI list with current states)
+  - `docs/Deploy.md` (index pointers to latest AFI status sections)
+  - `docs/HANDOFF.md` (AFI status corrections + new 4clz entry)
+
+**Artifacts and logs:**
+
+- Run log: `deploy/logs/run_2x2_sharing_builds_20260324_161553.out`
+- Summary CSV: `deploy/logs/sharing_2x2_20260324_161553/summary.csv`
+- AFI create responses:
+  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
+  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
+  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
+  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`
+
+**Remaining follow-up:**
+
+- Poll `afi-0db4c324dc633940e` until `available`, then update docs to flip 4clz from pending to available.
+
+---
+
 **What was done:**
 
 1. **REQP-123 root cause**: Previous AFI (`afi-064b74577e3b2f258`, tag `2026_03_19-031457`) failed with DRC REQP-123. Root cause: `CLK_GRP_A_EN(1)` in aws_clk_gen kept Group A MMCM instantiated, but `.i_clk_hbm_ref(1'b0)` fed it a dead clock. This was a regression of commit `fd6a0a3`.
@@ -70,7 +134,7 @@ Cycle counts within 0.1% of old AFI — hardware is receiving the same corrupted
 4. **XDC updated**: Removed `create_clock` workaround. Vivado auto-propagates generated clock through the MMCM. `set_false_path` references `u_mmcm_solver/CLKOUT0` pin.
 5. **Verification**: run_bigger_ladder **98/98 PASSED**; run_xsim_bridge_test **6/6 PASSED**.
 6. **BuildAll**: Tag `2026_03_19-051231`, 1×1 grid, 37 min. **WNS=+0.711 ns**, 0 DRC errors.
-7. **AFI**: Tar uploaded to S3, AFI created: **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Pending availability.
+7. **AFI**: Tar uploaded to S3, AFI created: **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f), now **available**.
 
 **Not done yet (for next agent):**
 
@@ -111,7 +175,7 @@ Hardware solved faster than XSim on the same SAT instance (corrupted formula is 
 
 **Full writeup**: `docs/bugs/pcis_byte_lane_bug.md`
 
-**Status (updated):** RTL fix is in tree and a new **2x2** AFI request has been submitted from build tag `2026_03_19-171700`: **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`). Awaiting `available`.
+**Status (updated):** RTL fix is in tree and the **2x2** AFI from build tag `2026_03_19-171700` is **available**: **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`).
 
 ---
 
@@ -179,8 +243,8 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 2×2 A2 (CDC fixed)                                      | `2026_03_18-171846`     | WNS=+0.711 ns ✅     | ✅               | ✅     | ✅ **available**           | afi-01ef63d452c8940a2, agfi-0193eda3eade22ae4                                                        |
 | 1×1 A2 (full BuildAll, clk_main_a0 direct)              | `2026_03_19-020552`     | WNS=-6.66 ns ❌      | ✅               | ❌     | —                          | **FAILED** timing; solver at 250 MHz. Do not use. Log: `build/scripts/2026_03_19-020552.vivado.log`. |
 | 1×1 A2 (clock-divide, clk_solver XDC fix)               | `2026_03_19-031457`     | WNS=+0.711 ns ✅     | ✅               | ✅     | ❌ REQP-123 fail           | afi-064b74577e3b2f258 — FAILED. `.i_clk_hbm_ref(1'b0)` with `CLK_GRP_A_EN(1)`.                       |
-| **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)**              | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ submitted**           | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1.                                   |
-| **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ submitted**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
+| **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)**              | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1.                                   |
+| **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -316,8 +380,9 @@ Design files: ensure both copies are synced before building:
 
 **AFIs**:
 
+- **afi-0db4c324dc633940e** (agfi-0197eb8028efe5692) — 2×2, sharing `4clz`, tag `2026_03_24-202347` — **pending** (submitted 2026-03-24 21:51 UTC). Creation JSON: `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`.
 - **afi-0d8e504d573195da8** (agfi-0aa0b1b8ec26f6b5d) — 1×1, name `SatSwarmV2-1x1` — **available, VALIDATED 2026-03-19**. PCIS byte-lane fix confirmed. **Preferred 1×1.** Load: `sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d`
-- **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **submitted / pending**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load when available: `sudo fpga-load-local-image -S 0 -I agfi-022074a3e1f323966`
+- **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **available**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load with: `sudo fpga-load-local-image -S 0 -I agfi-022074a3e1f323966`
 - afi-0520f5f8b8900def7 (agfi-0b41689a08b4d4d5f) — 1×1, tag `2026_03_19-051231` — **available** but PCIS bug not confirmed fixed (build timing uncertain). Do not use for correctness testing.
 - afi-064b74577e3b2f258 — 1×1, tag `2026_03_19-031457` — **FAILED** REQP-123. Do not use.
 - **afi-08366141b8a92b36f** (agfi-0f933cb959906a494) — 1×1, tag `2026_03_18-163435` — **available**. PCIS bug present. Uses gen_clk_extra_a1; may stay in reset on real F2.

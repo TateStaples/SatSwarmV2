@@ -7,7 +7,7 @@ module satswarm_top #(
     parameter int MAX_LITS = 16384,
     parameter int NUM_CORES = GRID_X * GRID_Y,
     parameter int CLAUSE_SHARING_MODE = 0,
-    parameter int SHARE_MAX_LEN = 2
+    parameter int SHARE_MAX_LEN = 4
 )(
     input  logic [31:0]  DEBUG, // Runtime Debug Level
     input  logic clk,

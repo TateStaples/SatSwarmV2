@@ -8,7 +8,7 @@ This document has been superseded by the split docs:
 
 Latest additions:
 
-- `Synth.md` includes a "Recent 2x2 sharing-mode AFI submissions (2026-03-24)" section with AFI/AGFI IDs and polling command.
-- `FPGA.md` includes a "Recently Submitted AFIs (Pending Availability)" section for deploy-time tracking.
+- `Synth.md` includes a "Recent 2x2 sharing-mode AFIs (2026-03-24)" section with AFI/AGFI IDs and state-check command (including `4clz`, currently pending).
+- `FPGA.md` includes a "Newly Available AFIs (2026-03-24)" section for deploy-time tracking, now including the newly submitted `4clz` AFI.
 
 If you are looking for the old "build and create an AFI" flow, go to `Synth.md`.
