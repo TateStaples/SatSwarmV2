@@ -128,7 +128,7 @@ run_cnf() {
   [[ -z "$RUN_CYCLES" ]] && RUN_CYCLES="0"
 
   # Detect timeout: host prints TIMEOUT or result is missing
-  if printf "%s\n" "$raw" | grep -qi "timeout\|timed out"; then
+  if printf "%s\n" "$raw" | grep -q "TIMEOUT after\|Result:.*TIMEOUT"; then
     RUN_TIMEOUT=1
     RUN_RESULT="TIMEOUT"
   fi
