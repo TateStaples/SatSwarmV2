@@ -74,7 +74,9 @@ module pse #(
     // Direct learned-clause append interface (bypasses load stream; single-cycle write)
     input  logic                                        cae_direct_append_en,
     input  logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]        cae_direct_append_len,
-    input  logic signed [MAX_CLAUSE_LEN-1:0][31:0]     cae_direct_append_lits
+    input  logic signed [MAX_CLAUSE_LEN-1:0][31:0]     cae_direct_append_lits,
+    // 1 if the append will be accepted this cycle (capacity check passed); 0 if silently dropped
+    output logic                                        cae_direct_append_accepted
 );
 
     typedef enum logic [3:0] {
@@ -302,6 +304,12 @@ module pse #(
 
     assign load_ready = (state_q == IDLE || state_q == LOAD_CLAUSE || state_q == COMPLETE);
     wire load_fire = load_valid && load_ready;
+
+    // Combinational: 1 if an append requested this cycle will be accepted (not dropped due to overflow)
+    assign cae_direct_append_accepted = cae_direct_append_en &&
+        (state_q == IDLE || state_q == LOAD_CLAUSE || state_q == COMPLETE) &&
+        clause_count_q < MAX_CLAUSES &&
+        (lit_count_q + cae_direct_append_len) <= MAX_LITS;
     
     // Reason query: Combinational lookup of reason clause for a variable
     always_comb begin

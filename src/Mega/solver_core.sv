@@ -174,6 +174,7 @@ module solver_core #(
     logic signed [31:0] pse_propagated_var;
     logic [15:0] pse_propagated_reason;
     logic [15:0] pse_clause_count;
+    logic        pse_direct_append_accepted;
     logic [FIFO_WIDTH:0] prop_fifo_count;
 
     sfifo #(
@@ -629,7 +630,8 @@ module solver_core #(
         .current_clause_count(pse_clause_count),     // Connect exposed clause count
         .cae_direct_append_en(cae_direct_append_en),
         .cae_direct_append_len(cae_direct_append_len),
-        .cae_direct_append_lits(cae_direct_append_lits)
+        .cae_direct_append_lits(cae_direct_append_lits),
+        .cae_direct_append_accepted(pse_direct_append_accepted)
     );
 
     // pse_propagated_reason, pse_clause_count declared above (forward decl for sfifo/PSE)
@@ -1458,7 +1460,9 @@ module solver_core #(
                         trail_push_value = (final_assert_lit > 0);
                         trail_push_level = decision_level_q;
                         trail_push_is_decision = 1'b0;
-                        trail_push_reason = pse_clause_count; // Clause being written THIS cycle
+                        // Use clause ID only if PSE accepted the append; otherwise treat as decision (0xFFFF)
+                        // to prevent CAE from resolving against a stale/unrelated clause.
+                        trail_push_reason = pse_direct_append_accepted ? pse_clause_count : 16'hFFFF;
 
                         vde_assign_valid = 1'b1;
                         vde_assign_var = assert_var;
@@ -1470,8 +1474,9 @@ module solver_core #(
                     end
 
 `ifndef SYNTHESIS
-                    if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO complete: append+push+pse_start in one cycle (len=%0d, assert_lit=%0d, assert_var=%0d, level=%0d, reason=%0d)",
-                                           CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q, pse_clause_count);
+                    if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO complete: append+push+pse_start in one cycle (len=%0d, assert_lit=%0d, assert_var=%0d, level=%0d, reason=%0d, accepted=%0d)",
+                                           CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q,
+                                           pse_direct_append_accepted ? pse_clause_count : 16'hFFFF, pse_direct_append_accepted);
 `endif
 
                     // ---- Clause sharing: export learned clause to neighbors ----
