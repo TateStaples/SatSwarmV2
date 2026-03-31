@@ -6,6 +6,10 @@ Welcome. This document captures the **current state** of SatSwarmV2 development,
 
 **Update (2026-03-31):** 1×1 large-config build completed (tag `2026_03_31-024747`): MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns. AFI submitted: `afi-058e8c5c1e2864659` (`agfi-042da882ac102dd2e`), state `pending`.
 
+**Update (2026-03-31, 2×2 sharing):** 2×2 **2clz** sharing build completed in run `grid_sharing_20260331_144138` (via `deploy/run_grid_sharing_builds.sh`): MAX_LITS=8192, MAX_CLAUSES_PER_CORE=2048, `CLAUSE_SHARING_MODE=1`, `SHARE_MAX_LEN=2`, Default directives, **WNS=+0.711 ns**, WHS=+0.010 ns. Build tag `2026_03_31-144138`; tar `2026_03_31-144138.Developer_CL.tar`. AFI **`afi-07e84cf377a21810e`** (`agfi-0e32325155d52e9a2`), name `SatSwarmV2-2x2_2clz-maxlits8192-20260331_144138`, state **`available`** (confirmed 2026-03-31 ~20:23 UTC). Ready to load on F2 and validate. Same run directory also tracks follow-on builds (3×3 2clz, 2×2 3clz, 3×3 3clz) in `summary.csv` as they complete.
+
+**Update (2026-03-31, 3×3 build in progress):** 3×3 **2clz** Vivado build (`build_3x3_2clz_20260331_175343`) started 17:53 UTC. As of ~20:23 UTC (~1h 40m elapsed), build is in **placement Phase 3.4 (Re-assign LUT pins)**; routing and DCP packaging still ahead.
+
 **Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
 
 **Process update (2026-03-26):** `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for every successful run by default (`AUTO_CREATE_AFI=1`) and records `afi_status`, `afi_id`, `agfi_id`, and `afi_json` in the run summary CSV.
@@ -50,6 +54,22 @@ The repository's documentation has been modularized:
 **Build log:** `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
 
 **Next step:** Poll `afi-058e8c5c1e2864659` until `available`, then load on F2 and validate.
+
+---
+
+## 2h. This Session (2026-03-31 — 2×2 **2clz** sharing BuildAll, AFI afi-07e84cf377a21810e)
+
+**What was done:**
+
+1. Sequential grid/sharing sweep started from `deploy/run_grid_sharing_builds.sh` (run dir `deploy/logs/grid_sharing_20260331_144138/`). First completed entry: **2×2, 2clz** (`CLAUSE_SHARING_MODE=1`, `SHARE_MAX_LEN=2`).
+2. **Build tag:** `2026_03_31-144138`. **Timing:** WNS=+0.711 ns (post-place and post-route), WHS=+0.010 ns, 0 implementation errors.
+3. **Tar:** `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_31-144138.Developer_CL.tar`
+4. Auto AFI submit (`AUTO_CREATE_AFI=1`): **`afi-07e84cf377a21810e`** / **`agfi-0e32325155d52e9a2`**. Create response: `deploy/logs/grid_sharing_20260331_144138/afi_create_2x2_2clz_20260331_144138.json`
+5. **Build log:** `deploy/logs/grid_sharing_20260331_144138/build_2x2_2clz_20260331_144138.log`. Summary row: `deploy/logs/grid_sharing_20260331_144138/summary.csv`
+
+**Context vs earlier 2×2 AFIs:** Plain PCIS-fix 2×2 (no sharing) remains **`afi-037e5d7f209df2123`**. March 2026 sharing sweep (`none`/`2clz`/`3clz`/`4clz`) for 2×2 is documented in §2e; this **2026-03-31** image is a fresh **2clz** build on current RTL with MAX_LITS=8192.
+
+**Next step:** AFI `afi-07e84cf377a21810e` is now **available** (confirmed 2026-03-31 ~20:23 UTC). Load on F2 and validate. When the full sweep finishes (3×3 2clz still building as of 20:23 UTC), extend this section or `Synth.md` with remaining `summary.csv` rows (3×3 modes, 2×2 3clz).
 
 ---
 
@@ -273,6 +293,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)**              | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1.                                   |
 | **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
 | **1×1 A2 large (MAX_LITS=16384, MAX_CLAUSES=2048)** | **`2026_03_31-024747`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e); Default directives, `--no-encrypt`. |
+| **2×2 A2 sharing 2clz (MAX_LITS=8192, MODE=1)** | **`2026_03_31-144138`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2); `run_grid_sharing_builds.sh`, grid sweep `grid_sharing_20260331_144138`. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -408,6 +429,7 @@ Design files: ensure both copies are synced before building:
 
 **AFIs**:
 
+- **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2) — 2×2 **2clz** sharing, name `SatSwarmV2-2x2_2clz-maxlits8192-20260331_144138`, tag `2026_03_31-144138` — **pending** (submitted 2026-03-31). MAX_LITS=8192, MAX_CLAUSES_PER_CORE=2048, `SHARE_MAX_LEN=2`, Default directives, WNS=+0.711 ns. Creation JSON: `deploy/logs/grid_sharing_20260331_144138/afi_create_2x2_2clz_20260331_144138.json`.
 - **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e) — 1×1, name `SatSwarmV2-1x1-large-maxlits16384`, tag `2026_03_31-024747` — **pending** (submitted 2026-03-31). MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns.
 - **afi-0db4c324dc633940e** (agfi-0197eb8028efe5692) — 2×2, sharing `4clz`, tag `2026_03_24-202347` — **pending** (submitted 2026-03-24 21:51 UTC). Creation JSON: `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`.
 - **afi-0d8e504d573195da8** (agfi-0aa0b1b8ec26f6b5d) — 1×1, name `SatSwarmV2-1x1` — **available, VALIDATED 2026-03-19**. PCIS byte-lane fix confirmed. **Preferred 1×1.** Load: `sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d`
