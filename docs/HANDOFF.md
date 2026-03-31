@@ -4,6 +4,8 @@ Welcome. This document captures the **current state** of SatSwarmV2 development,
 
 **Quick status (2026-03-19, VALIDATED):** PCIS byte-lane bug fix confirmed working for 1×1. AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) loaded and tested on F2 — `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles), `unsat_50v_215c_1.cnf` → **UNSAT ✓** (56,310 cycles). The 2×2 PCIS-fix BuildAll AFI (tag `2026_03_19-171700`) `afi-037e5d7f209df2123` (`agfi-022074a3e1f323966`) is **available**.
 
+**Update (2026-03-31):** 1×1 large-config build completed (tag `2026_03_31-024747`): MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns. AFI submitted: `afi-058e8c5c1e2864659` (`agfi-042da882ac102dd2e`), state `pending`.
+
 **Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
 
 **Process update (2026-03-26):** `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for every successful run by default (`AUTO_CREATE_AFI=1`) and records `afi_status`, `afi_id`, `agfi_id`, and `afi_json` in the run summary CSV.
@@ -23,6 +25,31 @@ The repository's documentation has been modularized:
 - **[Model.md](Model.md)**: Practical modeling flow for turning measured CSVs into scaling projections.
 - **[AWS_Intructions.md](AWS_instructions.md)**: Explinations and links to further resources to understand the aws-fpga ecosystem and rules
 - **HANDOFF.md (This File)**: Living state of the project.
+
+---
+
+## 2g. This Session (2026-03-31 — 1x1 large-config build, AFI afi-058e8c5c1e2864659)
+
+**What was done:**
+
+1. Set 1×1 grid with large parameters across all five design files: MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, MAX_VARS_PER_CORE=256, CLAUSE_SHARING_MODE=0.
+2. Ran fast BuildAll (Default directives for place/phys_opt/route, `--no-encrypt`).
+3. Build tag: `2026_03_31-024747`. Synth ~7 min, place ~36 min, route ~32 min. Total: **1h 32m**.
+4. **Timing: WNS=+0.711 ns (MET)**, WHS=+0.010 ns, 0 errors, 0 critical warnings.
+5. Uploaded tar to S3 and submitted AFI:
+  - AFI: `afi-058e8c5c1e2864659`
+  - AGFI: `agfi-042da882ac102dd2e`
+  - Name: `SatSwarmV2-1x1-large-maxlits16384`
+  - State: `pending`
+
+**Parameter notes flagged for future work:**
+
+- `MAX_CLAUSE_LEN` (default 32 in `solver_core.sv`) is not threaded from the top level — did not block this build but remains a propagation gap.
+- `RESTART_CONFLICT_THRESHOLD` (localparam 64 in `solver_core.sv`) should eventually scale with problem vars.
+
+**Build log:** `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
+
+**Next step:** Poll `afi-058e8c5c1e2864659` until `available`, then load on F2 and validate.
 
 ---
 
@@ -245,6 +272,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 1×1 A2 (clock-divide, clk_solver XDC fix)               | `2026_03_19-031457`     | WNS=+0.711 ns ✅     | ✅               | ✅     | ❌ REQP-123 fail           | afi-064b74577e3b2f258 — FAILED. `.i_clk_hbm_ref(1'b0)` with `CLK_GRP_A_EN(1)`.                       |
 | **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)**              | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1.                                   |
 | **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
+| **1×1 A2 large (MAX_LITS=16384, MAX_CLAUSES=2048)** | **`2026_03_31-024747`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e); Default directives, `--no-encrypt`. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -380,6 +408,7 @@ Design files: ensure both copies are synced before building:
 
 **AFIs**:
 
+- **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e) — 1×1, name `SatSwarmV2-1x1-large-maxlits16384`, tag `2026_03_31-024747` — **pending** (submitted 2026-03-31). MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns.
 - **afi-0db4c324dc633940e** (agfi-0197eb8028efe5692) — 2×2, sharing `4clz`, tag `2026_03_24-202347` — **pending** (submitted 2026-03-24 21:51 UTC). Creation JSON: `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`.
 - **afi-0d8e504d573195da8** (agfi-0aa0b1b8ec26f6b5d) — 1×1, name `SatSwarmV2-1x1` — **available, VALIDATED 2026-03-19**. PCIS byte-lane fix confirmed. **Preferred 1×1.** Load: `sudo fpga-load-local-image -S 0 -I agfi-0aa0b1b8ec26f6b5d`
 - **afi-037e5d7f209df2123** (`agfi-022074a3e1f323966`) — 2×2, tag `2026_03_19-171700` — **available**. Built with BuildAll `Default` directives and PCIS byte-lane fix. Load with: `sudo fpga-load-local-image -S 0 -I agfi-022074a3e1f323966`

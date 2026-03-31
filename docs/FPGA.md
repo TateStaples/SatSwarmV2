@@ -9,6 +9,7 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 
 | AFI                     | agfi                     | Grid | Tag/Name            | Clock           | Notes                    |
 | ----------------------- | ------------------------ | ---- | ------------------- | --------------- | ------------------------ |
+| `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | 1×1  | `2026_03_31-024747` | A2 / 15.625 MHz | **Newest 1×1 large** MAX_LITS=16384, MAX_CLAUSES=2048; Default directives, WNS=+0.711 ns; state `pending` |
 | `afi-037e5d7f209df2123` | `agfi-022074a3e1f323966` | 2×2  | `2026_03_19-171700` | A2 / 15.625 MHz | **Newest 2×2** BuildAll (Default directives), PCIS byte-lane fix |
 | `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | `2026_03_19-102818` | A2 / 15.625 MHz | **Preferred** PCIS-fixed, validated on F2 2026-03-19 ✓ |
 | `afi-08804376adf00f2ab` | `agfi-0ecd81ca9a8dd581c` | 1×1  | `2026_03_26-042416` | A2 / 15.625 MHz | MAX_LITS=16384 rebuild; submitted 2026-03-26, state `pending` |
@@ -16,18 +17,16 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 | `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | PCIS bug present; gen_clk_extra_a1, may not lock on F2 |
 | `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | PCIS bug present; same MMCM caveat |
 
-Creation response for the new 1×1 MAX_LITS=16384 AFI is logged at:
-
-- `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`
-
-Quick state-check for this AFI:
+Quick state-check for the newest 1×1 large AFI:
 
 ```bash
 aws ec2 describe-fpga-images \
   --region us-east-1 \
-  --fpga-image-ids afi-08804376adf00f2ab \
+  --fpga-image-ids afi-058e8c5c1e2864659 \
   --query 'FpgaImages[0].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
 ```
+
+Build log: `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
 
 ## Newly Available AFIs (2026-03-24)
 
@@ -60,7 +59,7 @@ aws ec2 describe-fpga-images \
   --query 'FpgaImages[*].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
 ```
 
-In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`, available).
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Newest 1×1 large**: `agfi-042da882ac102dd2e` (MAX_LITS=16384, MAX_CLAUSES=2048, pending). **Preferred 1×1 (validated)**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`, available).
 
 As of 2026-03-26, `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for successful runs by default (`AUTO_CREATE_AFI=1`).
 

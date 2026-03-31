@@ -14,9 +14,10 @@ set -euo pipefail
 
 ROOT_DIR="/home/ubuntu/src/project_data/SatSwarmV2"
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
-RUN_DIR="$ROOT_DIR/deploy/logs/grid_sharing_$RUN_TS"
+RUN_DIR="${RUN_DIR:-$ROOT_DIR/deploy/logs/grid_sharing_$RUN_TS}"
 BACKUP_DIR="$RUN_DIR/backups"
-SUMMARY_CSV="$RUN_DIR/summary.csv"
+SUMMARY_CSV="${SUMMARY_CSV:-$RUN_DIR/summary.csv}"
+SKIP_BACKUP="${SKIP_BACKUP:-0}"
 
 TOP_FILE="$ROOT_DIR/src/Mega/satswarm_top.sv"
 CL_TOP_FILE="$ROOT_DIR/src/aws-fpga/hdk/cl/examples/cl_satswarm/design/cl_satswarm.sv"
@@ -34,13 +35,17 @@ AFI_S3_LOGS_PREFIX="${AFI_S3_LOGS_PREFIX:-logs}"
 
 mkdir -p "$RUN_DIR" "$BACKUP_DIR"
 
-for f in "$TOP_FILE" "$CL_TOP_FILE" "$BRIDGE_FILE" "$PKG_FILE" "$MESH_FILE"; do
-  if [[ ! -f "$f" ]]; then
-    echo "ERROR: missing required file: $f"
-    exit 1
-  fi
-  cp "$f" "$BACKUP_DIR/$(basename "$f")"
-done
+if [[ "$SKIP_BACKUP" == "1" ]]; then
+  echo "SKIP_BACKUP=1: reusing existing backups in $BACKUP_DIR"
+else
+  for f in "$TOP_FILE" "$CL_TOP_FILE" "$BRIDGE_FILE" "$PKG_FILE" "$MESH_FILE"; do
+    if [[ ! -f "$f" ]]; then
+      echo "ERROR: missing required file: $f"
+      exit 1
+    fi
+    cp "$f" "$BACKUP_DIR/$(basename "$f")"
+  done
+fi
 
 restore_originals() {
   cp "$BACKUP_DIR/$(basename "$TOP_FILE")" "$TOP_FILE"
@@ -261,16 +266,21 @@ if [[ ! -f "$BUILD_DIR/aws_build_dcp_from_cl.py" ]]; then
   exit 1
 fi
 
-echo "grid_label,grid_x,grid_y,mode_name,clause_sharing_mode,share_max_len,max_lits,start_time,end_time,status,log_file,latest_tar,afi_status,afi_id,agfi_id,afi_json" > "$SUMMARY_CSV"
+# Only write CSV header when starting fresh (not when appending via resume)
+if [[ "$SKIP_BACKUP" != "1" ]]; then
+  echo "grid_label,grid_x,grid_y,mode_name,clause_sharing_mode,share_max_len,max_lits,start_time,end_time,status,log_file,latest_tar,afi_status,afi_id,agfi_id,afi_json" > "$SUMMARY_CSV"
+fi
 
 set_max_clauses_per_core 2048
 
 overall_status=0
 
-# All runs use MAX_LITS=8192.
-run_entry "1x1" 1 1 "none" 0 2 8192 || overall_status=1
+# 1x1_none: completed in prior run (afi-0d91d1d71688e2359)
+# run_entry "1x1" 1 1 "none" 0 2 8192 || overall_status=1
 
-run_entry "2x2" 2 2 "none" 0 2 8192 || overall_status=1
+# 2x2_none: resumed via resume_and_continue.sh
+# run_entry "2x2" 2 2 "none" 0 2 8192 || overall_status=1
+
 run_entry "3x3" 3 3 "none" 0 2 8192 || overall_status=1
 
 run_entry "2x2" 2 2 "2clz" 1 2 8192 || overall_status=1

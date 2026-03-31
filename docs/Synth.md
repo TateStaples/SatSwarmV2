@@ -316,7 +316,22 @@ When the state becomes `available`, the AFI is ready to load on F2.
 
 For the actual on-instance load / run workflow after the AFI exists, switch to `FPGA.md`. For AFI lifecycle and manifest details, see [Amazon_FPGA_Images_Afis_Guide.md](../src/aws-fpga/hdk/docs/Amazon_FPGA_Images_Afis_Guide.md) and [AFI_Manifest.md](../src/aws-fpga/hdk/docs/AFI_Manifest.md).
 
-### 4. Recent 2x2 sharing-mode AFIs (2026-03-24)
+### 4. Recent 1×1 large-config AFI (2026-03-31)
+
+| Grid | Tag | AFI | AGFI | Config | Current State |
+| ---- | --- | --- | ---- | ------ | ------------- |
+| 1×1  | `2026_03_31-024747` | `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | MAX_LITS=16384, MAX_CLAUSES=2048, Default directives | pending |
+
+Build log: `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids afi-058e8c5c1e2864659 \
+  --query 'FpgaImages[0].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
+
+### 5. Recent 2x2 sharing-mode AFIs (2026-03-24)
 
 Run: `sharing_2x2_20260324_161553`
 
