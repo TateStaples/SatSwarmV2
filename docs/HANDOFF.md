@@ -4,11 +4,18 @@ Welcome. This document captures the **current state** of SatSwarmV2 development,
 
 **Quick status (2026-03-19, VALIDATED):** PCIS byte-lane bug fix confirmed working for 1×1. AFI `afi-0d8e504d573195da8` (agfi-0aa0b1b8ec26f6b5d) loaded and tested on F2 — `sat_20v_80c_1.cnf` → SAT ✓ (5,366 cycles), `unsat_50v_215c_1.cnf` → **UNSAT ✓** (56,310 cycles). The 2×2 PCIS-fix BuildAll AFI (tag `2026_03_19-171700`) `afi-037e5d7f209df2123` (`agfi-022074a3e1f323966`) is **available**.
 
-**Update (2026-03-31):** 1×1 large-config build completed (tag `2026_03_31-024747`): MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns. AFI submitted: `afi-058e8c5c1e2864659` (`agfi-042da882ac102dd2e`), state `pending`.
+**Update (2026-03-31):** 1×1 large-config build completed (tag `2026_03_31-024747`): MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns. AFI `afi-058e8c5c1e2864659` (`agfi-042da882ac102dd2e`) now **available** (confirmed 2026-04-01).
 
-**Update (2026-03-31, 2×2 sharing):** 2×2 **2clz** sharing build completed in run `grid_sharing_20260331_144138` (via `deploy/run_grid_sharing_builds.sh`): MAX_LITS=8192, MAX_CLAUSES_PER_CORE=2048, `CLAUSE_SHARING_MODE=1`, `SHARE_MAX_LEN=2`, Default directives, **WNS=+0.711 ns**, WHS=+0.010 ns. Build tag `2026_03_31-144138`; tar `2026_03_31-144138.Developer_CL.tar`. AFI **`afi-07e84cf377a21810e`** (`agfi-0e32325155d52e9a2`), name `SatSwarmV2-2x2_2clz-maxlits8192-20260331_144138`, state **`available`** (confirmed 2026-03-31 ~20:23 UTC). Ready to load on F2 and validate. Same run directory also tracks follow-on builds (3×3 2clz, 2×2 3clz, 3×3 3clz) in `summary.csv` as they complete.
+**Update (2026-03-31 → 2026-04-01, sharing sweep):** Grid/sharing sweep run `grid_sharing_20260331_144138` (via `deploy/run_grid_sharing_builds.sh`) has produced three completed+available AFIs and one build in progress:
 
-**Update (2026-03-31, 3×3 build in progress):** 3×3 **2clz** Vivado build (`build_3x3_2clz_20260331_175343`) started 17:53 UTC. As of ~20:23 UTC (~1h 40m elapsed), build is in **placement Phase 3.4 (Re-assign LUT pins)**; routing and DCP packaging still ahead.
+| Grid | Mode | Build tag | AFI | agfi | State |
+| ---- | ---- | --------- | --- | ---- | ----- |
+| 2×2  | 2clz | `2026_03_31-144138` | `afi-07e84cf377a21810e` | `agfi-0e32325155d52e9a2` | **available** |
+| 3×3  | 2clz | `2026_03_31-175343` | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | **available** |
+| 2×2  | 3clz | `2026_04_01-004349` | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | **available** |
+| 3×3  | 3clz | `2026_04_01-035153` | — | — | **build in progress** (placement as of ~05:15 UTC) |
+
+All three available AFIs are ready to load on F2 and validate. Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
 **Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
 
@@ -44,7 +51,7 @@ The repository's documentation has been modularized:
   - AFI: `afi-058e8c5c1e2864659`
   - AGFI: `agfi-042da882ac102dd2e`
   - Name: `SatSwarmV2-1x1-large-maxlits16384`
-  - State: `pending`
+  - State: **available** (confirmed 2026-04-01)
 
 **Parameter notes flagged for future work:**
 
@@ -53,7 +60,7 @@ The repository's documentation has been modularized:
 
 **Build log:** `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
 
-**Next step:** Poll `afi-058e8c5c1e2864659` until `available`, then load on F2 and validate.
+**Next step:** Load `agfi-042da882ac102dd2e` on F2 and validate (large-config 1×1, MAX_LITS=16384).
 
 ---
 
@@ -69,7 +76,9 @@ The repository's documentation has been modularized:
 
 **Context vs earlier 2×2 AFIs:** Plain PCIS-fix 2×2 (no sharing) remains **`afi-037e5d7f209df2123`**. March 2026 sharing sweep (`none`/`2clz`/`3clz`/`4clz`) for 2×2 is documented in §2e; this **2026-03-31** image is a fresh **2clz** build on current RTL with MAX_LITS=8192.
 
-**Next step:** AFI `afi-07e84cf377a21810e` is now **available** (confirmed 2026-03-31 ~20:23 UTC). Load on F2 and validate. When the full sweep finishes (3×3 2clz still building as of 20:23 UTC), extend this section or `Synth.md` with remaining `summary.csv` rows (3×3 modes, 2×2 3clz).
+**Status (2026-04-01):** Three AFIs now available (2×2 2clz, 3×3 2clz, 2×2 3clz — see quick-status table above). 3×3 3clz build is in progress (tag `2026_04_01-035153`, started 03:51 UTC, in placement as of ~05:15 UTC).
+
+**Next step:** Load available sharing AFIs on F2 and validate. Once 3×3 3clz completes, update `summary.csv` row and confirm its AFI reaches `available`.
 
 ---
 
