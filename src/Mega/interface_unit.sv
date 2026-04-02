@@ -5,7 +5,7 @@
 module interface_unit #(
     parameter int CORE_ID = 0,
     parameter int CORE_ID_W = satswarmv2_pkg::CORE_ID_W,
-    parameter int CLAUSE_RX_FIFO_DEPTH = 4  // Small buffer for incoming clauses
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Buffer for incoming shared clauses; must be > max simultaneous broadcasts from neighbors
 )(
     input  logic clk,
     input  logic rst_n,

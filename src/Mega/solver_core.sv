@@ -4,13 +4,14 @@ module solver_core #(
     parameter int MAX_VARS = 256,
     parameter int MAX_CLAUSES = 256,
     parameter int MAX_LITS = 4096,
-    parameter int MAX_CLAUSE_LEN = 32,
+    parameter int MAX_CLAUSE_LEN = MAX_VARS,  // CAE buffer; was 32 (too small for vars > ~50)
     parameter int GRID_X = 2,
     parameter int GRID_Y = 2,
     // Clause sharing mode: 0=disabled, 1=binary clauses only (len==2),
     //                      2=short clauses (len<=SHARE_MAX_LEN)
     parameter int CLAUSE_SHARING_MODE = 0,
-    parameter int SHARE_MAX_LEN = 4   // Max clause length to share (mode 2)
+    parameter int SHARE_MAX_LEN = 4,  // Max clause length to share (mode 2)
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO depth
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
@@ -687,7 +688,8 @@ module solver_core #(
 
     interface_unit #(
         .CORE_ID(CORE_ID),
-        .CORE_ID_W(satswarmv2_pkg::CORE_ID_W)
+        .CORE_ID_W(satswarmv2_pkg::CORE_ID_W),
+        .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH)
     ) u_iface (
         .clk(clk),
         .rst_n(rst_n),
