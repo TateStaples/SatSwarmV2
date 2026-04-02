@@ -1278,9 +1278,12 @@ module solver_core #(
 
                     end else if (pse_started_q && (conflict_seen_q || pse_conflict)) begin
                         // Conflict detected and variables remain unassigned
-                        // $strobe("[CORE %0d] Conflict detected in ACCUMULATE. pse_started=%d seen=%d conflict=%d", CORE_ID, pse_started_q, conflict_seen_q, pse_conflict);
-                        state_d = CONFLICT_ANALYSIS;
-                        query_index_d = 4'd0;
+                        if (decision_level_q == 0) begin
+                            state_d = FINISH_UNSAT;
+                        end else begin
+                            state_d = CONFLICT_ANALYSIS;
+                            query_index_d = 4'd0;
+                        end
                     end else begin
                         // PSE finished cleanly (or timeout) with no actions -> Ready for next decision
                         state_d = VDE_PHASE;
