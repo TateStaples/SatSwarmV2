@@ -9,6 +9,7 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 
 | AFI                     | agfi                     | Grid | Mode | Tag/Name            | Clock           | Notes                    |
 | ----------------------- | ------------------------ | ---- | ---- | ------------------- | --------------- | ------------------------ |
+| `afi-048fa7b3b873620c3` | `agfi-00ff7949dc2bafd1a` | 1×1  | none | `2026_04_02-161326` | A2 / 15.625 MHz | **Newest 1×1** MAX_LITS=8192; WNS=+0.711 ns; finished 14:01 EDT; **available** |
 | `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | 1×1  | none | `2026_03_31-024747` | A2 / 15.625 MHz | **Newest 1×1 large** MAX_LITS=16384, MAX_CLAUSES=2048; WNS=+0.711 ns; **available** |
 | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | 2×2  | 3clz | `2026_04_01-004349` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
 | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | 3×3  | 2clz | `2026_03_31-175343` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |

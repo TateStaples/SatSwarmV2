@@ -6,16 +6,26 @@ Welcome. This document captures the **current state** of SatSwarmV2 development,
 
 **Update (2026-03-31):** 1×1 large-config build completed (tag `2026_03_31-024747`): MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns. AFI `afi-058e8c5c1e2864659` (`agfi-042da882ac102dd2e`) now **available** (confirmed 2026-04-01).
 
-**Update (2026-03-31 → 2026-04-01, sharing sweep):** Grid/sharing sweep run `grid_sharing_20260331_144138` (via `deploy/run_grid_sharing_builds.sh`) has produced three completed+available AFIs and one build in progress:
+**Update (2026-03-31 → 2026-04-01, sharing sweep):** Grid/sharing sweep run `grid_sharing_20260331_144138` completed three of four entries:
 
 | Grid | Mode | Build tag | AFI | agfi | State |
 | ---- | ---- | --------- | --- | ---- | ----- |
 | 2×2  | 2clz | `2026_03_31-144138` | `afi-07e84cf377a21810e` | `agfi-0e32325155d52e9a2` | **available** |
 | 3×3  | 2clz | `2026_03_31-175343` | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | **available** |
 | 2×2  | 3clz | `2026_04_01-004349` | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | **available** |
-| 3×3  | 3clz | `2026_04_01-035153` | — | — | **build in progress** (placement as of ~05:15 UTC) |
+| 3×3  | 3clz | `2026_04_01-035153` | — | — | **FAILED** (Vivado segfault/OOM ~07:05 UTC, needs retry) |
 
-All three available AFIs are ready to load on F2 and validate. Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
+Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
+
+**Update (2026-04-02, 1×1 none baseline):** Run `grid_sharing_20260402_161326` completed: **1×1 none**, MAX_LITS=8192. Build started 16:13 UTC, finished 18:01 UTC (14:01 EDT), ~1h48m. AFI `afi-048fa7b3b873620c3` (`agfi-00ff7949dc2bafd1a`) — **available**. Log: `deploy/logs/grid_sharing_20260402_161326/`. Summary CSV: `deploy/logs/grid_sharing_20260402_161326/summary.csv`.
+
+**Update (2026-04-01, no-sharing baseline sweep):** Run `grid_sharing_20260401_132542` launched for 2×2/3×3/4×4 `none` mode (MAX_LITS=8192). 2×2 completed; 3×3 failed (Vivado segfault + disk full during tar packaging); 4×4 failed immediately (disk full). Disk cleaned (~3.4 GB freed from orphaned/intermediate DCPs). 3×3 and 4×4 retried (pid 243628, appending to same run dir and `summary.csv`).
+
+| Grid | Mode | Build tag | AFI | agfi | State |
+| ---- | ---- | --------- | --- | ---- | ----- |
+| 2×2  | none | `2026_04_01-132542` | `afi-0620b908c628bb5ac` | `agfi-0557b672797cfa0e1` | submitted |
+| 3×3  | none | — | — | — | **retrying** |
+| 4×4  | none | — | — | — | **retrying** |
 
 **Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
 
@@ -76,9 +86,9 @@ The repository's documentation has been modularized:
 
 **Context vs earlier 2×2 AFIs:** Plain PCIS-fix 2×2 (no sharing) remains **`afi-037e5d7f209df2123`**. March 2026 sharing sweep (`none`/`2clz`/`3clz`/`4clz`) for 2×2 is documented in §2e; this **2026-03-31** image is a fresh **2clz** build on current RTL with MAX_LITS=8192.
 
-**Status (2026-04-01):** Three AFIs now available (2×2 2clz, 3×3 2clz, 2×2 3clz — see quick-status table above). 3×3 3clz build is in progress (tag `2026_04_01-035153`, started 03:51 UTC, in placement as of ~05:15 UTC).
+**Status (2026-04-01):** Three AFIs available (2×2 2clz, 3×3 2clz, 2×2 3clz). 3×3 3clz build **failed** — Vivado segfaulted (signal 11, likely OOM) at ~07:05 UTC, ~3h 14m in, during implementation. No DCP produced; no AFI submitted. Summary CSV row records `failed`.
 
-**Next step:** Load available sharing AFIs on F2 and validate. Once 3×3 3clz completes, update `summary.csv` row and confirm its AFI reaches `available`.
+**Next step:** Load the three available sharing AFIs on F2 and validate. Retry 3×3 3clz when RAM is free (3×3 2clz peaked at ~18 GB; 3×3 3clz likely pushes higher). Retry command: re-run `deploy/run_grid_sharing_builds.sh` with only the 3×3 3clz entry, or launch a standalone build with `GRID_X=3 GRID_Y=3 CLAUSE_SHARING_MODE=2 SHARE_MAX_LEN=3`.
 
 ---
 
