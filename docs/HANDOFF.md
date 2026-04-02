@@ -19,6 +19,8 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
 **Update (2026-04-02, 1×1 none baseline):** Run `grid_sharing_20260402_161326` completed: **1×1 none**, MAX_LITS=8192. Build started 16:13 UTC, finished 18:01 UTC (14:01 EDT), ~1h48m. AFI `afi-048fa7b3b873620c3` (`agfi-00ff7949dc2bafd1a`) — **available**. Log: `deploy/logs/grid_sharing_20260402_161326/`. Summary CSV: `deploy/logs/grid_sharing_20260402_161326/summary.csv`.
 
+**Update (2026-04-02, 1×1 none 8192-clause build):** Run `grid_sharing_20260402_195210` completed: **1×1 none**, MAX_CLAUSES_PER_CORE=8192 (4× previous), MAX_LITS=8192. Build tag `2026_04_02-195210`. Started 19:52 UTC, finished 22:02 UTC, ~2h10m. WNS=+0.711 ns, WHS=+0.010 ns. AFI `afi-07b833dc55da8f85f` (`agfi-0f4c080b925f34eaf`) — **submitted/pending**. Log: `deploy/logs/grid_sharing_20260402_195210/`. Summary CSV: `deploy/logs/grid_sharing_20260402_195210/summary.csv`.
+
 **Update (2026-04-01, no-sharing baseline sweep):** Run `grid_sharing_20260401_132542` launched for 2×2/3×3/4×4 `none` mode (MAX_LITS=8192). 2×2 completed; 3×3 failed (Vivado segfault + disk full during tar packaging); 4×4 failed immediately (disk full). Disk cleaned (~3.4 GB freed from orphaned/intermediate DCPs). 3×3 and 4×4 retried (pid 243628, appending to same run dir and `summary.csv`).
 
 | Grid | Mode | Build tag | AFI | agfi | State |
@@ -46,6 +48,26 @@ The repository's documentation has been modularized:
 - **[Model.md](Model.md)**: Practical modeling flow for turning measured CSVs into scaling projections.
 - **[AWS_Intructions.md](AWS_instructions.md)**: Explinations and links to further resources to understand the aws-fpga ecosystem and rules
 - **HANDOFF.md (This File)**: Living state of the project.
+
+---
+
+## 2i. This Session (2026-04-02 — 1×1 none MAX_CLAUSES=8192 build, AFI afi-07b833dc55da8f85f)
+
+**What was done:**
+
+1. Updated `deploy/run_grid_sharing_builds.sh` to set `MAX_CLAUSES_PER_CORE=8192` (4× the previous 2048), keeping everything else unchanged (1×1 grid, `none` sharing, MAX_LITS=8192, Default directives, clock A2/B0/C0).
+2. Launched build (pid 1718). Run dir: `deploy/logs/grid_sharing_20260402_195210/`.
+3. **Build tag:** `2026_04_02-195210`. Started 19:52 UTC, completed 22:02 UTC (~2h10m).
+4. **Timing: WNS=+0.711 ns (MET)**, WHS=+0.010 ns, 0 errors.
+5. AFI auto-submitted:
+   - AFI: `afi-07b833dc55da8f85f`
+   - AGFI: `agfi-0f4c080b925f34eaf`
+   - State: **submitted/pending** as of 22:02 UTC
+   - Create JSON: `deploy/logs/grid_sharing_20260402_195210/afi_create_1x1_none_20260402_195210.json`
+
+**Purpose:** Baseline to measure whether 4× clause capacity improves solve rates on harder / larger problems (more learned clauses retained before eviction). Compare against `afi-048fa7b3b873620c3` (same config but MAX_CLAUSES=2048).
+
+**Next step:** Wait for AFI to become available (~30–60 min), then benchmark against the 2048-clause baseline.
 
 ---
 

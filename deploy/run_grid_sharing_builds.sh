@@ -2,10 +2,8 @@
 # =============================================================================
 # Sequential BuildAll runner for SatSwarm grid/sharing sweep.
 #
-# Requested default matrix:
-#   1x1: none (skip for next run; already completed)
-#   2x2: none, 2clz, 3clz
-#   3x3: none, 2clz, 3clz (with MAX_LITS=8192)
+# Current matrix: 1x1 only (none sharing).
+# (Previously: 2x2/3x3 sweeps; see git history for full matrix.)
 #
 # All runs use speed-focused directives: -p Default -o Default -r Default
 # Includes manual monitoring loop (sleep + grep) while each build is running.
@@ -271,23 +269,24 @@ if [[ "$SKIP_BACKUP" != "1" ]]; then
   echo "grid_label,grid_x,grid_y,mode_name,clause_sharing_mode,share_max_len,max_lits,start_time,end_time,status,log_file,latest_tar,afi_status,afi_id,agfi_id,afi_json" > "$SUMMARY_CSV"
 fi
 
-set_max_clauses_per_core 2048
+set_max_clauses_per_core 8192
 
 overall_status=0
 
-# 1x1_none: completed in prior run (afi-0d91d1d71688e2359)
-# run_entry "1x1" 1 1 "none" 0 2 8192 || overall_status=1
+# 1x1 none (MAX_LITS=8192)
+run_entry "1x1" 1 1 "none" 0 2 8192 || overall_status=1
 
-# 2x2_none: resumed via resume_and_continue.sh
+# Archived / other grid sizes (not in this run):
+# 1x1_none: completed (afi-0d91d1d71688e2359); re-run above if needed
+# sharing sweep: completed 2026-03-31 / 2026-04-01
+# run_entry "2x2" 2 2 "2clz" 1 2 8192 || overall_status=1
+# run_entry "3x3" 3 3 "2clz" 1 2 8192 || overall_status=1
+# run_entry "2x2" 2 2 "3clz" 2 3 8192 || overall_status=1
+# run_entry "3x3" 3 3 "3clz" 2 3 8192 || overall_status=1  # failed (OOM), needs retry
+# 2x2_none: completed (afi-0620b908c628bb5ac)
 # run_entry "2x2" 2 2 "none" 0 2 8192 || overall_status=1
-
-run_entry "3x3" 3 3 "none" 0 2 8192 || overall_status=1
-
-run_entry "2x2" 2 2 "2clz" 1 2 8192 || overall_status=1
-run_entry "3x3" 3 3 "2clz" 1 2 8192 || overall_status=1
-
-run_entry "2x2" 2 2 "3clz" 2 3 8192 || overall_status=1
-run_entry "3x3" 3 3 "3clz" 2 3 8192 || overall_status=1
+# run_entry "3x3" 3 3 "none" 0 2 8192 || overall_status=1
+# run_entry "4x4" 4 4 "none" 0 2 8192 || overall_status=1
 
 echo ""
 if [[ "$overall_status" -eq 0 ]]; then

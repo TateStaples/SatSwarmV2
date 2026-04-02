@@ -9,7 +9,8 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 
 | AFI                     | agfi                     | Grid | Mode | Tag/Name            | Clock           | Notes                    |
 | ----------------------- | ------------------------ | ---- | ---- | ------------------- | --------------- | ------------------------ |
-| `afi-048fa7b3b873620c3` | `agfi-00ff7949dc2bafd1a` | 1×1  | none | `2026_04_02-161326` | A2 / 15.625 MHz | **Newest 1×1** MAX_LITS=8192; WNS=+0.711 ns; finished 14:01 EDT; **available** |
+| `afi-07b833dc55da8f85f` | `agfi-0f4c080b925f34eaf` | 1×1  | none | `2026_04_02-195210` | A2 / 15.625 MHz | **Newest 1×1** MAX_CLAUSES=8192, MAX_LITS=8192; WNS=+0.711 ns; **pending** |
+| `afi-048fa7b3b873620c3` | `agfi-00ff7949dc2bafd1a` | 1×1  | none | `2026_04_02-161326` | A2 / 15.625 MHz | MAX_CLAUSES=2048, MAX_LITS=8192; WNS=+0.711 ns; **available** |
 | `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | 1×1  | none | `2026_03_31-024747` | A2 / 15.625 MHz | **Newest 1×1 large** MAX_LITS=16384, MAX_CLAUSES=2048; WNS=+0.711 ns; **available** |
 | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | 2×2  | 3clz | `2026_04_01-004349` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
 | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | 3×3  | 2clz | `2026_03_31-175343` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
@@ -37,7 +38,7 @@ Build logs in `deploy/logs/grid_sharing_20260331_144138/`. Summary CSV: `deploy/
 
 **3×3 3clz build in progress** (tag `2026_04_01-035153`, started ~03:51 UTC). Check log: `deploy/logs/grid_sharing_20260331_144138/build_3x3_3clz_20260401_035153.log`.
 
-In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Newest 1×1 large (available)**: `agfi-042da882ac102dd2e` (MAX_LITS=16384, MAX_CLAUSES=2048). **Preferred 1×1 (validated)**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2 no-sharing**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`, available).
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Newest 1×1 (pending)**: `agfi-0f4c080b925f34eaf` (MAX_CLAUSES=8192, MAX_LITS=8192, tag `2026_04_02-195210`). **Newest 1×1 large (available)**: `agfi-042da882ac102dd2e` (MAX_LITS=16384, MAX_CLAUSES=2048). **Preferred 1×1 (validated)**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2 no-sharing**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`, available).
 
 ## Earlier 2×2 Sharing AFIs (2026-03-24)
 
