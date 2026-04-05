@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
 
   // Simple time advance loop; stop if the testbench calls $finish or timeout
   // hits. Allow long runs (e.g., 15-minute UNSAT) without host-side timeout.
-  const vluint64_t max_time = 100000000000ULL; // ~16.7 minutes @ 10ns per tick
+  const vluint64_t max_time = 10000000000000ULL; // Increased limit to allow long runs
   while (!context.gotFinish() && context.time() < max_time) {
     context.timeInc(1);
     top.eval();

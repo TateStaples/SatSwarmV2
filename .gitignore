@@ -42,3 +42,6 @@ deploy/output/
 .Xil/
 
 temp_out/*
+
+# Temporary simulation traces and analysis output
+tmp/

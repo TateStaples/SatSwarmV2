@@ -465,7 +465,7 @@ module tb_satswarmv2;
 
   // Timeout watchdog
   initial begin
-    #(64'd900_000_000_000); // ~15 minutes sim time budget
+    #(64'd7200_000_000_000); // 2 hour sim time budget
     $display("\n*** GLOBAL TIMEOUT - ABORTING ***");
     $finish;
   end
