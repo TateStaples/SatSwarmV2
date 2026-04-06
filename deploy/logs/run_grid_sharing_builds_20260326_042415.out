@@ -1,0 +1,721 @@
+
+=== [1x1_none] apply params ===
+--- Current parameter snapshot ---
+cl_satswarm: 23:    parameter int GRID_X               = 1,
+cl_satswarm: 24:    parameter int GRID_Y               = 1,
+cl_satswarm: 27:    parameter int MAX_LITS             = 16384
+bridge: 19:    parameter int GRID_X              = 1,
+bridge: 20:    parameter int GRID_Y              = 1,
+bridge: 23:    parameter int MAX_LITS            = 16384
+satswarm_top: 3:    parameter int GRID_X = 1,
+satswarm_top: 4:    parameter int GRID_Y = 1,
+satswarm_top: 7:    parameter int MAX_LITS = 16384,
+satswarm_top: 9:    parameter int CLAUSE_SHARING_MODE = 0,
+satswarm_top: 10:    parameter int SHARE_MAX_LEN = 2
+satswarm_top: 205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+satswarm_top: 206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+pkg: 15:  parameter int GRID_X         = 1;    // 2x2 grid
+pkg: 16:  parameter int GRID_Y         = 1;
+mesh: 4:    parameter int GRID_X = 1,
+mesh: 5:    parameter int GRID_Y = 1
+=== [1x1_none] launch BuildAll (speed-focused directives) ===
+[1x1_none] pid=2717 log=/home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_042415/build_1x1_none_20260326_042415.log
+[2026-03-26T04:26:16+0000] [1x1_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:00:43 ; elapsed = 00:00:45 . Memory (MB): peak = 4154.008 ; gain = 1166.957 ; free physical = 22672 ; free virtual = 36201
+[2026-03-26T04:28:16+0000] [1x1_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:00:43 ; elapsed = 00:00:45 . Memory (MB): peak = 4154.008 ; gain = 1166.957 ; free physical = 22672 ; free virtual = 36201
+[2026-03-26T04:30:16+0000] [1x1_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:00:43 ; elapsed = 00:00:45 . Memory (MB): peak = 4154.008 ; gain = 1166.957 ; free physical = 22672 ; free virtual = 36201
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:33 ; elapsed = 00:03:41 . Memory (MB): peak = 4272.543 ; gain = 1285.492 ; free physical = 20990 ; free virtual = 34552
+[2026-03-26T04:32:16+0000] [1x1_none] still running...
+### print "Writing post-synth design checkpoint"
+AWS FPGA: (04:31:37): Writing post-synth design checkpoint
+### write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_synth.dcp
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_synth.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:28 ; elapsed = 00:00:28 . Memory (MB): peak = 5608.465 ; gain = 0.000 ; free physical = 22221 ; free virtual = 35817
+####       print "CRITICAL WARNING: MiG BRAM is not populated with ELF file. This results in Calibration Failure!!"
+## set AWS_DCP_DIR "${HDK_SHELL_DIR}/build/checkpoints/from_aws/"
+## add_files ${checkpoints_dir}/${CL}.${TAG}.post_synth.dcp
+##              [get_files ${checkpoints_dir}/${CL}.${TAG}.post_synth.dcp]
+INFO: [Project 1-454] Reading design checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_synth.dcp' for cell 'WRAPPER/CL'
+[2026-03-26T04:34:16+0000] [1x1_none] still running...
+Parsing XDC File [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/checkpoints/from_aws/cl_bb_routed.small_shell/top_late.xdc]
+INFO: [Timing 38-35] Done setting XDC timing constraints. [/proj/chiron/zhcz/scratch/F2_BUILD_2024_Vivado_2024-10-21-15-03-11299/build/hpr_AltSpreadLogic_low_AggressiveExplore/constraints/timing/io_timing.xdc:20]
+INFO: [Timing 38-2] Deriving generated clocks [/proj/chiron/zhcz/scratch/F2_BUILD_2024_Vivado_2024-10-21-15-03-11299/build/hpr_AltSpreadLogic_low_AggressiveExplore/constraints/timing/io_timing.xdc:20]
+Finished Parsing XDC File [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/checkpoints/from_aws/cl_bb_routed.small_shell/top_late.xdc]
+Parsing XDC File [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_synth/cl_satswarm_late.xdc] for cell 'WRAPPER/CL'
+Finished Parsing XDC File [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_synth/cl_satswarm_late.xdc] for cell 'WRAPPER/CL'
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y207 had a top level port PCIE_RP_PERSTN on sitetype net OUTBUF_O which was overwritten!
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y207 had a top level port PCIE_RP_PERSTN on sitetype net PULL_PAD which was overwritten!
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y207 had a top level port PCIE_RP_PERSTN on sitetype net IO which was overwritten!
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y181 had a top level port PCIE_EP_PERSTN on sitetype net OUTBUF_O which was overwritten!
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y181 had a top level port PCIE_EP_PERSTN on sitetype net PULL_PAD which was overwritten!
+CRITICAL WARNING: [Constraints 18-4866] Site IOB_X0Y181 had a top level port PCIE_EP_PERSTN on sitetype net IO which was overwritten!
+[2026-03-26T04:36:16+0000] [1x1_none] still running...
+## print "Writing post-link design checkpoint"
+AWS FPGA: (04:34:20): Writing post-link design checkpoint
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_link.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_link.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:17 ; elapsed = 00:00:18 . Memory (MB): peak = 5608.465 ; gain = 0.000 ; free physical = 22168 ; free virtual = 35805
+###         puts "\nCRITICAL WARNING: $mmcm_cell cell not found. Clock recipe for this MMCM not applied.\n"
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_A_EN_I.CLK_MMCM_A_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_B_EN_I.CLK_MMCM_B_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_C_EN_I.CLK_MMCM_C_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_HBM_EN_I.CLK_MMCM_HBM_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: [Vivado 12-795] Pblock 'pblock_CL' already exists. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/small_shell_level_1_fp_cl.xdc:28]
+[2026-03-26T04:38:16+0000] [1x1_none] still running...
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_link.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:17 ; elapsed = 00:00:18 . Memory (MB): peak = 5608.465 ; gain = 0.000 ; free physical = 22168 ; free virtual = 35805
+###         puts "\nCRITICAL WARNING: $mmcm_cell cell not found. Clock recipe for this MMCM not applied.\n"
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_A_EN_I.CLK_MMCM_A_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_B_EN_I.CLK_MMCM_B_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_GRP_C_EN_I.CLK_MMCM_C_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: WRAPPER/CL/AWS_CLK_GEN/CLK_HBM_EN_I.CLK_MMCM_HBM_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst cell not found. Clock recipe for this MMCM not applied.
+CRITICAL WARNING: [Vivado 12-795] Pblock 'pblock_CL' already exists. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/small_shell_level_1_fp_cl.xdc:28]
+Starting Cache Timing Information Task
+Ending Cache Timing Information Task | Checksum: 1382451ea
+Phase 2 Timer Update And Timing Data Collection
+[2026-03-26T04:40:16+0000] [1x1_none] still running...
+Phase 2 Timer Update And Timing Data Collection
+Phase 2.3 Timing Data Collection
+Phase 2.3 Timing Data Collection | Checksum: 1382451ea
+Phase 2 Timer Update And Timing Data Collection | Checksum: 1382451ea
+## print "Writing post-opt design checkpoint and report"
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+[2026-03-26T04:42:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:44:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:46:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:48:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:50:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:52:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:54:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:56:16+0000] [1x1_none] still running...
+AWS FPGA: (04:38:42): Writing post-opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+[2026-03-26T04:58:16+0000] [1x1_none] still running...
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+[2026-03-26T05:00:16+0000] [1x1_none] still running...
+write_checkpoint: Time (s): cpu = 00:00:15 ; elapsed = 00:00:15 . Memory (MB): peak = 5840.441 ; gain = 0.000 ; free physical = 21934 ; free virtual = 35597
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+[2026-03-26T05:02:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:04:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:06:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:08:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:10:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:12:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+[2026-03-26T05:14:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+CRITICAL WARNING: [Vivado 12-4430] You are lowering the severity from an ERROR. This can potentially lead to board damage or other functionality issues on hardware. If this is not desired, please run 'reset_property SEVERITY [get_drc_checks REQP-123]' to undo this change.
+## place_design -directive $PLACE_DIRECT -no_bufg_opt
+Command: place_design -directive Default -no_bufg_opt
+Running DRC as a precondition to command place_design
+Phase 2.1.1.4 PBP: UpdateTiming
+Phase 2.1.1.4 PBP: UpdateTiming | Checksum: 1837a6bc5
+Phase 2.3 Update Timing before SLR Path Opt
+Phase 2.3 Update Timing before SLR Path Opt | Checksum: 23a24fc99
+Phase 2.6.1 UpdateTiming Before Physical Synthesis
+Phase 2.6.1 UpdateTiming Before Physical Synthesis | Checksum: 144976bf4
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+[2026-03-26T05:16:16+0000] [1x1_none] still running...
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Place 46-63] BUFG replication identified 0 candidate nets: Replicated nets: 0, Replicated BUFGs: 0, Replicated BUFG Driver: 0, moved BUFGs: 0, Skipped due to Placement / Routing Conflict: 0, Skipped due to Timing: 0, Skipped due to constraints: 0
+Phase 4.1.1.2 Post Placement Timing Optimization
+INFO: [Place 30-746] Post Placement Timing Summary WNS=0.711. For the most accurate timing information please run report_timing.
+Phase 4.1.1.2 Post Placement Timing Optimization | Checksum: 1f2bff3e7
+INFO: [Place 46-19] Post Replication Timing Summary WNS=0.711. For the most accurate timing information please run report_timing.
+place_design completed successfully
+place_design: Time (s): cpu = 00:35:39 ; elapsed = 00:35:42 . Memory (MB): peak = 8311.621 ; gain = 2039.305 ; free physical = 18782 ; free virtual = 33112
+## print "Writing post-place design checkpoint and report"
+AWS FPGA: (05:16:12): Writing post-place design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_place.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+[2026-03-26T05:18:16+0000] [1x1_none] still running...
+Phase 4.1.1.2 Post Placement Timing Optimization | Checksum: 1f2bff3e7
+INFO: [Place 46-19] Post Replication Timing Summary WNS=0.711. For the most accurate timing information please run report_timing.
+place_design completed successfully
+place_design: Time (s): cpu = 00:35:39 ; elapsed = 00:35:42 . Memory (MB): peak = 8311.621 ; gain = 2039.305 ; free physical = 18782 ; free virtual = 33112
+## print "Writing post-place design checkpoint and report"
+AWS FPGA: (05:16:12): Writing post-place design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_place.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_place.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18715 ; free virtual = 33096
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+[2026-03-26T05:20:16+0000] [1x1_none] still running...
+INFO: [Vivado_Tcl 4-2279] Estimated Timing Summary | WNS= 0.711 | TNS= 0.000 | 
+INFO: [Vivado_Tcl 4-383] Design worst setup slack (WNS) is greater than or equal to 0.000 ns. All physical synthesis setup optimizations will be skipped.
+## print "Writing post-phy_opt design checkpoint and report"
+AWS FPGA: (05:18:30): Writing post-phy_opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_phys_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_phys_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18695 ; free virtual = 33128
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+[2026-03-26T05:22:16+0000] [1x1_none] still running...
+INFO: [Vivado_Tcl 4-383] Design worst setup slack (WNS) is greater than or equal to 0.000 ns. All physical synthesis setup optimizations will be skipped.
+## print "Writing post-phy_opt design checkpoint and report"
+AWS FPGA: (05:18:30): Writing post-phy_opt design checkpoint and report
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_phys_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_phys_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18695 ; free virtual = 33128
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+[2026-03-26T05:24:16+0000] [1x1_none] still running...
+## write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_phys_opt.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_phys_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18695 ; free virtual = 33128
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+[2026-03-26T05:26:16+0000] [1x1_none] still running...
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_phys_opt.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18695 ; free virtual = 33128
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Temperature grade: E, Delay Type: max.
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+[2026-03-26T05:28:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:30:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:32:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:34:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:36:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:38:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:40:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:42:16+0000] [1x1_none] still running...
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+[2026-03-26T05:44:16+0000] [1x1_none] still running...
+## route_design -directive $ROUTE_DIRECT -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.023 | THS=-0.097 |
+[2026-03-26T05:46:16+0000] [1x1_none] still running...
+Post Restoration Checksum: NetGraph: 31b64d7e | NumContArr: ae0f0454 | Constraints: b71e2c50 | Timing: c2a8fa9d
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 1c0dc5654
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.059 | THS=-10.316|
+Phase 2.5 Update Timing for Bus Skew
+Phase 2.5.1 Update Timing
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.023 | THS=-0.097 |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+[2026-03-26T05:48:16+0000] [1x1_none] still running...
+Phase 2.5.1 Update Timing | Checksum: 25d82289c
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.118 | THS=-3.021 |
+Phase 2.5 Update Timing for Bus Skew | Checksum: 29819e0b6
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.023 | THS=-0.097 |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+Phase 14 Post Router Timing
+INFO: [Route 35-57] Estimated Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+Phase 14 Post Router Timing | Checksum: 1acce0cbf
+Total Elapsed time in route_design: 1730.13 secs
+INFO: [Constraints 18-12546] INFO: Running DFX DRC before completing route_design
+[2026-03-26T05:50:16+0000] [1x1_none] still running...
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+Phase 14 Post Router Timing
+INFO: [Route 35-57] Estimated Timing Summary | WNS=0.711  | TNS=0.000  | WHS=0.010  | THS=0.000  |
+Phase 14 Post Router Timing | Checksum: 1acce0cbf
+Total Elapsed time in route_design: 1730.13 secs
+INFO: [Constraints 18-12546] INFO: Running DFX DRC before completing route_design
+route_design completed successfully
+route_design: Time (s): cpu = 00:29:35 ; elapsed = 00:29:36 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18525 ; free virtual = 32971
+## print "Writing post-route design checkpoint and report"
+AWS FPGA: (05:48:53): Writing post-route design checkpoint and report
+[2026-03-26T05:52:16+0000] [1x1_none] still running...
+WARNING: [Timing 38-164] This design has multiple clocks. Inter clock paths are considered valid unless explicitly excluded by timing constraints such as set_clock_groups or set_false_path.
+WARNING: [Timing 38-164] This design has multiple clocks. Inter clock paths are considered valid unless explicitly excluded by timing constraints such as set_clock_groups or set_false_path.
+##     write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_route.VIOLATED.dcp
+##     write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_route.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+INFO: [Common 17-1381] The checkpoint '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_route.dcp' has been generated.
+write_checkpoint: Time (s): cpu = 00:00:28 ; elapsed = 00:00:29 . Memory (MB): peak = 8311.621 ; gain = 0.000 ; free physical = 18535 ; free virtual = 33051
+INFO: [Timing 38-78] ReportTimingParams: -max_paths 10 -nworst 1 -delay_type max -sort_by group.
+## write_debug_probes -no_partial_ltxfile -force ${checkpoints_dir}/${TAG}.debug_probes.ltx
+## print "Finished building design checkpoints for customer design ${CL}"
+AWS FPGA: (05:51:48): Finished building design checkpoints for customer design cl_satswarm
+923c47accdf64670f6478c0182fd812a0346353dbe97f9fed262794039b58120  /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-042416.post_route.dcp
+=== [1x1_none] ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_042415/build_1x1_none_20260326_042415.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_26-042416.Developer_CL.tar
+
+=== [2x2_none] apply params ===
+--- Current parameter snapshot ---
+cl_satswarm: 23:    parameter int GRID_X               = 2,
+cl_satswarm: 24:    parameter int GRID_Y               = 2,
+cl_satswarm: 27:    parameter int MAX_LITS             = 16384
+bridge: 19:    parameter int GRID_X              = 2,
+bridge: 20:    parameter int GRID_Y              = 2,
+bridge: 23:    parameter int MAX_LITS            = 16384
+satswarm_top: 3:    parameter int GRID_X = 2,
+satswarm_top: 4:    parameter int GRID_Y = 2,
+satswarm_top: 7:    parameter int MAX_LITS = 16384,
+satswarm_top: 9:    parameter int CLAUSE_SHARING_MODE = 0,
+satswarm_top: 10:    parameter int SHARE_MAX_LEN = 2
+satswarm_top: 205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+satswarm_top: 206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+pkg: 15:  parameter int GRID_X         = 2;    // 2x2 grid
+pkg: 16:  parameter int GRID_Y         = 2;
+mesh: 4:    parameter int GRID_X = 2,
+mesh: 5:    parameter int GRID_Y = 2
+=== [2x2_none] launch BuildAll (speed-focused directives) ===
+[2x2_none] pid=18287 log=/home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_042415/build_2x2_none_20260326_055216.log
+[2026-03-26T05:54:16+0000] [2x2_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:03 ; elapsed = 00:01:05 . Memory (MB): peak = 4567.223 ; gain = 1628.098 ; free physical = 21212 ; free virtual = 35801
+[2026-03-26T05:56:16+0000] [2x2_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:03 ; elapsed = 00:01:05 . Memory (MB): peak = 4567.223 ; gain = 1628.098 ; free physical = 21212 ; free virtual = 35801
+[2026-03-26T05:58:16+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:03 ; elapsed = 00:01:05 . Memory (MB): peak = 4567.223 ; gain = 1628.098 ; free physical = 21212 ; free virtual = 35801
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:43 ; elapsed = 00:04:40 . Memory (MB): peak = 4599.008 ; gain = 1659.883 ; free physical = 16913 ; free virtual = 31521
+[2026-03-26T06:00:16+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:03 ; elapsed = 00:01:05 . Memory (MB): peak = 4567.223 ; gain = 1628.098 ; free physical = 21212 ; free virtual = 35801
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:43 ; elapsed = 00:04:40 . Memory (MB): peak = 4599.008 ; gain = 1659.883 ; free physical = 16913 ; free virtual = 31521
+[2026-03-26T06:02:16+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:03 ; elapsed = 00:01:05 . Memory (MB): peak = 4567.223 ; gain = 1628.098 ; free physical = 21212 ; free virtual = 35801
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:43 ; elapsed = 00:04:40 . Memory (MB): peak = 4599.008 ; gain = 1659.883 ; free physical = 16913 ; free virtual = 31521
+[2026-03-26T06:04:16+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Vivado 12-1815] Setting property 'IOSTANDARD' is not allowed for GT terminals. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_pins.xdc:205]
+CRITICAL WARNING: [Vivado 12-1815] Setting property 'IOSTANDARD' is not allowed for GT terminals. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_pins.xdc:223]
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+[2026-03-26T06:06:16+0000] [2x2_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/cl_axi_clock_converter_clocks.xdc:16]
+CRITICAL WARNING: [Vivado 12-4739] set_false_path:No valid object(s) found for '-from [get_pins -of_objects [get_cells -hierarchical -filter { NAME =~ *ram_reg*}] -filter {REF_PIN_NAME == CLK}]'. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:26]
+CRITICAL WARNING: [Vivado 12-4739] set_clock_groups:No valid object(s) found for '-group [get_clocks -of_objects [get_pins -hierarchical -filter NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0]]'. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+CRITICAL WARNING: [Vivado 12-4739] set_clock_groups:No valid object(s) found for '-group '. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+CRITICAL WARNING: [Vivado 12-5201] set_clock_groups: cannot set the clock group when only one non-empty group remains. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+synth_design completed successfully
+synth_design: Time (s): cpu = 00:11:41 ; elapsed = 00:13:13 . Memory (MB): peak = 8744.742 ; gain = 7068.023 ; free physical = 13657 ; free virtual = 28325
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 8350.779; main = 7793.988; forked = 3964.427
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 11166.777; main = 8744.711; forked = 5732.996
+### print "Writing post-synth design checkpoint"
+AWS FPGA: (06:05:38): Writing post-synth design checkpoint
+### write_checkpoint -force ${checkpoints_dir}/${CL}.${TAG}.post_synth.dcp
+[2026-03-26T06:08:16+0000] [2x2_none] still running...
+CRITICAL WARNING: [Vivado 12-4739] set_clock_groups:No valid object(s) found for '-group [get_clocks -of_objects [get_pins -hierarchical -filter NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0]]'. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+CRITICAL WARNING: [Vivado 12-4739] set_clock_groups:No valid object(s) found for '-group '. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+CRITICAL WARNING: [Vivado 12-5201] set_clock_groups: cannot set the clock group when only one non-empty group remains. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc:30]
+synth_design completed successfully
+synth_design: Time (s): cpu = 00:11:41 ; elapsed = 00:13:13 . Memory (MB): peak = 8744.742 ; gain = 7068.023 ; free physical = 13657 ; free virtual = 28325
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 8350.779; main = 7793.988; forked = 3964.427
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 11166.777; main = 8744.711; forked = 5732.996
+### print "Writing post-synth design checkpoint"
+AWS FPGA: (06:05:38): Writing post-synth design checkpoint
+### write_che

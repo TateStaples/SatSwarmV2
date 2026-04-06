@@ -1,0 +1,954 @@
+==================================================
+Running CL builds
+==================================================
+cl               : cl_satswarm     
+mode             : small_shell     
+flow             : BuildAll        
+aws_clk_gen      : True            
+clock_recipe_a   : A2              
+clock_recipe_b   : B0              
+clock_recipe_c   : C0              
+clock_recipe_hbm : H2              
+place_direct     : Default         
+phy_opt_direct   : Default         
+route_direct     : Default         
+build_tag        : None            
+encrypt          : True            
+==================================================
+
+AWS FPGA: 2026-03-24 16:10:53 - Build starts
+
+
+****** Vivado v2025.2 (64-bit)
+  **** SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+  **** IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+  **** SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+  **** Start of session at: Tue Mar 24 16:10:55 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2025 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source build_all.tcl
+# proc print {message} {
+#     set prefix "\nAWS FPGA: ([clock format [clock seconds] -format %T]): "
+#     append output $prefix $message "\n"
+#     puts $output
+# }
+# proc check_timing_path { {verbose 1} } {
+# 
+#   set setupPaths [get_timing_paths -max_paths 1 -slack_lesser_than 0 -setup]
+#   set holdPaths  [get_timing_paths -max_paths 1 -slack_lesser_than 0 -hold]
+# 
+#   if {$verbose>0} {
+#     print "Checking the negative slack path of the existing design"
+#   }
+# 
+#   if {[llength $setupPaths] == 0 && [llength $holdPaths] == 0} {
+#     if {$verbose>0} {
+#       print "SUCCESS: Design has no negative slack path"
+#     }
+#     return 0
+#   } else {
+#     if {$verbose>0} {
+#       print "CRITICAL WARNING: Found $setupPaths negative setup slack paths and $holdPaths negative hold slack hold paths"
+#     }
+#     return 1
+#   }
+# }
+# proc create_dir {name path {verbose 0}} {
+# 
+#     # Better to use absolute path
+#     set cur [pwd]
+#     # Check if the $path exists
+#     if {![file isdirectory $path]} {
+#         error "$path doesn't exist"
+#     }
+#     cd $path
+#     set path_abs [pwd]
+# 
+#     cd $cur
+#     # Check and create the directory if not exists
+#     if {![file isdirectory $path_abs/$name]} {
+#         file mkdir $path_abs/$name
+#         if {$verbose>0} {
+#             print "Creating new folder $path_abs/$name"
+#         }
+#     } elseif {$verbose>0} {
+#         print "Found existing folder $path_abs/$name. Folder creation skipped"
+#     }
+#     return $path_abs/$name
+# }
+# proc display_proj {} {
+#     global VIVADO_TOOL_VERSION
+#     global CL
+#     global SHELL_MODE
+#     global BUILD_FLOW
+#     global PLACE_DIRECT
+#     global PHY_OPT_DIRECT
+#     global ROUTE_DIRECT
+#     global TAG
+#     global clock_recipe_a
+#     global clock_recipe_b
+#     global clock_recipe_c
+#     global clock_recipe_hbm
+# 
+# 
+#     set rpt "
+#     ==================================================
+#     Running CL builds w/ updated build tag
+#     ==================================================
+#     vivado_tool      : $VIVADO_TOOL_VERSION
+#     cl               : $CL
+#     mode             : $SHELL_MODE
+#     clock_recipe_a   : $clock_recipe_a
+#     clock_recipe_b   : $clock_recipe_b
+#     clock_recipe_c   : $clock_recipe_c
+#     clock_recipe_hbm : $clock_recipe_hbm
+#     flow             : $BUILD_FLOW
+#     place_direct     : $PLACE_DIRECT
+#     phy_opt_direct   : $PHY_OPT_DIRECT
+#     route_direct     : $ROUTE_DIRECT
+#     build_tag        : $TAG
+#     ==================================================
+#     "
+#     puts "$rpt"
+# }
+# set PLACE_DIRECT     [lindex $argv 0]
+# set PHY_OPT_DIRECT   [lindex $argv 1]
+# set ROUTE_DIRECT     [lindex $argv 2]
+# set clock_recipe_a   [lindex $argv 3]
+# set clock_recipe_b   [lindex $argv 4]
+# set clock_recipe_c   [lindex $argv 5]
+# set clock_recipe_hbm [lindex $argv 6]
+# set DEVICE_TYPE "xcvu47p-fsvh2892-2-e"
+# if { [info exists ::env(BUILD_FLOW)] } {
+#   set BUILD_FLOW $::env(BUILD_FLOW)
+# } else {
+#   set BUILD_FLOW "BuildAll"
+# }
+# if { [info exists ::env(CL)] } {
+#   set CL $::env(CL)
+# } else {
+#   set CL "cl_dram_hbm_dma"
+# }
+# if { [info exists ::env(SHELL_MODE)] } {
+#   set SHELL_MODE $::env(SHELL_MODE)
+# } else {
+#   set SHELL_MODE "xdma_shell"
+# }
+# if { [info exists ::env(BUILD_TAG)] } {
+#   set TAG $::env(BUILD_TAG)
+# } else {
+#   set TAG "00_00_0000-999999"
+# }
+# if { [info exists ::env(HDK_SHELL_DIR)] } {
+#     set HDK_SHELL_DIR $::env(HDK_SHELL_DIR)
+# } else {
+#     print "ERROR: HDK_SHELL_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(HDK_SHELL_DESIGN_DIR)] } {
+#     set HDK_SHELL_DESIGN_DIR $::env(HDK_SHELL_DESIGN_DIR)
+# } else {
+#     print "ERROR: HDK_SHELL_DESIGN_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(HDK_COMMON_DIR)] } {
+#     set HDK_COMMON_DIR $::env(HDK_COMMON_DIR)
+# } else {
+#     print "ERROR: HDK_COMMON_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(HDK_IP_SRC_DIR)] } {
+#     set HDK_IP_SRC_DIR $::env(HDK_IP_SRC_DIR)
+# } else {
+#     print "ERROR: HDK_IP_SRC_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(HDK_BD_SRC_DIR)] } {
+#     set HDK_BD_SRC_DIR $::env(HDK_BD_SRC_DIR)
+# } else {
+#     print "ERROR: HDK_BD_SRC_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(HDK_BD_GEN_DIR)] } {
+#     set HDK_BD_GEN_DIR $::env(HDK_BD_GEN_DIR)
+# } else {
+#     print "ERROR: HDK_BD_GEN_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(CL_DIR)] } {
+#     set CL_DIR $::env(CL_DIR)
+# } else {
+#     print "ERROR: CL_DIR not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(VIVADO_TOOL_VERSION)] } {
+#     set VIVADO_TOOL_VERSION $::env(VIVADO_TOOL_VERSION)
+# } else {
+#     print "ERROR: VIVADO_TOOL_VERSION not set. Please run hdk_setup.sh to set required env variables."
+#     exit
+# }
+# if { [info exists ::env(ENCRYPT)] } {
+#     set ENCRYPT $::env(ENCRYPT)
+# } else {
+#     set ENCRYPT 1
+# }
+# display_proj
+
+    ==================================================
+    Running CL builds w/ updated build tag
+    ==================================================
+    vivado_tool      : 2025.2
+    cl               : cl_satswarm
+    mode             : small_shell
+    clock_recipe_a   : A2
+    clock_recipe_b   : B0
+    clock_recipe_c   : C0
+    clock_recipe_hbm : H2
+    flow             : BuildAll
+    place_direct     : Default
+    phy_opt_direct   : Default
+    route_direct     : Default
+    build_tag        : 2026_03_24-161053
+    ==================================================
+    
+# set scripts_dir [pwd]
+# set build_dir [file dirname $scripts_dir]
+# create_dir "reports"              $build_dir
+# create_dir "checkpoints"          $build_dir
+# create_dir "src_post_encryption"  $build_dir
+# set design_dir       "${CL_DIR}/design"
+# set constraints_dir  "${build_dir}/constraints"
+# set reports_dir      "${build_dir}/reports"
+# set checkpoints_dir  "${build_dir}/checkpoints"
+# set reports_dir      "${build_dir}/reports"
+# set src_post_enc_dir "${build_dir}/src_post_encryption"
+# cd $scripts_dir
+# print "Generating clock contraints for CL source clocks"
+
+AWS FPGA: (16:10:56): Generating clock contraints for CL source clocks
+
+# source $HDK_SHELL_DIR/build/scripts/aws_gen_clk_constraints.tcl
+## switch $clock_recipe_a {
+##     "A0" {
+##         #NOT SUPPORTED# set clk_main_a0_period        8
+##         #NOT SUPPORTED# set clk_main_a0_half_period   4
+##         set clk_main_a0_period        4
+##         set clk_main_a0_half_period   2
+##         set clk_extra_a1_period      16
+##         set clk_extra_a1_half_period  8
+##         set clk_extra_a2_period       5.333
+##         set clk_extra_a2_half_period  2.667
+##         set clk_extra_a3_period       4
+##         set clk_extra_a3_half_period  2
+##     }
+##     "A1" {
+##         set clk_main_a0_period        4
+##         set clk_main_a0_half_period   2
+##         set clk_extra_a1_period       6.667
+##         set clk_extra_a1_half_period  3.333
+##         set clk_extra_a2_period       4
+##         set clk_extra_a2_half_period  2
+##         set clk_extra_a3_period       3.333
+##         set clk_extra_a3_half_period  1.667
+##     }
+##     "A2" {
+##         #NOT SUPPORTED# set clk_main_a0_period        64
+##         #NOT SUPPORTED# set clk_main_a0_half_period   32
+##         set clk_main_a0_period         4
+##         set clk_main_a0_half_period    2
+##         set clk_extra_a1_period      128
+##         set clk_extra_a1_half_period  64
+##         set clk_extra_a2_period        8
+##         set clk_extra_a2_half_period   4
+##         set clk_extra_a3_period       16
+##         set clk_extra_a3_half_period   8
+##     }
+##     default {
+##         puts "$clock_recipe_a is NOT a valid clock_recipe_a."
+##     }
+## }
+## switch $clock_recipe_b {
+##     "B0" {
+##         set clk_extra_b0_period       4
+##         set clk_extra_b0_half_period  2
+##         set clk_extra_b1_period       8
+##         set clk_extra_b1_half_period  4
+##     }
+##     "B1" {
+##         set clk_extra_b0_period       8
+##         set clk_extra_b0_half_period  4
+##         set clk_extra_b1_period      16
+##         set clk_extra_b1_half_period  8
+##     }
+##     "B2" {
+##         set clk_extra_b0_period       2.222
+##         set clk_extra_b0_half_period  1.111
+##         set clk_extra_b1_period       4.444
+##         set clk_extra_b1_half_period  2.222
+##     }
+##     "B3" {
+##         set clk_extra_b0_period       4
+##         set clk_extra_b0_half_period  2
+##         set clk_extra_b1_period      16
+##         set clk_extra_b1_half_period  8
+##     }
+##     "B4" {
+##         set clk_extra_b0_period       3.333
+##         set clk_extra_b0_half_period  1.667
+##         set clk_extra_b1_period      13.333
+##         set clk_extra_b1_half_period  6.667
+##     }
+##     "B5" {
+##         set clk_extra_b0_period       2.5
+##         set clk_extra_b0_half_period  1.25
+##         set clk_extra_b1_period      10
+##         set clk_extra_b1_half_period  5
+##     }
+##     default {
+##         puts "$clock_recipe_b is NOT a valid clock_recipe_b."
+##     }
+## }
+## switch $clock_recipe_c {
+##     "C0" {
+##         set clk_extra_c0_period       3.333
+##         set clk_extra_c0_half_period  1.667
+##         set clk_extra_c1_period       2.5
+##         set clk_extra_c1_half_period  1.25
+##     }
+##     "C1" {
+##         set clk_extra_c0_period       6.667
+##         set clk_extra_c0_half_period  3.333
+##         set clk_extra_c1_period       5
+##         set clk_extra_c1_half_period  2.5
+##     }
+##     "C2" {
+##         set clk_extra_c0_period      13.333
+##         set clk_extra_c0_half_period  6.667
+##         set clk_extra_c1_period      10
+##         set clk_extra_c1_half_period  5
+##     }
+##     "C3" {
+##         set clk_extra_c0_period       5
+##         set clk_extra_c0_half_period  2.5
+##         set clk_extra_c1_period       3.75
+##         set clk_extra_c1_half_period  1.875
+##     }
+##     default {
+##         puts "$clock_recipe_c is NOT a valid clock_recipe_c."
+##     }
+## }
+## switch $clock_recipe_hbm {
+##     "H0" {
+##         set clk_hbm_axi_period       4
+##         set clk_hbm_axi_half_period  2
+##     }
+##     "H1" {
+##         set clk_hbm_axi_period       8
+##         set clk_hbm_axi_half_period  4
+##     }
+##     "H2" {
+##         set clk_hbm_axi_period       2.222
+##         set clk_hbm_axi_half_period  1.111
+##     }
+##     "H3" {
+##         set clk_hbm_axi_period       3.333
+##         set clk_hbm_axi_half_period  1.667
+##     }
+##     "H4" {
+##         set clk_hbm_axi_period       2.5
+##         set clk_hbm_axi_half_period  1.25
+##     }
+##     default {
+##         puts "$clock_recipe_hbm is NOT a valid clock_recipe_hbm."
+##     }
+## }
+## set pin_clk_extra_a1 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_A_EN_I.CLK_MMCM_A_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT0}\]"
+## set pin_clk_extra_a2 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_A_EN_I.CLK_MMCM_A_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT1}\]"
+## set pin_clk_extra_a3 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_A_EN_I.CLK_MMCM_A_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT2}\]"
+## set pin_clk_extra_b0 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_B_EN_I.CLK_MMCM_B_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT0}\]"
+## set pin_clk_extra_b1 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_B_EN_I.CLK_MMCM_B_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT1}\]"
+## set pin_clk_extra_c0 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_C_EN_I.CLK_MMCM_C_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT0}\]"
+## set pin_clk_extra_c1 "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_GRP_C_EN_I.CLK_MMCM_C_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT1}\]"
+## set pin_clk_hbm_axi  "\[get_pins -of_objects \[get_cells -hierarchical -regexp .*AWS_CLK_GEN/CLK_HBM_EN_I.CLK_MMCM_HBM_I/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst\] -filter {NAME=~*CLKOUT0}\]"
+## if { [file exists $CL_DIR/build/constraints/generated_cl_clocks_aws.xdc] } {
+##     puts "Deleting old CL clocks constraints file since it will be replaced.";
+##     file delete -force $CL_DIR/build/constraints/generated_cl_clocks_aws.xdc
+## }
+Deleting old CL clocks constraints file since it will be replaced.
+## set clocks_file [open "$CL_DIR/build/constraints/generated_cl_clocks_aws.xdc" w]
+## puts $clocks_file "#-------------------------------------------------------------------------"
+## puts $clocks_file "# Do not edit this file! It is auto-generated from $argv0."
+## puts $clocks_file "#-------------------------------------------------------------------------"
+## puts $clocks_file "###############################################################################                          "
+## puts $clocks_file "# OOC Source Clocks                                                                                      "
+## puts $clocks_file "###############################################################################                          "
+## puts $clocks_file "#CL HBM reference clock @100MHz                                                                          "
+## puts $clocks_file "create_clock -period 10.000 -name clk_hbm_ref  -waveform {0.000 5.000} \[get_ports clk_hbm_ref\]       \n"
+## puts $clocks_file "# Group A Clocks"
+## puts $clocks_file "create_clock -period $clk_main_a0_period  -name clk_main_a0 -waveform {0.000 $clk_main_a0_half_period}  \[get_ports clk_main_a0\]"
+## close $clocks_file
+# print "Checking for source code encryption"
+
+AWS FPGA: (16:10:57): Checking for source code encryption
+
+# source encrypt.tcl
+## if {[llength [glob -nocomplain -dir ${src_post_enc_dir} *]] != 0} {
+##   eval file delete -force [glob ${src_post_enc_dir}/*]
+## }
+## foreach f [glob -directory ${HDK_SHELL_DESIGN_DIR}/interfaces *.inc] {
+##   file copy -force $f ${src_post_enc_dir}/
+## }
+## foreach f [glob -directory ${design_dir} *.{v,sv,vh,svh,inc}] {
+##   file copy -force $f ${src_post_enc_dir}/
+## }
+## exec chmod +w {*}[glob ${src_post_enc_dir}/*]
+## if {$ENCRYPT} {
+##   print "Encryption enabled. Encrypting HDL files and DCPs."
+##   encrypt -k ${HDK_SHELL_DIR}/build/scripts/vivado_keyfile.txt      -lang verilog -quiet [glob -nocomplain -- ${src_post_enc_dir}/*.{v,sv,vh,inc}]
+##   encrypt -k ${HDK_SHELL_DIR}/build/scripts/vivado_vhdl_keyfile.txt -lang vhdl    -quiet [glob -nocomplain -- ${src_post_enc_dir}/*.vhd?]
+## } else {
+##   print "Encryption disabled."
+## }
+
+AWS FPGA: (16:10:57): Encryption enabled. Encrypting HDL files and DCPs.
+
+# switch $BUILD_FLOW {
+#   "SynthCL" {
+#     source ${scripts_dir}/synth_${CL}.tcl
+#   }
+# 
+#   "ImplCL" {
+#     source ${scripts_dir}/build_level_1_cl.tcl
+#   }
+# 
+#   default {
+#     source ${scripts_dir}/synth_${CL}.tcl
+#     source ${scripts_dir}/build_level_1_cl.tcl
+#   }
+# }
+## source ${HDK_SHELL_DIR}/build/scripts/synth_cl_header.tcl
+### print "Creating in-memory synthesis project"
+
+AWS FPGA: (16:10:57): Creating in-memory synthesis project
+
+### set_param sta.enableAutoGenClkNamePersistence 0
+### create_project -in_memory -part $DEVICE_TYPE -force
+### set_property XPM_LIBRARIES {XPM_CDC XPM_MEMORY XPM_FIFO} [current_project]
+### print "Reading common AWS components"
+
+AWS FPGA: (16:10:58): Reading common AWS components
+
+### read_verilog -sv [ list \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/interfaces.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/aws_clk_gen.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/aws_clk_regs.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/axil_to_cfg_cnv.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/axis_flop_fifo.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/lib_pipe.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/bram_1w1r.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/bram_2rw.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/xpm_fifo.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/flop_fifo.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/flop_fifo_in.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/cdc_async_fifo.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/cdc_sync.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/ft_fifo_p.v \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/ft_fifo.v \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/ram_fifo_ft.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/../../lib/rr_arb.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/sync.v \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/flop_ccf.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/ccf_ctl.v \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/mgt_acc_axl.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/mgt_gen_axl.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/sh_ddr/synth/sh_ddr.sv \
+###   ${HDK_SHELL_DESIGN_DIR}/interfaces/cl_ports.vh
+### ]
+### print "Reading AWS Constraints"
+
+AWS FPGA: (16:10:58): Reading AWS Constraints
+
+### read_xdc ${HDK_SHELL_DIR}/build/constraints/cl_pins.xdc
+### read_xdc ${CL_DIR}/build/constraints/generated_cl_clocks_aws.xdc
+### read_xdc -ref ${CL} ${HDK_SHELL_DIR}/build/constraints/cl_ddr_timing_aws.xdc
+### set_property USED_IN {synthesis implementation OUT_OF_CONTEXT} [get_files generated_cl_clocks_aws.xdc]
+### set_property PROCESSING_ORDER EARLY [get_files generated_cl_clocks_aws.xdc]
+### set_property USED_IN {synthesis implementation} [get_files cl_ddr_timing_aws.xdc]
+### set_property PROCESSING_ORDER LATE   [get_files cl_ddr_timing_aws.xdc]
+## print "Reading encrypted user source codes"
+
+AWS FPGA: (16:10:58): Reading encrypted user source codes
+
+## read_verilog -sv [glob ${src_post_enc_dir}/*.{s,}v]
+## read_verilog -sv ${src_post_enc_dir}/cl_satswarm_defines.vh
+## set_property file_type {Verilog Header} [get_files ${src_post_enc_dir}/cl_satswarm_defines.vh]
+## set_property is_global_include true     [get_files ${src_post_enc_dir}/cl_satswarm_defines.vh]
+## if {[info exists ::env(SATSWARM_RTL_DIR)]} {
+##     set rtl_dir $::env(SATSWARM_RTL_DIR)
+## } else {
+##     set rtl_dir [file normalize "/home/ubuntu/src/project_data/SatSwarmV2/src/Mega"]
+## }
+## print "Reading SatSwarm RTL from ${rtl_dir}"
+
+AWS FPGA: (16:10:58): Reading SatSwarm RTL from /home/ubuntu/src/project_data/SatSwarmV2/src/Mega
+
+## read_verilog -sv ${rtl_dir}/satswarmv2_pkg.sv
+## foreach f [glob -nocomplain ${rtl_dir}/*.sv] {
+##     set tail [file tail $f]
+##     if {$tail eq "satswarmv2_pkg.sv"}       { continue }
+##     if {[string match "tb_*" $tail]}        { continue }
+##     read_verilog -sv $f
+## }
+## foreach f [glob -nocomplain ${rtl_dir}/utils/*.sv] {
+##     set tail [file tail $f]
+##     if {[string match "tb_*" $tail]} { continue }
+##     read_verilog -sv $f
+## }
+## print "Reading CL IP blocks"
+
+AWS FPGA: (16:10:58): Reading CL IP blocks
+
+## read_ip [ list \
+##   ${HDK_IP_SRC_DIR}/cl_ddr4/cl_ddr4.xci \
+## ]
+INFO: [IP_Flow 19-234] Refreshing IP repositories
+INFO: [IP_Flow 19-1704] No user IP repositories specified
+INFO: [IP_Flow 19-2313] Loaded Vivado IP repository '/opt/Xilinx/2025.2/data/ip'.
+WARNING: [IP_Flow 19-3664] IP 'cl_ddr4' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_sv.sveo'. Please regenerate to continue.
+WARNING: [filemgmt 56-443] The ECC Algorithm string is empty. Setting the Memory Map to default ECC value to ECC_NONE.
+WARNING: [filemgmt 56-443] The ECC Algorithm string is empty. Setting the Memory Map to default ECC value to ECC_NONE.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_ddr4/cl_ddr4.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+## read_ip [ list \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_a/clk_mmcm_a.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_b/clk_mmcm_b.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_c/clk_mmcm_c.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_clk_axil_xbar/cl_clk_axil_xbar.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_sda_axil_xbar/cl_sda_axil_xbar.xci \
+## ]
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_a/clk_mmcm_a.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_b/clk_mmcm_b.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_c/clk_mmcm_c.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_clk_axil_xbar' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/cl_clk_axil_xbar_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_clk_axil_xbar/cl_clk_axil_xbar.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_sda_axil_xbar' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_sda_axil_xbar/cl_sda_axil_xbar_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_sda_axil_xbar/cl_sda_axil_xbar.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_sda_axil_xbar'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+## read_ip [ list \
+##   ${HDK_IP_SRC_DIR}/axi_register_slice/axi_register_slice.xci \
+##   ${HDK_IP_SRC_DIR}/axi_register_slice_light/axi_register_slice_light.xci \
+##   ${HDK_IP_SRC_DIR}/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_register_slice_light/cl_axi_register_slice_light.xci \
+##   $HDK_SHELL_DESIGN_DIR/../../ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice.xci \
+## ]
+WARNING: [IP_Flow 19-3664] IP 'axi_register_slice' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice/axi_register_slice.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'axi_register_slice_light' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice_light/axi_register_slice_light.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_axi3_256b_reg_slice' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_axi_register_slice_light' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice_light/cl_axi_register_slice_light_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_register_slice_light/cl_axi_register_slice_light.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice_light'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_axi_register_slice' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+## read_ip [ list \
+##   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter/cl_axi_clock_converter.xci \
+##   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter_light/cl_axi_clock_converter_light.xci \
+## ]
+WARNING: [IP_Flow 19-3664] IP 'cl_axi_clock_converter' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/cl_axi_clock_converter_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_clock_converter/cl_axi_clock_converter.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+WARNING: [IP_Flow 19-3664] IP 'cl_axi_clock_converter_light' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter_light/cl_axi_clock_converter_light_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_clock_converter_light/cl_axi_clock_converter_light.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter_light'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+## read_ip [ list \
+##   ${HDK_IP_SRC_DIR}/cl_axi_interconnect_64G_ddr/cl_axi_interconnect_64G_ddr.xci \
+## ]
+WARNING: [IP_Flow 19-3664] IP 'cl_axi_interconnect_64G_ddr' generated file not found '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_interconnect_64G_ddr/cl_axi_interconnect_64G_ddr_sv.sveo'. Please regenerate to continue.
+WARNING: [Vivado 12-13650] The IP file '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi_interconnect_64G_ddr/cl_axi_interconnect_64G_ddr.xci' has been moved from its original location, as a result the outputs for this IP will now be generated in '/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_interconnect_64G_ddr'. Alternatively a copy of the IP can be imported into the project using one of the 'import_ip' or 'import_files' commands.
+## print "Reading user constraints"
+
+AWS FPGA: (16:11:00): Reading user constraints
+
+## read_xdc [ list \
+##   ${constraints_dir}/cl_synth_user.xdc \
+##   ${constraints_dir}/cl_timing_user.xdc
+## ]
+## set_property PROCESSING_ORDER LATE [get_files cl_synth_user.xdc]
+## set_property PROCESSING_ORDER LATE [get_files cl_timing_user.xdc]
+## print "Starting synthesizing customer design ${CL}"
+
+AWS FPGA: (16:11:00): Starting synthesizing customer design cl_satswarm
+
+## update_compile_order -fileset sources_1
+## set_param general.maxThreads 1
+## synth_design -mode out_of_context \
+##              -top ${CL} \
+##              -verilog_define XSDB_SLV_DIS \
+##              -part ${DEVICE_TYPE} \
+##              -keep_equivalent_registers \
+##              -global_retiming off \
+##              -flatten_hierarchy rebuilt \
+##              -directive RuntimeOptimized
+Command: synth_design -mode out_of_context -top cl_satswarm -verilog_define XSDB_SLV_DIS -part xcvu47p-fsvh2892-2-e -keep_equivalent_registers -global_retiming off -flatten_hierarchy rebuilt -directive RuntimeOptimized
+Starting synth_design
+WARNING: [Vivado_Tcl 4-393] The 'Synthesis' target of the following IPs are stale, please generate the output products using the generate_target or synth_ip command before running synth_design.
+/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_ddr4/cl_ddr4.xci
+
+WARNING: [Vivado_Tcl 4-393] The 'Implementation' target of the following IPs are stale, please generate the output products using the generate_target or synth_ip command before running synth_design.
+/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_ddr4/cl_ddr4.xci
+
+Attempting to get a license for feature 'Synthesis' and/or device 'xcvu47p'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xcvu47p'
+INFO: [Device 21-403] Loading part xcvu47p-fsvh2892-2-e
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 1 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 9793
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 3269.848 ; gain = 330.688 ; free physical = 23902 ; free virtual = 37860
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-11065] parameter 'NUM_LOC' becomes localparam in 'ram_fifo_ft' with formal parameter declaration list [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/ram_fifo_ft.sv:43]
+WARNING: [Synth 8-11067] parameter 'VAR_MAX' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:3]
+WARNING: [Synth 8-11067] parameter 'LIT_MAX' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:4]
+WARNING: [Synth 8-11067] parameter 'CLAUSE_MAX' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:5]
+WARNING: [Synth 8-11067] parameter 'CURSOR_COUNT' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:6]
+WARNING: [Synth 8-11067] parameter 'DECLEVEL_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:7]
+WARNING: [Synth 8-11067] parameter 'LBD_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:8]
+WARNING: [Synth 8-11067] parameter 'PTR_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:9]
+WARNING: [Synth 8-11067] parameter 'ACT_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:10]
+WARNING: [Synth 8-11067] parameter 'HEAP_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:11]
+WARNING: [Synth 8-11067] parameter 'GRID_X' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:15]
+WARNING: [Synth 8-11067] parameter 'GRID_Y' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:16]
+WARNING: [Synth 8-11067] parameter 'CORE_ID_W' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:17]
+WARNING: [Synth 8-11067] parameter 'VC_BITS' declared inside package 'satswarmv2_pkg' shall be treated as localparam [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarmv2_pkg.sv:18]
+WARNING: [Synth 8-6901] identifier 'clause_rx_fifo_full' is used before its declaration [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/interface_unit.sv:88]
+CRITICAL WARNING: [Synth 8-9873] overwriting previous definition of module 'pse' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/pse.sv:1284]
+INFO: [Synth 8-6157] synthesizing module 'lib_pipe' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/lib_pipe.sv:23]
+INFO: [Synth 8-6155] done synthesizing module 'lib_pipe' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/lib_pipe.sv:23]
+INFO: [Synth 8-6157] synthesizing module 'aws_clk_gen' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/aws_clk_gen.sv:29]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_async_rst' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+	Parameter DEST_SYNC_FF bound to: 2 - type: integer 
+	Parameter INIT_SYNC_FF bound to: 0 - type: integer 
+	Parameter RST_ACTIVE_HIGH bound to: 0 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_async_rst' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_async_rst__parameterized0' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+	Parameter DEST_SYNC_FF bound to: 4 - type: integer 
+	Parameter INIT_SYNC_FF bound to: 0 - type: integer 
+	Parameter RST_ACTIVE_HIGH bound to: 0 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_async_rst__parameterized0' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+INFO: [Synth 8-6157] synthesizing module 'cl_axi_clock_converter_light' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter_light/synth/cl_axi_clock_converter_light.v:53]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_axi_clock_converter' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:650]
+INFO: [Synth 8-6157] synthesizing module 'axi_infrastructure_v1_1_0_axi2vector' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_infrastructure_v1_1_vl_rfs.v:59]
+INFO: [Synth 8-6155] done synthesizing module 'axi_infrastructure_v1_1_0_axi2vector' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_infrastructure_v1_1_vl_rfs.v:59]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_lite_async' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_handshake' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_single' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_single' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_handshake' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_lite_async' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_handshake__parameterized0' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_handshake__parameterized0' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized1' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_handshake__parameterized1' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_handshake__parameterized1' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized1' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized2' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_handshake__parameterized2' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_handshake__parameterized2' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:468]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_lite_async__parameterized2' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:513]
+INFO: [Synth 8-6157] synthesizing module 'axi_infrastructure_v1_1_0_vector2axi' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_infrastructure_v1_1_vl_rfs.v:473]
+INFO: [Synth 8-6155] done synthesizing module 'axi_infrastructure_v1_1_0_vector2axi' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_infrastructure_v1_1_vl_rfs.v:473]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_axi_clock_converter' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:650]
+INFO: [Synth 8-6155] done synthesizing module 'cl_axi_clock_converter_light' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter_light/synth/cl_axi_clock_converter_light.v:53]
+INFO: [Synth 8-6157] synthesizing module 'cl_clk_axil_xbar' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/synth/cl_clk_axil_xbar.v:53]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_axi_crossbar' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4871]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_crossbar_sasd' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:1234]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_addr_decoder' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:790]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_comparator_static' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_carry_and' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:60]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_carry_and' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:60]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_comparator_static' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized1' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized1' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized2' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized2' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized3' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_comparator_static__parameterized3' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2119]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_addr_decoder' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:790]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_decerr_slave' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:3493]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_decerr_slave' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:3493]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_addr_arbiter_sasd' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:63]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_addr_arbiter_sasd' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:63]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_splitter' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4451]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_splitter' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4451]
+INFO: [Synth 8-6157] synthesizing module 'axi_crossbar_v2_1_38_splitter__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4451]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_splitter__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4451]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_mux_enc' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_mux_enc' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized1' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized1' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6157] synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized2' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6155] done synthesizing module 'generic_baseblocks_v2_1_2_mux_enc__parameterized2' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/generic_baseblocks_v2_1_vl_rfs.v:2436]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_crossbar_sasd' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:1234]
+INFO: [Synth 8-6155] done synthesizing module 'axi_crossbar_v2_1_38_axi_crossbar' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_crossbar_v2_1_vl_rfs.v:4871]
+INFO: [Synth 8-6155] done synthesizing module 'cl_clk_axil_xbar' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/synth/cl_clk_axil_xbar.v:53]
+INFO: [Synth 8-6157] synthesizing module 'cl_axi_register_slice_light' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice_light/synth/cl_axi_register_slice_light.v:53]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axi_register_slice' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:3721]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized1' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized1' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized2' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized2' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6157] synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized3' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axic_register_slice__parameterized3' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:1492]
+INFO: [Synth 8-6155] done synthesizing module 'axi_register_slice_v2_1_36_axi_register_slice' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_clk_axil_xbar/hdl/axi_register_slice_v2_1_vl_rfs.v:3721]
+INFO: [Synth 8-6155] done synthesizing module 'cl_axi_register_slice_light' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice_light/synth/cl_axi_register_slice_light.v:53]
+INFO: [Synth 8-6157] synthesizing module 'aws_clk_regs' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/aws_clk_regs.sv:29]
+	Parameter CLK_GRP_A_EN bound to: 0 - type: integer 
+	Parameter CLK_GRP_B_EN bound to: 0 - type: integer 
+	Parameter CLK_GRP_C_EN bound to: 0 - type: integer 
+	Parameter CLK_HBM_EN bound to: 0 - type: integer 
+	Parameter MAX_NUM_CLKS bound to: 10 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'axil_bus_t' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/interfaces.sv:24]
+INFO: [Synth 8-6155] done synthesizing module 'axil_bus_t' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/interfaces.sv:24]
+INFO: [Synth 8-6157] synthesizing module 'cfg_bus_t' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/interfaces.sv:61]
+INFO: [Synth 8-6155] done synthesizing module 'cfg_bus_t' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/interfaces.sv:61]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_single__parameterized0' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+	Parameter DEST_SYNC_FF bound to: 2 - type: integer 
+	Parameter INIT_SYNC_FF bound to: 0 - type: integer 
+	Parameter SIM_ASSERT_CHK bound to: 0 - type: integer 
+	Parameter SRC_INPUT_REG bound to: 0 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_single__parameterized0' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6157] synthesizing module 'axil_to_cfg_cnv' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/axil_to_cfg_cnv.sv:28]
+	Parameter ADDR_WIDTH bound to: 32 - type: integer 
+	Parameter DATA_WIDTH bound to: 32 - type: integer 
+INFO: [Synth 8-294] found qualifier unique on case statement: implementing as parallel_case [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/axil_to_cfg_cnv.sv:62]
+INFO: [Synth 8-6155] done synthesizing module 'axil_to_cfg_cnv' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/axil_to_cfg_cnv.sv:28]
+INFO: [Synth 8-294] found qualifier unique on case statement: implementing as parallel_case [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/aws_clk_regs.sv:182]
+INFO: [Synth 8-6155] done synthesizing module 'aws_clk_regs' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/aws_clk_regs.sv:29]
+INFO: [Synth 8-6155] done synthesizing module 'aws_clk_gen' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/lib/aws_clk_gen.sv:29]
+INFO: [Synth 8-6157] synthesizing module 'MMCME4_ADV' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:96237]
+INFO: [Synth 8-6155] done synthesizing module 'MMCME4_ADV' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:96237]
+INFO: [Synth 8-6157] synthesizing module 'BUFG' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:2678]
+INFO: [Synth 8-6155] done synthesizing module 'BUFG' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:2678]
+INFO: [Synth 8-6157] synthesizing module 'cl_axi_clock_converter' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/synth/cl_axi_clock_converter.v:53]
+INFO: [Synth 8-6157] synthesizing module 'axi_clock_converter_v2_1_35_axi_clock_converter__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:650]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_single__parameterized2' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_single__parameterized2' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_async_rst__parameterized2' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_async_rst__parameterized2' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:1175]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_single__parameterized4' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_single__parameterized4' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:152]
+INFO: [Synth 8-6157] synthesizing module 'xpm_cdc_gray' [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:283]
+INFO: [Synth 8-6155] done synthesizing module 'xpm_cdc_gray' (0#1) [/opt/Xilinx/2025.2/data/ip/xpm/xpm_cdc/hdl/xpm_cdc.sv:283]
+INFO: [Synth 8-6155] done synthesizing module 'axi_clock_converter_v2_1_35_axi_clock_converter__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/hdl/axi_clock_converter_v2_1_vl_rfs.v:650]
+INFO: [Synth 8-6155] done synthesizing module 'cl_axi_clock_converter' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_clock_converter/synth/cl_axi_clock_converter.v:53]
+INFO: [Synth 8-6157] synthesizing module 'OBUF' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:113520]
+INFO: [Synth 8-6155] done synthesizing module 'OBUF' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:113520]
+INFO: [Synth 8-6157] synthesizing module 'IOBUFE3' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:88095]
+INFO: [Synth 8-6155] done synthesizing module 'IOBUFE3' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:88095]
+INFO: [Synth 8-6157] synthesizing module 'IOBUFDS' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:87583]
+INFO: [Synth 8-6155] done synthesizing module 'IOBUFDS' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:87583]
+INFO: [Synth 8-6157] synthesizing module 'IBUFDS' [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:82819]
+INFO: [Synth 8-6155] done synthesizing module 'IBUFDS' (0#1) [/opt/Xilinx/2025.2/Vivado/scripts/rt/data/unisim_comp.v:82819]
+INFO: [Synth 8-6157] synthesizing module 'satswarm_top' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarm_top.sv:2]
+INFO: [Synth 8-6157] synthesizing module 'solver_core' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/solver_core.sv:2]
+	Parameter CORE_ID bound to: 32'sb00000000000000000000000000000000 
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+	Parameter MAX_CLAUSES bound to: 32'sb00000000000000000000001000000000 
+	Parameter MAX_LITS bound to: 32'sb00000000000000000000010000000000 
+	Parameter GRID_X bound to: 32'sb00000000000000000000000000000010 
+	Parameter GRID_Y bound to: 32'sb00000000000000000000000000000010 
+	Parameter CLAUSE_SHARING_MODE bound to: 32'sb00000000000000000000000000000001 
+	Parameter SHARE_MAX_LEN bound to: 32'sb00000000000000000000000000000010 
+INFO: [Synth 8-6157] synthesizing module 'sfifo' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+	Parameter WIDTH bound to: 32'sb00000000000000000000000000110000 
+	Parameter DEPTH bound to: 32'sb00000000000000000000000100000000 
+INFO: [Synth 8-6155] done synthesizing module 'sfifo' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+INFO: [Synth 8-6157] synthesizing module 'stats_manager' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/stats_manager.sv:1]
+INFO: [Synth 8-6155] done synthesizing module 'stats_manager' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/stats_manager.sv:1]
+INFO: [Synth 8-6157] synthesizing module 'vde' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde.sv:1]
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+	Parameter BUMP_Q_SIZE bound to: 32'sb00000000000000000000000000100000 
+INFO: [Synth 8-6157] synthesizing module 'sfifo__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+	Parameter WIDTH bound to: 35 - type: integer 
+	Parameter DEPTH bound to: 256 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'sfifo__parameterized0' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+WARNING: [Synth 8-689] width (10) of port connection 'count' does not match port width (9) of module 'sfifo__parameterized0' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde.sv:95]
+INFO: [Synth 8-6157] synthesizing module 'vde_heap' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde_heap.sv:5]
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+	Parameter ACT_W bound to: 32'sb00000000000000000000000000100000 
+	Parameter BUMP_Q_SIZE bound to: 32'sb00000000000000000000000000100000 
+INFO: [Synth 8-226] default block is never used [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde_heap.sv:198]
+INFO: [Synth 8-6155] done synthesizing module 'vde_heap' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde_heap.sv:5]
+INFO: [Synth 8-6155] done synthesizing module 'vde' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/vde.sv:1]
+INFO: [Synth 8-6157] synthesizing module 'trail_manager' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:11]
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[0]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[1]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[2]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[3]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[4]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[5]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[6]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[7]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[8]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[9]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[10]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[11]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[12]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[13]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[14]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[15]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[16]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[17]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[18]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[19]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[20]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[21]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[22]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[23]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[24]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[25]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[26]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[27]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[28]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[29]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[30]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[31]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[32]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[33]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[34]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[35]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[36]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[37]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[38]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[39]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[40]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[41]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[42]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[43]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[44]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[45]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[46]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[47]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[48]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[49]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[50]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[51]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[52]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[53]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[54]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[55]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[56]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[57]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[58]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[59]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[60]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[61]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[62]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[63]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[64]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[65]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[66]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[67]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[68]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[69]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[70]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[71]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[72]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[73]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[74]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[75]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[76]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[77]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[78]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[79]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[80]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[81]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[82]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[83]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[84]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[85]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[86]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[87]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[88]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[89]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[90]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[91]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[92]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[93]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[94]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[95]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[96]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[97]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[98]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+WARNING: [Synth 8-7186] Applying attribute ram_style = "distributed" is ignored, object 'level_start[99]' is not inferred as ram due to incorrect usage [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:100]
+INFO: [Common 17-14] Message 'Synth 8-7186' appears 100 times and further instances of the messages will be disabled. Use the Tcl command set_msg_config to change the current settings.
+INFO: [Synth 8-155] case statement is not full and has no default [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:289]
+INFO: [Synth 8-6155] done synthesizing module 'trail_manager' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/trail_manager.sv:11]
+INFO: [Synth 8-6157] synthesizing module 'pse' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/pse.sv:13]
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+	Parameter MAX_CLAUSES bound to: 32'sb00000000000000000000001000000000 
+	Parameter MAX_LITS bound to: 32'sb00000000000000000000010000000000 
+	Parameter MAX_CLAUSE_LEN bound to: 32'sb00000000000000000000000000100000 
+	Parameter CORE_ID bound to: 32'sb00000000000000000000000000000000 
+INFO: [Synth 8-6157] synthesizing module 'sfifo__parameterized1' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+	Parameter WIDTH bound to: 32'sb00000000000000000000000000100000 
+	Parameter DEPTH bound to: 32'sb00000000000000000000010000000000 
+INFO: [Synth 8-6155] done synthesizing module 'sfifo__parameterized1' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/utils/sfifo.sv:28]
+INFO: [Synth 8-6155] done synthesizing module 'pse' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/pse.sv:13]
+INFO: [Synth 8-6157] synthesizing module 'cae' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/cae.sv:17]
+	Parameter MAX_LITS bound to: 32'sb00000000000000000000000000100000 
+	Parameter LEVEL_W bound to: 32'sb00000000000000000000000000010000 
+	Parameter MAX_VARS bound to: 32'sb00000000000000000000000100000000 
+INFO: [Synth 8-6155] done synthesizing module 'cae' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/cae.sv:17]
+INFO: [Synth 8-6157] synthesizing module 'interface_unit' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/interface_unit.sv:5]
+	Parameter CORE_ID bound to: 32'sb00000000000000000000000000000000 
+	Parameter CORE_ID_W bound to: 32'sb00000000000000000000000000000100 
+INFO: [Synth 8-6155] done synthesizing module 'interface_unit' (0#1) [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/interface_unit.sv:5]
+ERROR: [Synth 8-524] part-select [7:0] out of range of prefix 'cae_learned_len' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/solver_core.sv:1485]
+ERROR: [Synth 8-6156] failed synthesizing module 'solver_core' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/solver_core.sv:2]
+ERROR: [Synth 8-196] conditional expression could not be resolved to a constant [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarm_top.sv:160]
+ERROR: [Synth 8-196] conditional expression could not be resolved to a constant [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarm_top.sv:159]
+ERROR: [Synth 8-6156] failed synthesizing module 'satswarm_top' [/home/ubuntu/src/project_data/SatSwarmV2/src/Mega/satswarm_top.sv:2]
+ERROR: [Synth 8-5809] Error generated from encrypted envelope. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/src_post_encryption/satswarm_core_bridge.sv:18]
+ERROR: [Synth 8-5809] Error generated from encrypted envelope. [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/src_post_encryption/cl_satswarm.sv:22]
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:11 ; elapsed = 00:00:12 . Memory (MB): peak = 3613.355 ; gain = 674.195 ; free physical = 23488 ; free virtual = 37447
+---------------------------------------------------------------------------------
+RTL Elaboration failed
+INFO: [Common 17-83] Releasing license: Synthesis
+151 Infos, 118 Warnings, 1 Critical Warnings and 8 Errors encountered.
+synth_design failed
+synth_design: Time (s): cpu = 00:00:21 ; elapsed = 00:00:22 . Memory (MB): peak = 3613.363 ; gain = 1936.648 ; free physical = 23488 ; free virtual = 37447
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 3250.325; main = 2897.438; forked = 352.887
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 4599.953; main = 3613.359; forked = 986.609
+ERROR: [Common 17-69] Command failed: Synthesis failed - please see the console or run log file for details
+
+    while executing
+"source ${scripts_dir}/synth_${CL}.tcl"
+    ("default" arm line 2)
+    invoked from within
+"switch $BUILD_FLOW {
+  "SynthCL" {
+    source ${scripts_dir}/synth_${CL}.tcl
+  }
+
+  "ImplCL" {
+    source ${scripts_dir}/build_level_1_cl.tcl
+  }
+
+  d..."
+    (file "build_all.tcl" line 265)
+INFO: [Common 17-206] Exiting Vivado at Tue Mar 24 16:11:24 2026...
+ERROR: Did not find the post-route DCP file from /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/
+

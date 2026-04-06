@@ -7,15 +7,51 @@ This document assumes an AFI already exists and is `available`. It covers loadin
 ## Available AFIs
 
 
-| AFI                     | agfi                     | Grid | Tag/Name            | Clock           | Notes                    |
-| ----------------------- | ------------------------ | ---- | ------------------- | --------------- | ------------------------ |
-| `afi-037e5d7f209df2123` | `agfi-022074a3e1f323966` | 2×2  | `2026_03_19-171700` | A2 / 15.625 MHz | **Newest 2×2** BuildAll (Default directives), PCIS byte-lane fix |
-| `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | `2026_03_19-102818` | A2 / 15.625 MHz | **Preferred** PCIS-fixed, validated on F2 2026-03-19 ✓ |
-| `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | `2026_03_19-051231` | A2 / 15.625 MHz | CL-owned MMCM, CLK_GRP_A_EN=0; has PCIS bug |
-| `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | `2026_03_18-163435` | A2 / 15.625 MHz | PCIS bug present; gen_clk_extra_a1, may not lock on F2 |
-| `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | `2026_03_18-171846` | A2 / 15.625 MHz | PCIS bug present; same MMCM caveat |
+| AFI                     | agfi                     | Grid | Mode | Tag/Name            | Clock           | Notes                    |
+| ----------------------- | ------------------------ | ---- | ---- | ------------------- | --------------- | ------------------------ |
+| `afi-07b833dc55da8f85f` | `agfi-0f4c080b925f34eaf` | 1×1  | none | `2026_04_02-195210` | A2 / 15.625 MHz | **Newest 1×1** MAX_CLAUSES=8192, MAX_LITS=8192; WNS=+0.711 ns; **pending** |
+| `afi-048fa7b3b873620c3` | `agfi-00ff7949dc2bafd1a` | 1×1  | none | `2026_04_02-161326` | A2 / 15.625 MHz | MAX_CLAUSES=2048, MAX_LITS=8192; WNS=+0.711 ns; **available** |
+| `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | 1×1  | none | `2026_03_31-024747` | A2 / 15.625 MHz | **Newest 1×1 large** MAX_LITS=16384, MAX_CLAUSES=2048; WNS=+0.711 ns; **available** |
+| `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | 2×2  | 3clz | `2026_04_01-004349` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
+| `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | 3×3  | 2clz | `2026_03_31-175343` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
+| `afi-07e84cf377a21810e` | `agfi-0e32325155d52e9a2` | 2×2  | 2clz | `2026_03_31-144138` | A2 / 15.625 MHz | Sharing sweep; MAX_LITS=8192; WNS=+0.711 ns; **available** |
+| `afi-037e5d7f209df2123` | `agfi-022074a3e1f323966` | 2×2  | none | `2026_03_19-171700` | A2 / 15.625 MHz | No sharing; PCIS byte-lane fix; **available** |
+| `afi-0d8e504d573195da8` | `agfi-0aa0b1b8ec26f6b5d` | 1×1  | none | `2026_03_19-102818` | A2 / 15.625 MHz | **Validated on F2** PCIS-fixed ✓ (SAT+UNSAT correct) |
+| `afi-0520f5f8b8900def7` | `agfi-0b41689a08b4d4d5f` | 1×1  | none | `2026_03_19-051231` | A2 / 15.625 MHz | CL-owned MMCM, CLK_GRP_A_EN=0; has PCIS bug |
+| `afi-08366141b8a92b36f` | `agfi-0f933cb959906a494` | 1×1  | none | `2026_03_18-163435` | A2 / 15.625 MHz | PCIS bug present; gen_clk_extra_a1, may not lock on F2 |
+| `afi-01ef63d452c8940a2` | `agfi-0193eda3eade22ae4` | 2×2  | none | `2026_03_18-171846` | A2 / 15.625 MHz | PCIS bug present; same MMCM caveat |
 
-In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Preferred 1×1**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`) once `available`.
+Quick state-check for current sharing-sweep AFIs (all available as of 2026-04-01):
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids \
+    afi-058e8c5c1e2864659 \
+    afi-07e84cf377a21810e \
+    afi-0321c2767044f669e \
+    afi-0d0c6789a8312fe2e \
+  --query 'FpgaImages[*].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
+
+Build logs in `deploy/logs/grid_sharing_20260331_144138/`. Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
+
+**3×3 3clz build in progress** (tag `2026_04_01-035153`, started ~03:51 UTC). Check log: `deploy/logs/grid_sharing_20260331_144138/build_3x3_3clz_20260401_035153.log`.
+
+In these A2 builds, the shell runs at `clk_main_a0` (250 MHz) while the solver domain runs at `clk_solver` (15.625 MHz) from a CL-owned MMCME4_ADV. **Newest 1×1 (pending)**: `agfi-0f4c080b925f34eaf` (MAX_CLAUSES=8192, MAX_LITS=8192, tag `2026_04_02-195210`). **Newest 1×1 large (available)**: `agfi-042da882ac102dd2e` (MAX_LITS=16384, MAX_CLAUSES=2048). **Preferred 1×1 (validated)**: `agfi-0aa0b1b8ec26f6b5d` — PCIS byte-lane bug fixed and validated on F2 (SAT ✓, UNSAT ✓). **Preferred 2×2 no-sharing**: `agfi-022074a3e1f323966` (tag `2026_03_19-171700`, available).
+
+## Earlier 2×2 Sharing AFIs (2026-03-24)
+
+Superseded by the 2026-03-31 sweep (same modes, but newer RTL and MAX_LITS=8192). Kept for reference.
+
+| Mode | AFI | agfi | Tag | Notes |
+| ---- | --- | ---- | --- | ----- |
+| `none` | `afi-0070486be9cca64bb` | `agfi-06be2426aa615503a` | `2026_03_24-161553` | available |
+| `2clz` | `afi-0cce87e15db5a8c58` | `agfi-028e6419bce2d9003` | `2026_03_24-173923` | available |
+| `3clz` | `afi-0c9157a0d6d10ac9b` | `agfi-03c4ec38595841774` | `2026_03_24-190133` | available |
+| `4clz` | `afi-0db4c324dc633940e` | `agfi-0197eb8028efe5692` | `2026_03_24-202347` | available |
+
+As of 2026-03-26, `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for successful runs by default (`AUTO_CREATE_AFI=1`).
 
 > Historical note: `afi-064b74577e3b2f258` (fabric divider) failed REQP-123 during AWS bitgen. Do not use. AFIs created from tars before the REQP-123 fix should also not be used.
 

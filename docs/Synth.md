@@ -129,6 +129,37 @@ The output tar lands at:
 
 Older notes referring to a `to_aws/` subdirectory are stale.
 
+### Automated AFI Submission In Grid Sweeps
+
+`deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for each successful run by default.
+
+After a successful BuildAll run with a discovered `latest_tar`, the script:
+
+1. uploads the tar to S3 (`s3://$AFI_S3_BUCKET/$AFI_S3_DCP_PREFIX/<tag>.Developer_CL.tar`)
+2. calls `aws ec2 create-fpga-image`
+3. writes the create response JSON to `$RUN_DIR/afi_create_<run_label>_<stamp>.json`
+4. appends AFI metadata to summary CSV columns:
+  - `afi_status`
+  - `afi_id`
+  - `agfi_id`
+  - `afi_json`
+
+Default environment settings used by the script:
+
+```bash
+AUTO_CREATE_AFI=1
+AWS_REGION=us-east-1
+AFI_S3_BUCKET=satswarm-v2-afi-624824941978
+AFI_S3_DCP_PREFIX=dcp
+AFI_S3_LOGS_PREFIX=logs
+```
+
+To disable AFI submission for a specific run:
+
+```bash
+AUTO_CREATE_AFI=0 bash deploy/run_grid_sharing_builds.sh
+```
+
 ### Skipping synthesis (`ImplCL`)
 
 If `post_synth.dcp` is already clean, you can skip synthesis:
@@ -284,6 +315,54 @@ aws ec2 describe-fpga-images \
 When the state becomes `available`, the AFI is ready to load on F2.
 
 For the actual on-instance load / run workflow after the AFI exists, switch to `FPGA.md`. For AFI lifecycle and manifest details, see [Amazon_FPGA_Images_Afis_Guide.md](../src/aws-fpga/hdk/docs/Amazon_FPGA_Images_Afis_Guide.md) and [AFI_Manifest.md](../src/aws-fpga/hdk/docs/AFI_Manifest.md).
+
+### 4. Recent 1×1 large-config AFI (2026-03-31)
+
+| Grid | Tag | AFI | AGFI | Config | Current State |
+| ---- | --- | --- | ---- | ------ | ------------- |
+| 1×1  | `2026_03_31-024747` | `afi-058e8c5c1e2864659` | `agfi-042da882ac102dd2e` | MAX_LITS=16384, MAX_CLAUSES=2048, Default directives | pending |
+
+Build log: `/home/ubuntu/build_1x1_large_fast_20260331_024747.log`
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids afi-058e8c5c1e2864659 \
+  --query 'FpgaImages[0].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
+
+### 5. Recent 2x2 sharing-mode AFIs (2026-03-24)
+
+Run: `sharing_2x2_20260324_161553`
+
+Created from completed `Developer_CL.tar` artifacts:
+
+| Mode | Tag | AFI | AGFI | Current State |
+| ---- | --- | --- | ---- | ------------- |
+| `none` | `2026_03_24-161553` | `afi-0070486be9cca64bb` | `agfi-06be2426aa615503a` | available |
+| `2clz` | `2026_03_24-173923` | `afi-0cce87e15db5a8c58` | `agfi-028e6419bce2d9003` | available |
+| `3clz` | `2026_03_24-190133` | `afi-0c9157a0d6d10ac9b` | `agfi-03c4ec38595841774` | available |
+| `4clz` | `2026_03_24-202347` | `afi-0db4c324dc633940e` | `agfi-0197eb8028efe5692` | pending |
+
+Creation responses are saved under:
+
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
+- `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`
+
+Use this command to re-check state if needed:
+
+```bash
+aws ec2 describe-fpga-images \
+  --region us-east-1 \
+  --fpga-image-ids \
+    afi-0070486be9cca64bb \
+    afi-0cce87e15db5a8c58 \
+    afi-0c9157a0d6d10ac9b \
+    afi-0db4c324dc633940e \
+  --query 'FpgaImages[*].{Id:FpgaImageId,Global:FpgaImageGlobalId,State:State,Name:Name}'
+```
 
 ---
 

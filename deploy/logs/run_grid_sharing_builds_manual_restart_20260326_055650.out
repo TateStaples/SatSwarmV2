@@ -1,0 +1,131 @@
+
+=== [2x2_none] apply params ===
+--- Current parameter snapshot ---
+cl_satswarm: 23:    parameter int GRID_X               = 2,
+cl_satswarm: 24:    parameter int GRID_Y               = 2,
+cl_satswarm: 27:    parameter int MAX_LITS             = 16384
+bridge: 19:    parameter int GRID_X              = 2,
+bridge: 20:    parameter int GRID_Y              = 2,
+bridge: 23:    parameter int MAX_LITS            = 16384
+satswarm_top: 3:    parameter int GRID_X = 2,
+satswarm_top: 4:    parameter int GRID_Y = 2,
+satswarm_top: 7:    parameter int MAX_LITS = 16384,
+satswarm_top: 9:    parameter int CLAUSE_SHARING_MODE = 0,
+satswarm_top: 10:    parameter int SHARE_MAX_LEN = 2
+satswarm_top: 205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+satswarm_top: 206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+pkg: 15:  parameter int GRID_X         = 2;    // 2x2 grid
+pkg: 16:  parameter int GRID_Y         = 2;
+mesh: 4:    parameter int GRID_X = 2,
+mesh: 5:    parameter int GRID_Y = 2
+=== [2x2_none] launch BuildAll (speed-focused directives) ===
+[2x2_none] pid=19761 log=/home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_055650/build_2x2_none_20260326_055650.log
+[2026-03-26T05:58:50+0000] [2x2_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+[2026-03-26T06:00:50+0000] [2x2_none] still running...
+INFO: [Timing 38-2] Deriving generated clocks
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+[2026-03-26T06:02:50+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:46 ; elapsed = 00:04:44 . Memory (MB): peak = 4599.598 ; gain = 1660.000 ; free physical = 14869 ; free virtual = 29542
+[2026-03-26T06:04:50+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:46 ; elapsed = 00:04:44 . Memory (MB): peak = 4599.598 ; gain = 1660.000 ; free physical = 14869 ; free virtual = 29542
+[2026-03-26T06:06:50+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:46 ; elapsed = 00:04:44 . Memory (MB): peak = 4599.598 ; gain = 1660.000 ; free physical = 14869 ; free virtual = 29542
+[2026-03-26T06:08:50+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+Start Applying XDC Timi[2026-03-26T06:10:50+0000] [2x2_none] still running...
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+Start Loading Part and Timing Information
+Finished Loading Part and Timing Information : Time (s): cpu = 00:01:04 ; elapsed = 00:01:07 . Memory (MB): peak = 4567.812 ; gain = 1628.215 ; free physical = 13647 ; free virtual = 28345
+Start Applying XDC Timing Constraints
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:03:46 ; elapsed = 00:04:44 . Memory (MB): peak = 4599.598 ; gain = 1660.000 ; free physical = 14869 ; free virtual = 29542
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_microblaze_I_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_0/bd_2e02_microblaze_I_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_rst_0_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_1/bd_2e02_rst_0_0_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_ilmb_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_2/bd_2e02_ilmb_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_dlmb_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_3/bd_2e02_dlmb_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_iomodule_0_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_10/bd_2e02_iomodule_0_0_board.xdc will not bERROR: Did not find the post-route DCP file from /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/
+=== [2x2_none] failed ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_055650/build_2x2_none_20260326_055650.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_26-042416.Developer_CL.tar
+[2x2_none] last error lines:
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_ddr4'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/cl_ddr4_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_a'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_a/clk_mmcm_a_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_b'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_b/clk_mmcm_b_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_c'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_c/clk_mmcm_c_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'clk_mmcm_hbm'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/clk_mmcm_hbm/clk_mmcm_hbm_late.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice/axi_register_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'axi_register_slice_light'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/axi_register_slice_light/axi_register_slice_light_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi3_256b_reg_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice_clocks.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'cl_axi_register_slice'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_axi_register_slice/cl_axi_register_slice_clocks.xdc will not be read for any cell of this module.
+WARNING: [Project 1-498] One or more constraints failed evaluation while reading constraint file [/home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/shell_stable/build/constraints/cl_ddr_timing_aws.xdc] and the design contains unresolved black boxes. These constraints will be read post-synthesis (as long as their source constraint file is marked as used_in_implementation) and should be applied correctly then. You should review the constraints listed in the file [.Xil/cl_satswarm_propImpl.xdc] and check the run log file to verify that these constraints were correctly applied.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_microblaze_I_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_0/bd_2e02_microblaze_I_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_rst_0_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_1/bd_2e02_rst_0_0_board.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_ilmb_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_2/bd_2e02_ilmb_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_dlmb_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_3/bd_2e02_dlmb_0.xdc will not be read for any cell of this module.
+CRITICAL WARNING: [Designutils 20-1280] Could not find module 'bd_2e02_iomodule_0_0'. The XDC file /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_ddr4/bd_0/ip/ip_10/bd_2e02_iomodule_0_0_board.xdc will not bERROR: Did not find the post-route DCP file from /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/
+deploy/run_grid_sharing_builds.sh: line 208: syntax error near unexpected token `)'

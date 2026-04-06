@@ -1,0 +1,4 @@
+Running CNF: /Users/shaanyadav/Desktop/Projects/SatSwarm/AWS/SatSwarmV2/benchmarks/satlib_3sat/sat/uf100/uf100-02.cnf
+Expected Result: SAT
+Max Cycles: 10000000
+Warning: timeout not found. Running without timeout.

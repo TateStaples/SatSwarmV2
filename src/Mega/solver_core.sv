@@ -4,13 +4,14 @@ module solver_core #(
     parameter int MAX_VARS = 256,
     parameter int MAX_CLAUSES = 256,
     parameter int MAX_LITS = 4096,
-    parameter int MAX_CLAUSE_LEN = 32,
+    parameter int MAX_CLAUSE_LEN = MAX_VARS,  // CAE buffer; was 32 (too small for vars > ~50)
     parameter int GRID_X = 2,
     parameter int GRID_Y = 2,
     // Clause sharing mode: 0=disabled, 1=binary clauses only (len==2),
     //                      2=short clauses (len<=SHARE_MAX_LEN)
     parameter int CLAUSE_SHARING_MODE = 0,
-    parameter int SHARE_MAX_LEN = 4   // Max clause length to share (mode 2)
+    parameter int SHARE_MAX_LEN = 4,  // Max clause length to share (mode 2)
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO depth
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
@@ -174,6 +175,7 @@ module solver_core #(
     logic signed [31:0] pse_propagated_var;
     logic [15:0] pse_propagated_reason;
     logic [15:0] pse_clause_count;
+    logic        pse_direct_append_accepted;
     logic [FIFO_WIDTH:0] prop_fifo_count;
 
     sfifo #(
@@ -629,7 +631,8 @@ module solver_core #(
         .current_clause_count(pse_clause_count),     // Connect exposed clause count
         .cae_direct_append_en(cae_direct_append_en),
         .cae_direct_append_len(cae_direct_append_len),
-        .cae_direct_append_lits(cae_direct_append_lits)
+        .cae_direct_append_lits(cae_direct_append_lits),
+        .cae_direct_append_accepted(pse_direct_append_accepted)
     );
 
     // pse_propagated_reason, pse_clause_count declared above (forward decl for sfifo/PSE)
@@ -685,7 +688,8 @@ module solver_core #(
 
     interface_unit #(
         .CORE_ID(CORE_ID),
-        .CORE_ID_W(satswarmv2_pkg::CORE_ID_W)
+        .CORE_ID_W(satswarmv2_pkg::CORE_ID_W),
+        .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH)
     ) u_iface (
         .clk(clk),
         .rst_n(rst_n),
@@ -1274,9 +1278,12 @@ module solver_core #(
 
                     end else if (pse_started_q && (conflict_seen_q || pse_conflict)) begin
                         // Conflict detected and variables remain unassigned
-                        // $strobe("[CORE %0d] Conflict detected in ACCUMULATE. pse_started=%d seen=%d conflict=%d", CORE_ID, pse_started_q, conflict_seen_q, pse_conflict);
-                        state_d = CONFLICT_ANALYSIS;
-                        query_index_d = 4'd0;
+                        if (decision_level_q == 0) begin
+                            state_d = FINISH_UNSAT;
+                        end else begin
+                            state_d = CONFLICT_ANALYSIS;
+                            query_index_d = 4'd0;
+                        end
                     end else begin
                         // PSE finished cleanly (or timeout) with no actions -> Ready for next decision
                         state_d = VDE_PHASE;
@@ -1458,7 +1465,9 @@ module solver_core #(
                         trail_push_value = (final_assert_lit > 0);
                         trail_push_level = decision_level_q;
                         trail_push_is_decision = 1'b0;
-                        trail_push_reason = pse_clause_count; // Clause being written THIS cycle
+                        // Use clause ID only if PSE accepted the append; otherwise treat as decision (0xFFFF)
+                        // to prevent CAE from resolving against a stale/unrelated clause.
+                        trail_push_reason = pse_direct_append_accepted ? pse_clause_count : 16'hFFFF;
 
                         vde_assign_valid = 1'b1;
                         vde_assign_var = assert_var;
@@ -1470,8 +1479,9 @@ module solver_core #(
                     end
 
 `ifndef SYNTHESIS
-                    if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO complete: append+push+pse_start in one cycle (len=%0d, assert_lit=%0d, assert_var=%0d, level=%0d, reason=%0d)",
-                                           CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q, pse_clause_count);
+                    if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO complete: append+push+pse_start in one cycle (len=%0d, assert_lit=%0d, assert_var=%0d, level=%0d, reason=%0d, accepted=%0d)",
+                                           CORE_ID, cae_learned_len, final_assert_lit, assert_var, decision_level_q,
+                                           pse_direct_append_accepted ? pse_clause_count : 16'hFFFF, pse_direct_append_accepted);
 `endif
 
                     // ---- Clause sharing: export learned clause to neighbors ----
@@ -1482,7 +1492,8 @@ module solver_core #(
                         cae_learned_len <= SHARE_MAX_LEN) begin
                         share_pending_d     = 1'b1;
                         share_pending_len_d = cae_learned_len[2:0];
-                        share_pending_lbd_d = cae_learned_len[7:0];
+                        // Learned-clause LBD proxy is clause length; zero-extend to 8 bits.
+                        share_pending_lbd_d = {5'b0, cae_learned_len[2:0]};
                         // Pack literals as 16-bit signed (sufficient for MAX_VARS up to 32767)
                         share_pending_payload_d = '0;
                         for (int i = 0; i < 4; i++) begin

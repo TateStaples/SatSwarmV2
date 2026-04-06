@@ -113,6 +113,7 @@ module cae #(
     // FINALIZE_SCAN iteration state
     logic [BUF_COUNT_W-1:0] fin_scan_idx_q, fin_scan_idx_d;
     logic                   fin_found_uip_q, fin_found_uip_d;
+    logic                   fin_found_sec_q, fin_found_sec_d;
     logic [LEN_W-1:0]       fin_out_idx_q, fin_out_idx_d;
 
     // Outputs
@@ -167,6 +168,7 @@ module cae #(
         rescan_needed_d  = rescan_needed_q;
         fin_scan_idx_d   = fin_scan_idx_q;
         fin_found_uip_d  = fin_found_uip_q;
+        fin_found_sec_d  = fin_found_sec_q;
         fin_out_idx_d    = fin_out_idx_q;
 
         backtrack_d      = backtrack_q;
@@ -224,7 +226,12 @@ module cae #(
                         trail_scan_idx_d = trail_height - 1;
                     else
                         trail_scan_idx_d = 0;
-                    state_d = INIT_CLAUSE;
+                    
+                    if (decision_level == 0) begin
+                        state_d = FINALIZE_EMIT;
+                    end else begin
+                        state_d = INIT_CLAUSE;
+                    end
                 end
             end
 
@@ -245,6 +252,7 @@ module cae #(
 `endif
                         fin_scan_idx_d  = 0;
                         fin_found_uip_d = 1'b0;
+                        fin_found_sec_d = 1'b0;
                         fin_out_idx_d   = 1;
                         for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
                         state_d = FINALIZE_SCAN;
@@ -300,6 +308,7 @@ module cae #(
                         // Decision variable — no reason clause, finalize directly
                         fin_scan_idx_d  = 0;
                         fin_found_uip_d = 1'b0;
+                        fin_found_sec_d = 1'b0;
                         fin_out_idx_d   = 1;
                         for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
                         state_d = FINALIZE_SCAN;
@@ -311,6 +320,7 @@ module cae #(
                     end else begin
                         fin_scan_idx_d  = 0;
                         fin_found_uip_d = 1'b0;
+                        fin_found_sec_d = 1'b0;
                         fin_out_idx_d   = 1;
                         for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
                         state_d = FINALIZE_SCAN;
@@ -354,6 +364,7 @@ module cae #(
 `endif
                         fin_scan_idx_d  = 0;
                         fin_found_uip_d = 1'b0;
+                        fin_found_sec_d = 1'b0;
                         fin_out_idx_d   = 1;
                         for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
                         state_d = FINALIZE_SCAN;
@@ -384,6 +395,16 @@ module cae #(
                             if (!fin_found_uip_q && buf_levels[fin_scan_idx_q] == decision_level) begin
                                 output_clause_d[0] = buf_lits[fin_scan_idx_q];
                                 fin_found_uip_d = 1'b1;
+                            end else if (decision_level > 0 && !fin_found_sec_q && buf_levels[fin_scan_idx_q] == sec_max_level_q) begin
+                                if (fin_out_idx_q > 1) begin
+                                    output_clause_d[fin_out_idx_q] = output_clause_d[1];
+                                    output_clause_d[1] = buf_lits[fin_scan_idx_q];
+                                    fin_out_idx_d = fin_out_idx_q + 1;
+                                end else begin
+                                    output_clause_d[1] = buf_lits[fin_scan_idx_q];
+                                    fin_out_idx_d = fin_out_idx_q + 1;
+                                end
+                                fin_found_sec_d = 1'b1;
                             end else begin
                                 if (fin_out_idx_q < MAX_LITS) begin
                                     output_clause_d[fin_out_idx_q] = buf_lits[fin_scan_idx_q];
@@ -411,7 +432,7 @@ module cae #(
                               sec_max_level_q, trail_height);
                 end
                 // === CAE LEARNED CLAUSE VALIDATION ===
-                begin
+                if (decision_level > 0) begin
                     int uip_count_v;
                     int total_lits_v;
                     uip_count_v = 0;
@@ -472,6 +493,7 @@ module cae #(
             rescan_needed_q <= 0;
             fin_scan_idx_q <= 0;
             fin_found_uip_q <= 0;
+            fin_found_sec_q <= 0;
             fin_out_idx_q <= 0;
             backtrack_q <= 0;
             unsat_q <= 0;
@@ -520,6 +542,7 @@ module cae #(
             rescan_needed_q <= rescan_needed_d;
             fin_scan_idx_q <= fin_scan_idx_d;
             fin_found_uip_q <= fin_found_uip_d;
+            fin_found_sec_q <= fin_found_sec_d;
             fin_out_idx_q <= fin_out_idx_d;
             backtrack_q <= backtrack_d;
             unsat_q <= unsat_d;

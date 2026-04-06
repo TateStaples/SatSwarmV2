@@ -11,7 +11,6 @@ RTL_SRCS := $(abspath ../src/Mega/satswarmv2_pkg.sv \
             ../src/Mega/pse.sv \
             ../src/Mega/cae.sv \
             ../src/Mega/vde.sv \
-            ../src/Mega/vde.sv \
             ../src/Mega/vde_heap.sv \
             ../src/Mega/trail_manager.sv \
             ../src/Mega/shared_clause_buffer.sv \
@@ -49,7 +48,20 @@ build_1x1:
 		-Mdir obj_dir_1x1 \
 		--build -j 8
 
-# Build 2x2 grid (4 cores) for benchmark comparison  
+# Build 1x1 matching the current FPGA AFI parameters (MAX_CLAUSES=8192, MAX_LITS=8192)
+build_1x1_fpga:
+	@echo "Building SatSwarmv2 1x1 with FPGA-matching parameters (MAX_CLAUSES=8192, MAX_LITS=8192)..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=1 -GGRID_Y=1 \
+		-GMAX_CLAUSES_PER_CORE=8192 \
+		-GMAX_LITS=8192 \
+		-CFLAGS "-std=c++17" \
+		-I../src/Mega \
+		-Mdir obj_dir_1x1_fpga \
+		--build -j 8
+
+# Build 2x2 grid (4 cores) for benchmark comparison
 build_2x2:
 	@echo "Building SatSwarmv2 2x2 (4 Cores) for Benchmark..."
 	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
@@ -163,6 +175,8 @@ test_vde_heap:
 MAX_VARS ?= 256
 MAX_CLAUSES ?= 2048
 MAX_LITS ?= 16384
+MAX_CLAUSE_LEN ?= $(MAX_VARS)
+CLAUSE_RX_FIFO_DEPTH ?= 16
 CLAUSE_SHARING_MODE ?= 0
 SHARE_MAX_LEN ?= 4
 
@@ -177,6 +191,8 @@ $(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_
 		-GMAX_VARS_PER_CORE=$(MAX_VARS) \
 		-GMAX_CLAUSES_PER_CORE=$(MAX_CLAUSES) \
 		-GMAX_LITS=$(MAX_LITS) \
+		-GMAX_CLAUSE_LEN=$(MAX_CLAUSE_LEN) \
+		-GCLAUSE_RX_FIFO_DEPTH=$(CLAUSE_RX_FIFO_DEPTH) \
 		-GCLAUSE_SHARING_MODE=$(CLAUSE_SHARING_MODE) \
 		-GSHARE_MAX_LEN=$(SHARE_MAX_LEN) \
 		-CFLAGS "-std=c++17 -Wno-unknown-warning-option" \
@@ -201,6 +217,8 @@ obj_dir_sharing_2x2_m$(1)_l$(2)/Vtb_regression_single: sv/tb_regression_single.s
 		-GMAX_VARS_PER_CORE=$$(MAX_VARS) \
 		-GMAX_CLAUSES_PER_CORE=$$(MAX_CLAUSES) \
 		-GMAX_LITS=$$(MAX_LITS) \
+		-GMAX_CLAUSE_LEN=$$(MAX_CLAUSE_LEN) \
+		-GCLAUSE_RX_FIFO_DEPTH=$$(CLAUSE_RX_FIFO_DEPTH) \
 		-GCLAUSE_SHARING_MODE=$(1) \
 		-GSHARE_MAX_LEN=$(2) \
 		-DMULTICORE \

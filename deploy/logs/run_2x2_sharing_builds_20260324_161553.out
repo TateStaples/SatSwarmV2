@@ -1,0 +1,39 @@
+nohup: ignoring input
+=== [none] setting CLAUSE_SHARING_MODE=0 SHARE_MAX_LEN=2 ===
+9:    parameter int CLAUSE_SHARING_MODE = 0,
+10:    parameter int SHARE_MAX_LEN = 2
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [none] build start ===
+=== [none] build ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_161553/build_none_20260324_161553.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-161553.Developer_CL.tar
+=== [2clz] setting CLAUSE_SHARING_MODE=1 SHARE_MAX_LEN=2 ===
+9:    parameter int CLAUSE_SHARING_MODE = 1,
+10:    parameter int SHARE_MAX_LEN = 2
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [2clz] build start ===
+=== [2clz] build ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_161553/build_2clz_20260324_173923.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-173923.Developer_CL.tar
+=== [3clz] setting CLAUSE_SHARING_MODE=2 SHARE_MAX_LEN=3 ===
+9:    parameter int CLAUSE_SHARING_MODE = 2,
+10:    parameter int SHARE_MAX_LEN = 3
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [3clz] build start ===
+=== [3clz] build ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_161553/build_3clz_20260324_190132.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-190133.Developer_CL.tar
+=== [4clz] setting CLAUSE_SHARING_MODE=2 SHARE_MAX_LEN=4 ===
+9:    parameter int CLAUSE_SHARING_MODE = 2,
+10:    parameter int SHARE_MAX_LEN = 4
+205:                    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+206:                    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+=== [4clz] build start ===
+=== [4clz] build ok ===
+log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_161553/build_4clz_20260324_202347.log
+latest tar: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_24-202347.Developer_CL.tar
+All requested modes completed successfully.
+Summary CSV: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/sharing_2x2_20260324_161553/summary.csv

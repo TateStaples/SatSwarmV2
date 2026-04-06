@@ -1,0 +1,12 @@
+[full_pipeline] Waiting for current SynthCL (TAG=2026_03_19-165254)
+grep:  SynthCL: No such file or directory
+[full_pipeline] SynthCL done; launching ImplCL
+err_msg: command not found
+USAGE: source [$AWS_FPGA_REPO_DIR/]hdk_setup.sh [-d|-debug] [-s|-skip_downloads][-h|-help]
+[full_pipeline] ImplCL done; creating tarball
+[full_pipeline] Uploading /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_19-165254.Developer_CL.tar
+[full_pipeline] Submitting AFI
+[full_pipeline] AFI submission command returned
+dk/cl/examples/cl_satswarm/build/checkpoints/2026_03_19-165254.Developer_CL.tar does not exist.
+
+An error occurred (InaccessibleStorageLocation) when calling the CreateFpgaImage operation: Error accessing resource in S3. Check permissions, naming, and ensure the bucket is within the same region as the API endpoint. Bucket: satswarm-v2-afi-624824941978, Key: dcp/2026_03_19-165254.Developer_CL.tar.

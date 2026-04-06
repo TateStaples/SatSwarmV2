@@ -9,6 +9,8 @@ AGENTS.md
 logs/
 *.log
 sim/sv_trace.log
+!deploy/logs/
+!deploy/logs/**
 
 # Python
 __pycache__/
@@ -38,3 +40,8 @@ benchmark_results.txt
 deploy/output/
 *.jou
 .Xil/
+
+temp_out/*
+
+# Temporary simulation traces and analysis output
+tmp/
