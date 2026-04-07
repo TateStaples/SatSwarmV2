@@ -1,0 +1,24 @@
+SKIP_BACKUP=1: reusing existing backups in deploy/logs/grid_sharing_20260401_132542/backups
+
+=== [2x2_none] apply params ===
+--- Current parameter snapshot ---
+cl_satswarm: 23:    parameter int GRID_X               = 2,
+cl_satswarm: 24:    parameter int GRID_Y               = 2,
+cl_satswarm: 26:    parameter int MAX_CLAUSES_PER_CORE = 2048,
+cl_satswarm: 27:    parameter int MAX_LITS             = 8192
+bridge: 19:    parameter int GRID_X              = 2,
+bridge: 20:    parameter int GRID_Y              = 2,
+bridge: 22:    parameter int MAX_CLAUSES_PER_CORE= 2048,
+bridge: 23:    parameter int MAX_LITS            = 8192
+satswarm_top: 3:    parameter int GRID_X = 2,
+satswarm_top: 4:    parameter int GRID_Y = 2,
+satswarm_top: 6:    parameter int MAX_CLAUSES_PER_CORE = 2048,
+satswarm_top: 7:    parameter int MAX_LITS = 8192,
+satswarm_top: 9:    parameter int CLAUSE_SHARING_MODE = 0,
+satswarm_top: 10:    parameter int SHARE_MAX_LEN = 2
+pkg: 15:  parameter int GRID_X         = 2;    // 1x1 grid
+pkg: 16:  parameter int GRID_Y         = 2;
+mesh: 4:    parameter int GRID_X = 2,
+mesh: 5:    parameter int GRID_Y = 2
+=== [2x2_none] launch BuildAll (speed-focused directives) ===
+[2x2_none] pid=242893 log=deploy/logs/grid_sharing_20260401_132542/build_2x2_none_20260401_220011.log

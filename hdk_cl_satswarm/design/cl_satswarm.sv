@@ -6,7 +6,7 @@
 // Interfaces used:
 //   - OCL AXI-Lite (AppPF BAR0): Register reads/writes (status, control)
 //   - DMA_PCIS AXI4 (512-bit): CNF literal loading via DMA
-//   - DDR4 AXI4 via sh_ddr: Clause database memory
+//   - DDR4 AXI4 via sh_ddr: global literal pool / learned backing (see docs/DDR.md, docs/DDR_LIT_LAYOUT.md)
 //
 // Interfaces tied off:
 //   - SDA, PCIM, HBM, PCIe EP/RP, JTAG
@@ -72,7 +72,7 @@ module cl_satswarm #(
     logic        ddr_read_req, ddr_read_grant, ddr_read_valid;
     logic [31:0] ddr_read_addr, ddr_read_data;
     logic [7:0]  ddr_read_len;
-    logic        ddr_write_req, ddr_write_grant;
+    logic        ddr_write_req, ddr_write_grant, ddr_write_done;
     logic [31:0] ddr_write_addr, ddr_write_data;
 
     // =========================================================================
@@ -381,6 +381,24 @@ module cl_satswarm #(
     logic         m_ddr_axi_rvalid, m_ddr_axi_rready;
 
     logic         ddr_is_ready;
+    // Sample DDR trained flag on main clock, then 2-flop sync into clk_solver (async domain crossing)
+    logic         ddr_rdy_m;
+    (* ASYNC_REG *) logic [1:0] ddr_rdy_sync;
+    always_ff @(posedge clk_main_a0 or negedge rst_main_n_sync) begin
+        if (!rst_main_n_sync)
+            ddr_rdy_m <= 1'b0;
+        else
+            ddr_rdy_m <= ddr_is_ready;
+    end
+
+    always_ff @(posedge clk_solver or negedge rst_solver_n) begin
+        if (!rst_solver_n)
+            ddr_rdy_sync <= 2'b0;
+        else
+            ddr_rdy_sync <= {ddr_rdy_sync[0], ddr_rdy_m};
+    end
+
+    wire ddr_ready_solver = ddr_rdy_sync[1];
 
     cl_axi_clock_converter DDR_CDC (
         .s_axi_aclk    (clk_solver),
@@ -654,6 +672,33 @@ module cl_satswarm #(
     logic [31:0] ddr_rd_addr_q;
     logic [7:0]  ddr_rd_len_q;
     logic [7:0]  ddr_rd_cnt;
+    // ddr_wr_addr_q / ddr_wr_data_q — AXI write address/data latches
+    // -----------------------------------------------------------------
+    // Why latching is necessary:
+    //   The arbiter drives ddr_write_addr and ddr_write_data combinatorially
+    //   from core_write_addr[active_core] / core_write_data[active_core].
+    //   Those signals update as soon as the arbiter rotates its round-robin
+    //   pointer (when returning to ARB_IDLE after ddr_write_grant) or as soon
+    //   as the winning solver core de-asserts its request (which can happen the
+    //   cycle after it sees core_write_grant).  If we drove the AXI awaddr/wdata
+    //   lines directly from the arbiter outputs, they could change mid-transaction
+    //   while the bridge is still in DDR_WR_ADDR, DDR_WR_DATA, or DDR_WR_RESP,
+    //   producing a garbled AXI4 write.
+    //
+    // When the latch fires:
+    //   Captured on the DDR_IDLE → DDR_WR_ADDR transition (the same clock edge
+    //   on which ddr_write_grant is pulsed back to the arbiter).  After this
+    //   point the arbiter is free to advance and the bridge uses only the
+    //   latched values for the remainder of the transaction.
+    //
+    // ddr_write_done:
+    //   A one-cycle pulse driven by this bridge when bvalid is seen in
+    //   DDR_WR_RESP.  It is passed through satswarm_core_bridge → satswarm_top
+    //   → global_mem_arbiter where it clears write_active_q, allowing the
+    //   arbiter to issue the next write.  Without this signal the arbiter could
+    //   start a new write while a prior one is still awaiting BRESP (P0-B race).
+    logic [31:0] ddr_wr_addr_q;
+    logic [31:0] ddr_wr_data_q;
 
     always_ff @(posedge clk_solver) begin
         if (!rst_solver_n) begin
@@ -662,13 +707,23 @@ module cl_satswarm #(
             ddr_read_valid  <= 1'b0;
             ddr_read_data   <= 32'h0;
             ddr_write_grant <= 1'b0;
+            ddr_write_done  <= 1'b0;
             ddr_rd_addr_q   <= 32'h0;
             ddr_rd_len_q    <= 8'h0;
             ddr_rd_cnt      <= 8'h0;
+            ddr_wr_addr_q   <= 32'h0;
+            ddr_wr_data_q   <= 32'h0;
+        end else if (!ddr_ready_solver) begin
+            ddr_state       <= DDR_IDLE;
+            ddr_read_grant  <= 1'b0;
+            ddr_read_valid  <= 1'b0;
+            ddr_write_grant <= 1'b0;
+            ddr_write_done  <= 1'b0;
         end else begin
             ddr_read_grant  <= 1'b0;
             ddr_read_valid  <= 1'b0;
             ddr_write_grant <= 1'b0;
+            ddr_write_done  <= 1'b0;
 
             case (ddr_state)
                 DDR_IDLE: begin
@@ -680,6 +735,10 @@ module cl_satswarm #(
                         ddr_read_grant <= 1'b1;
                     end else if (ddr_write_req) begin
                         ddr_state       <= DDR_WR_ADDR;
+                        // Latch addr/data so AXI signals stay stable while the
+                        // arbiter may advance to the next pending write request.
+                        ddr_wr_addr_q   <= ddr_write_addr;
+                        ddr_wr_data_q   <= ddr_write_data;
                         ddr_write_grant <= 1'b1;
                     end
                 end
@@ -710,8 +769,11 @@ module cl_satswarm #(
                 end
 
                 DDR_WR_RESP: begin
-                    if (m_ddr_axi_bvalid)
-                        ddr_state <= DDR_IDLE;
+                    if (m_ddr_axi_bvalid) begin
+                        ddr_state      <= DDR_IDLE;
+                        // Signal arbiter that BRESP received; write_active_q can clear.
+                        ddr_write_done <= 1'b1;
+                    end
                 end
 
                 default: ddr_state <= DDR_IDLE;
@@ -729,7 +791,7 @@ module cl_satswarm #(
     assign m_ddr_axi_rready  = (ddr_state == DDR_RD_DATA);
 
     assign m_ddr_axi_awvalid = (ddr_state == DDR_WR_ADDR);
-    assign m_ddr_axi_awaddr  = {32'h0, ddr_write_addr};
+    assign m_ddr_axi_awaddr  = {32'h0, ddr_wr_addr_q};   // latched; stable across all DDR_WR_* states
     assign m_ddr_axi_awlen   = 8'h0;
     assign m_ddr_axi_awsize  = 3'b010;
     assign m_ddr_axi_awburst = 2'b01;
@@ -737,7 +799,7 @@ module cl_satswarm #(
     assign m_ddr_axi_awuser  = 1'b0;
 
     assign m_ddr_axi_wvalid  = (ddr_state == DDR_WR_DATA);
-    assign m_ddr_axi_wdata   = {480'h0, ddr_write_data};
+    assign m_ddr_axi_wdata   = {480'h0, ddr_wr_data_q};  // latched; stable across all DDR_WR_* states
     assign m_ddr_axi_wstrb   = 64'h000000000000000F;
     assign m_ddr_axi_wlast   = 1'b1;
     assign m_ddr_axi_bready  = (ddr_state == DDR_WR_RESP);
@@ -1007,7 +1069,8 @@ module cl_satswarm #(
         .ddr_write_req   (ddr_write_req),
         .ddr_write_addr  (ddr_write_addr),
         .ddr_write_data  (ddr_write_data),
-        .ddr_write_grant (ddr_write_grant)
+        .ddr_write_grant (ddr_write_grant),
+        .ddr_write_done  (ddr_write_done)
     );
 
 endmodule

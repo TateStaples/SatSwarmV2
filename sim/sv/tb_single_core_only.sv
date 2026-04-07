@@ -24,6 +24,7 @@ module tb_single_core_only;
   logic [31:0] ddr_write_addr;
   logic [31:0] ddr_write_data;
   logic ddr_write_grant;
+  logic ddr_write_done;
 
   // Parameters - SINGLE CORE ONLY (matching tb_satswarmv2 2x2)
   parameter int GRID_X = 1;
@@ -59,15 +60,17 @@ module tb_single_core_only;
     .ddr_write_req(ddr_write_req),
     .ddr_write_addr(ddr_write_addr),
     .ddr_write_data(ddr_write_data),
-    .ddr_write_grant(ddr_write_grant)
+    .ddr_write_grant(ddr_write_grant),
+    .ddr_write_done(ddr_write_done)
   );
 
   // DDR4 Mock
   always @(posedge clk) begin
-    ddr_read_grant <= ddr_read_req;
-    ddr_read_valid <= ddr_read_req;
-    ddr_read_data <= '0;
+    ddr_read_grant  <= ddr_read_req;
+    ddr_read_valid  <= ddr_read_req;
+    ddr_read_data   <= '0;
     ddr_write_grant <= ddr_write_req;
+    ddr_write_done  <= ddr_write_grant; // fires cycle after grant (mimics BRESP)
   end
 
   initial clk = 0;
@@ -87,6 +90,7 @@ module tb_single_core_only;
   int _clause_count_idx = 0;
   int passed_tests = 0;
   int failed_tests = 0;
+  int clause_store[$][$];  // per-clause literal list for model verification
 
   task automatic push_literal(input int lit, input bit clause_end);
     begin

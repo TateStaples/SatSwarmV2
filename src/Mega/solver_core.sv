@@ -11,7 +11,8 @@ module solver_core #(
     //                      2=short clauses (len<=SHARE_MAX_LEN)
     parameter int CLAUSE_SHARING_MODE = 0,
     parameter int SHARE_MAX_LEN = 4,  // Max clause length to share (mode 2)
-    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO depth
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16,  // Per-core incoming clause FIFO depth
+    parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
@@ -79,7 +80,13 @@ module solver_core #(
     output logic        global_write_req,
     output logic [31:0] global_write_addr,
     output logic [31:0] global_write_data,
-    input  logic        global_write_grant
+    input  logic        global_write_grant,
+
+    // DDR learned-region allocator (pulse on first cycle of learned-clause append)
+    output logic        alloc_req,
+    output logic [15:0] alloc_words,
+    input  logic        alloc_grant,
+    input  logic [31:0] alloc_addr
 );
 
 `ifdef YOSYS
@@ -117,6 +124,65 @@ module solver_core #(
     assign tx_ready[2] = tx_ready_2;
     assign tx_ready[3] = tx_ready_3;
 `endif
+
+    // =========================================================================
+    // DDR Literal Pool — Write-Through Mirror
+    // =========================================================================
+    // Each core owns a contiguous, statically addressed slice of DDR that
+    // mirrors its local PSE literal array (lit_mem).  The host populates this
+    // region during CNF load via PCIS; the solver core keeps it in sync on
+    // every subsequent literal write (learned clause appends) so that DDR is
+    // always a faithful replica of lit_mem.
+    //
+    // Address layout:
+    //   Core N's literal pool starts at byte address CORE_ID * MAX_LITS * 4.
+    //   Literal index i maps to byte address LIT_POOL_BYTE_BASE + i*4.
+    //   The flat per-core layout avoids needing a global address arbiter:
+    //   each core can compute its own write address with a single add.
+    //
+    // ENABLE_LIT_DDR_MIRROR (default 1):
+    //   1 → global_write_req is driven by lit_ddr_wr; every PSE literal write
+    //       is mirrored to DDR through the global memory arbiter.
+    //   0 → global_write_req is held 0; the DDR pool is never updated by this
+    //       core (useful for simulation experiments that skip DDR).
+    //
+    // lit_ddr_wr signal properties (from pse.sv):
+    //   • ONE-CYCLE STROBE: asserted for exactly one clock per literal written.
+    //   • Two sources: (a) load_fire during CNF loading (one pulse per literal),
+    //     (b) each cycle of APPEND_CLAUSE state (one pulse per learned literal).
+    //   • global_write_req inherits this strobe nature; the arbiter must accept
+    //     the request in ARB_IDLE within the same cycle it appears (it does —
+    //     ARB_IDLE picks up any_wr combinatorially on every cycle).
+    //
+    // alloc_req / alloc_words — Learned clause bump allocator:
+    //   pse_append_active is HIGH throughout the APPEND_CLAUSE state (multi-cycle
+    //   for multi-literal clauses).  The edge-detector (pse_append_r lag register)
+    //   converts the leading edge of pse_append_active into a single-cycle
+    //   alloc_req pulse, triggering global_allocator to reserve address space for
+    //   the clause exactly once per learned clause, regardless of its length.
+    // =========================================================================
+    localparam [31:0] LIT_POOL_BYTE_BASE = 32'd0 + CORE_ID * (MAX_LITS * 32'd4);
+
+    wire lit_ddr_wr;
+    wire [$clog2(MAX_LITS+1)-1:0] lit_ddr_wr_idx;
+    wire signed [31:0] lit_ddr_wr_data;
+    wire pse_append_active;
+    wire [15:0] pse_append_word_len;
+
+    assign global_read_req   = 1'b0;
+    assign global_read_addr  = '0;
+    assign global_read_len   = '0;
+    assign global_write_req  = ENABLE_LIT_DDR_MIRROR ? lit_ddr_wr : 1'b0;
+    assign global_write_addr = LIT_POOL_BYTE_BASE + 32'(lit_ddr_wr_idx) * 32'd4;
+    assign global_write_data = lit_ddr_wr_data;
+
+    logic pse_append_r;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) pse_append_r <= 1'b0;
+        else pse_append_r <= pse_append_active;
+    end
+    assign alloc_req   = ENABLE_LIT_DDR_MIRROR && pse_append_active && !pse_append_r;
+    assign alloc_words = pse_append_word_len;
 
     // =========================================================================
     // TOP-LEVEL INVARIANTS:
@@ -591,7 +657,8 @@ module solver_core #(
         .MAX_CLAUSES(MAX_CLAUSES),
         .MAX_LITS(MAX_LITS),
         .MAX_CLAUSE_LEN(MAX_CLAUSE_LEN),
-        .CORE_ID(CORE_ID)
+        .CORE_ID(CORE_ID),
+        .ENABLE_LIT_DDR_MIRROR(ENABLE_LIT_DDR_MIRROR)
     ) u_pse (
         .DEBUG(DEBUG),
         .clk(clk),
@@ -632,7 +699,12 @@ module solver_core #(
         .cae_direct_append_en(cae_direct_append_en),
         .cae_direct_append_len(cae_direct_append_len),
         .cae_direct_append_lits(cae_direct_append_lits),
-        .cae_direct_append_accepted(pse_direct_append_accepted)
+        .cae_direct_append_accepted(pse_direct_append_accepted),
+        .lit_ddr_wr(lit_ddr_wr),
+        .lit_ddr_wr_idx(lit_ddr_wr_idx),
+        .lit_ddr_wr_data(lit_ddr_wr_data),
+        .pse_append_active(pse_append_active),
+        .pse_append_word_len(pse_append_word_len)
     );
 
     // pse_propagated_reason, pse_clause_count declared above (forward decl for sfifo/PSE)
@@ -889,13 +961,8 @@ module solver_core #(
         rx_clause_payload_d = rx_clause_payload_q;
         rx_clause_len_d     = rx_clause_len_q;
 
-        // Global memory stubs
-        global_read_req        = 1'b0;
-        global_read_addr       = '0;
-        global_read_len        = '0;
-        global_write_req       = 1'b0;
-        global_write_addr      = '0;
-        global_write_data      = '0;
+        // Global memory: read path unused (DDR literal fetch handled in future PSE port);
+        // write path driven by continuous assigns from PSE DDR mirror.
 
         // NoC stubs
         for (int i = 0; i < 4; i++) begin

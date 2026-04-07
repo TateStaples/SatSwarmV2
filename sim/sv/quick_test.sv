@@ -1,6 +1,10 @@
+// tb_quick_test.sv — Lightweight 2×2 smoke-test for manual iteration.
+// Loads two small SATLIB uf20 instances and checks SAT/UNSAT correctness.
+// This is NOT wired into the Makefile; build manually with Verilator if needed.
+// Distinct from tb_satswarmv2.sv (the main regression testbench).
 `timescale 1ns/1ps
 
-module tb_satswarmv2;
+module tb_quick_test;
     import satswarmv2_pkg::*;
     
     logic clk, rst_n;
@@ -17,6 +21,7 @@ module tb_satswarmv2;
     logic ddr_write_req;
     logic [31:0] ddr_write_addr, ddr_write_data;
     logic ddr_read_grant, ddr_write_grant;
+    logic ddr_write_done;
 
     satswarm_top #(
         .GRID_X(2),
@@ -43,8 +48,17 @@ module tb_satswarmv2;
         .ddr_write_req(ddr_write_req),
         .ddr_write_addr(ddr_write_addr),
         .ddr_write_data(ddr_write_data),
-        .ddr_write_grant(ddr_write_grant)
+        .ddr_write_grant(ddr_write_grant),
+        .ddr_write_done(ddr_write_done)
     );
+    // DDR4 Mock
+    always @(posedge clk) begin
+        ddr_read_grant  <= ddr_read_req;
+        ddr_read_valid  <= ddr_read_req;
+        ddr_read_data   <= '0;
+        ddr_write_grant <= ddr_write_req;
+        ddr_write_done  <= ddr_write_grant; // fires cycle after grant (mimics BRESP)
+    end
     
     initial clk = 0;
     always #5 clk = ~clk;

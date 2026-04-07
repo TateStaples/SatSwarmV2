@@ -60,15 +60,13 @@ module global_allocator #(
         end
     end
 
-    // Sequential: Update pointer on grant
+    // Sequential: bump only when a core actually receives alloc_grant (same cycle as request)
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             bump_ptr_q <= BASE_ADDR;
             rr_idx_q <= '0;
-        end else if (any_request) begin
-            // Bump the pointer by the winner's requested size (words -> bytes: *4)
+        end else if (|alloc_grant) begin
             bump_ptr_q <= bump_ptr_q + {winner_size, 2'b00};
-            // Advance round-robin to be fair
             rr_idx_q <= (winner_idx + 1) % NUM_CORES;
         end
     end

@@ -22,6 +22,7 @@ module tb_unsat_tests;
   logic [31:0] ddr_write_addr;
   logic [31:0] ddr_write_data;
   logic ddr_write_grant;
+  logic ddr_write_done;
 
   // Parameters for testing
   parameter int GRID_X = 1;
@@ -57,15 +58,17 @@ module tb_unsat_tests;
     .ddr_write_req(ddr_write_req),
     .ddr_write_addr(ddr_write_addr),
     .ddr_write_data(ddr_write_data),
-    .ddr_write_grant(ddr_write_grant)
+    .ddr_write_grant(ddr_write_grant),
+    .ddr_write_done(ddr_write_done)
   );
 
   // DDR4 Mock
   always @(posedge clk) begin
-    ddr_read_grant <= ddr_read_req;
-    ddr_read_valid <= ddr_read_req;
-    ddr_read_data <= '0;
+    ddr_read_grant  <= ddr_read_req;
+    ddr_read_valid  <= ddr_read_req;
+    ddr_read_data   <= '0;
     ddr_write_grant <= ddr_write_req;
+    ddr_write_done  <= ddr_write_grant; // fires cycle after grant (mimics BRESP)
   end
 
   initial clk = 0;

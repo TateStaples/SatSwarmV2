@@ -22,6 +22,7 @@ module tb_satswarmv2;
   logic [31:0] ddr_write_addr;
   logic [31:0] ddr_write_data;
   logic ddr_write_grant;
+  logic ddr_write_done;
 
   // Parameters for testing - increased for sat_75v_325c benchmark
   parameter int GRID_X = 1;
@@ -62,18 +63,83 @@ module tb_satswarmv2;
     .ddr_write_req(ddr_write_req),
     .ddr_write_addr(ddr_write_addr),
     .ddr_write_data(ddr_write_data),
-    .ddr_write_grant(ddr_write_grant)
+    .ddr_write_grant(ddr_write_grant),
+    .ddr_write_done(ddr_write_done)
   );
 
-  // DDR4 Mock
+  // =========================================================================
+  // DDR4 Simulation Model
+  // =========================================================================
+  // Backing store: sparse SystemVerilog associative array (tb_ddr_mem).
+  //   • Avoids gigabytes of fixed allocation: a 1×1 build with MAX_LITS=65536
+  //     would need 262 KB per core; large multi-core or FPGA-matching configs
+  //     can exceed hundreds of MB.  The associative array costs only what is
+  //     actually written.
+  //   • Unwritten reads return 32'hDEAD_BEEF as a sentinel, making
+  //     reads-before-writes visually obvious in waveforms.
+  //
+  // Timing model (deliberately simple — no full AXI4 latency):
+  //   Write: ddr_write_grant fires on the same cycle as ddr_write_req.
+  //          ddr_write_done fires the cycle AFTER ddr_write_grant, mimicking
+  //          BRESP completion without modeling the full AXI handshake.
+  //          This one-cycle gap is the minimum needed to ensure the arbiter's
+  //          write_active_q is SET by grant and CLEARED by done in separate
+  //          clock edges (the always_ff priority: grant sets, done clears).
+  //   Read:  ddr_read_grant and ddr_read_valid fire together on the same cycle
+  //          as ddr_read_req.  Single-beat only (all current solver paths use
+  //          global_read_len = 0, so the arbiter always requests exactly 1 beat).
+  //
+  // DDR_CHECK assertions (enabled by compiling with -DDDR_CHECK=1):
+  //   Compiled into make test_ddr_mirror.  Two checks per write:
+  //   (a) Range: ddr_write_addr must be in [0, DDR_POOL_BYTES) where
+  //       DDR_POOL_BYTES = GRID_X * GRID_Y * MAX_LITS * 4.  This covers the
+  //       entire per-core literal pool region (each core's slice is
+  //       CORE_ID * MAX_LITS * 4 .. (CORE_ID+1) * MAX_LITS * 4 - 4).
+  //       A write above this range indicates a miscalculated pool base or an
+  //       out-of-bounds literal index.
+  //   (b) Liveness: ddr_write_count > 0 at end of each test.  Catches the case
+  //       where ENABLE_LIT_DDR_MIRROR was accidentally set to 0.
+  // =========================================================================
+  logic [31:0] tb_ddr_mem [logic [31:0]];
+  longint unsigned ddr_write_count;  // cumulative DDR writes since last reset
+
+  // Max valid DDR byte address for the configured literal pool:
+  //   GRID_X*GRID_Y pools, each MAX_LITS * 4 bytes starting at address 0.
+  localparam longint DDR_POOL_BYTES = longint'(GRID_X) * longint'(GRID_Y) *
+                                      longint'(MAX_LITS) * 4;
+
   always @(posedge clk) begin
-    ddr_read_grant <= ddr_read_req;
-    ddr_read_valid <= ddr_read_req;
-    ddr_read_data <= '0;
-    ddr_write_grant <= ddr_write_req;
+    ddr_read_grant  <= 1'b0;
+    ddr_read_valid  <= 1'b0;
+    ddr_read_data   <= 32'hDEAD_BEEF;
+    ddr_write_grant <= 1'b0;
+
+    if (ddr_write_req) begin
+      tb_ddr_mem[ddr_write_addr] <= ddr_write_data;
+      ddr_write_grant <= 1'b1;
+      ddr_write_count <= ddr_write_count + 1;
+`ifdef DDR_CHECK
+      // Verify each write lands within the expected per-core literal pool region.
+      if (longint'(ddr_write_addr) >= DDR_POOL_BYTES)
+        $fatal(1, "[DDR_CHECK] Write addr 0x%08x out of pool [0..0x%08x) cores=%0d MAX_LITS=%0d",
+               ddr_write_addr, DDR_POOL_BYTES, GRID_X*GRID_Y, MAX_LITS);
+`endif
+    end
+    // ddr_write_done fires the cycle after grant (mimics BRESP arrival)
+    ddr_write_done <= ddr_write_grant;
+
+    if (ddr_read_req) begin
+      ddr_read_grant <= 1'b1;
+      ddr_read_valid <= 1'b1;
+      ddr_read_data  <= tb_ddr_mem.exists(ddr_read_addr)
+                        ? tb_ddr_mem[ddr_read_addr] : 32'hDEAD_BEEF;
+    end
   end
 
-  initial clk = 0;
+  initial begin
+    clk = 0;
+    ddr_write_count = 0;
+  end
   always #5 clk = ~clk; // 100MHz
 
   // Performance counters and clause storage for brute-force verification
@@ -390,6 +456,15 @@ module tb_satswarmv2;
         end else begin
           $display("\n*** TEST PASSED ***\n");
         end
+`ifdef DDR_CHECK
+        // Under DDR_CHECK: verify the mirror path was actually exercised.
+        // Any CNF load triggers host-load writes; conflicts add learned-clause writes.
+        if (ddr_write_count == 0)
+          $fatal(1, "[DDR_CHECK] No DDR writes in this test — ENABLE_LIT_DDR_MIRROR=0?");
+        else
+          $display("[DDR_CHECK] PASS: %0d DDR writes (all within pool range).", ddr_write_count);
+        ddr_write_count = 0; // reset for next test
+`endif
       end else begin
         $display("\n=== TIMEOUT ===");
         $display("  Exceeded %0d cycles", max_cycles_cfg);

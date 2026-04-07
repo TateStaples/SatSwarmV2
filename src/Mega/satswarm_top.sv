@@ -9,7 +9,8 @@ module satswarm_top #(
     parameter int CLAUSE_SHARING_MODE = 0,
     parameter int SHARE_MAX_LEN = 2,
     parameter int MAX_CLAUSE_LEN = MAX_VARS_PER_CORE,  // CAE working-clause buffer; must be >= max possible conflict size
-    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO; increase for grids with high sharing activity
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16,  // Per-core incoming clause FIFO; increase for grids with high sharing activity
+    parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1
 )(
     input  logic [31:0]  DEBUG, // Runtime Debug Level
     input  logic clk,
@@ -38,7 +39,11 @@ module satswarm_top #(
     output logic        ddr_write_req,
     output logic [31:0] ddr_write_addr,
     output logic [31:0] ddr_write_data,
-    input  logic        ddr_write_grant
+    input  logic        ddr_write_grant,
+
+    // Pulsed by cl_satswarm bridge for one cycle on BRESP completion.
+    // Forwarded to global_mem_arbiter to clear write_active_q.
+    input  logic        ddr_write_done
 );
 
     // Mesh interconnect signals
@@ -123,7 +128,8 @@ module satswarm_top #(
         .ddr_write_req(ddr_write_req),
         .ddr_write_addr(ddr_write_addr),
         .ddr_write_data(ddr_write_data),
-        .ddr_write_grant(ddr_write_grant)
+        .ddr_write_grant(ddr_write_grant),
+        .ddr_write_done(ddr_write_done)
     );
 
 
@@ -207,7 +213,8 @@ module satswarm_top #(
                     .GRID_Y(GRID_Y),
                     .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
                     .SHARE_MAX_LEN(SHARE_MAX_LEN),
-                    .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH)
+                    .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH),
+                    .ENABLE_LIT_DDR_MIRROR(ENABLE_LIT_DDR_MIRROR)
                 ) u_core (
                     .DEBUG(DEBUG),
                     .clk(clk),
@@ -236,7 +243,11 @@ module satswarm_top #(
                     .global_write_req(core_write_req[CORE_IDX]),
                     .global_write_addr(core_write_addr[CORE_IDX]),
                     .global_write_data(core_write_data[CORE_IDX]),
-                    .global_write_grant(core_write_grant[CORE_IDX])
+                    .global_write_grant(core_write_grant[CORE_IDX]),
+                    .alloc_req(alloc_req[CORE_IDX]),
+                    .alloc_words(alloc_size[CORE_IDX]),
+                    .alloc_grant(alloc_grant[CORE_IDX]),
+                    .alloc_addr(alloc_addr)
                 );
             end
         end

@@ -38,6 +38,7 @@ module tb_vde_heap;
     ) dut (
         .clk(clk),
         .reset(reset),
+        .DEBUG(32'd2),
         .request(request),
         .decision_valid(decision_valid),
         .decision_var(decision_var),
@@ -98,6 +99,12 @@ module tb_vde_heap;
         repeat (2) @(posedge clk);
         reset = 0;
         repeat (2) @(posedge clk);
+
+        // Trigger initialization: solver_core holds clear_all=1 in IDLE state.
+        // The heap does not self-initialize on reset; it needs clear_all to run INIT_WRITE.
+        clear_all = 1;
+        @(posedge clk);
+        clear_all = 0;
         wait_busy();
 
 

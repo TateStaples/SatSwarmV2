@@ -53,7 +53,11 @@ module satswarm_core_bridge #(
     output logic        ddr_write_req,
     output logic [31:0] ddr_write_addr,
     output logic [31:0] ddr_write_data,
-    input  logic        ddr_write_grant
+    input  logic        ddr_write_grant,
+
+    // Pulsed by cl_satswarm bridge for one cycle on BRESP completion.
+    // Passed through to satswarm_top → global_mem_arbiter.
+    input  logic        ddr_write_done
 );
 
     // ---------------------------------------------------------------
@@ -177,7 +181,8 @@ module satswarm_core_bridge #(
         .ddr_write_req      (ddr_write_req),
         .ddr_write_addr     (ddr_write_addr),
         .ddr_write_data     (ddr_write_data),
-        .ddr_write_grant    (ddr_write_grant)
+        .ddr_write_grant    (ddr_write_grant),
+        .ddr_write_done     (ddr_write_done)
     );
 
 endmodule

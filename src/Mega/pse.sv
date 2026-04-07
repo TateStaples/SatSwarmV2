@@ -16,7 +16,8 @@ module pse #(
     parameter int MAX_LITS    = 4096,
     parameter int MAX_CLAUSE_LEN = 32,
     parameter int CORE_ID     = 0,
-    parameter int PROP_QUEUE_DEPTH = MAX_LITS
+    parameter int PROP_QUEUE_DEPTH = MAX_LITS,
+    parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1
 )(
     input  logic [31:0]          DEBUG,
     input  logic               clk,
@@ -76,7 +77,14 @@ module pse #(
     input  logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]        cae_direct_append_len,
     input  logic signed [MAX_CLAUSE_LEN-1:0][31:0]     cae_direct_append_lits,
     // 1 if the append will be accepted this cycle (capacity check passed); 0 if silently dropped
-    output logic                                        cae_direct_append_accepted
+    output logic                                        cae_direct_append_accepted,
+
+    // DDR literal mirror (write-through; byte address formed in solver_core as pool_base + idx*4)
+    output logic                                        lit_ddr_wr,
+    output logic [$clog2(MAX_LITS+1)-1:0]               lit_ddr_wr_idx,
+    output logic signed [31:0]                           lit_ddr_wr_data,
+    output logic                                        pse_append_active,
+    output logic [15:0]                                 pse_append_word_len
 );
 
     typedef enum logic [3:0] {
@@ -108,7 +116,8 @@ module pse #(
     // Clause Store (Local Arrays)
     (* ram_style = "distributed" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
     (* ram_style = "distributed" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
+    // VeriSAT-style: literal bulk targets BRAM/URAM; DDR mirror for capacity beyond on-chip (solver_core)
+    (* ram_style = "block" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists (Local Arrays)
     (* ram_style = "distributed" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
@@ -304,6 +313,9 @@ module pse #(
 
     assign load_ready = (state_q == IDLE || state_q == LOAD_CLAUSE || state_q == COMPLETE);
     wire load_fire = load_valid && load_ready;
+
+    assign pse_append_active   = (state_q == APPEND_CLAUSE);
+    assign pse_append_word_len = 16'(append_len_q);
 
     // Combinational: 1 if an append requested this cycle will be accepted (not dropped due to overflow)
     assign cae_direct_append_accepted = cae_direct_append_en &&
@@ -992,6 +1004,54 @@ module pse #(
 `ifndef SYNTHESIS
                 if (DEBUG >= 2) $display("[PSE DEBUG] LOAD_CLAUSE end: c_idx=%0d, total_len=%0d", clause_count_q, cur_clause_len_q+1);
 `endif
+            end
+        end
+    end
+
+    // ─── DDR Write-Through Mirror ────────────────────────────────────────────
+    // Mirrors every literal written into lit_mem to the DDR literal pool so that
+    // DDR is a faithful replica of lit_mem at all times (assuming host writes also
+    // go through PCIS).  solver_core gates this path with ENABLE_LIT_DDR_MIRROR.
+    //
+    // lit_ddr_wr is a ONE-CYCLE STROBE: it is reset to 0 every clock and set
+    // to 1 only on the cycle a literal is being written.  The global memory
+    // arbiter in solver_core observes this strobe as global_write_req and must
+    // pick it up in ARB_IDLE within that single cycle (which it always can,
+    // because ARB_IDLE samples any_wr combinatorially every cycle).
+    //
+    // Two trigger sources:
+    //
+    //   1. CNF load (load_fire = load_valid && load_ready):
+    //      Fires once per literal delivered from the host.
+    //      lit_ddr_wr_idx = lit_count_q (absolute position in this core's pool).
+    //      lit_ddr_wr_data = the literal value as a signed 32-bit word.
+    //
+    //   2. Learned clause append (state_q == APPEND_CLAUSE):
+    //      The APPEND_CLAUSE state serializes one literal per cycle from the
+    //      staged clause buffer (append_lits_q).  lit_ddr_wr fires on every cycle
+    //      of this state, writing each literal to its destination index:
+    //        lit_ddr_wr_idx = append_clause_base_q + append_idx_q
+    //      where append_clause_base_q is lit_count_q captured at the start of the
+    //      append (the base position of the new clause in the literal pool).
+    //
+    // pse_append_active:
+    //   Remains HIGH throughout the entire APPEND_CLAUSE state (multiple cycles
+    //   for multi-literal clauses).  solver_core uses the rising edge of this
+    //   signal to fire alloc_req exactly once per learned clause, reserving space
+    //   in the global_allocator bump region for future reference.
+    always_ff @(posedge clk) begin
+        if (!ENABLE_LIT_DDR_MIRROR) begin
+            lit_ddr_wr <= 1'b0;
+        end else begin
+            lit_ddr_wr <= 1'b0;
+            if (state_q == APPEND_CLAUSE) begin
+                lit_ddr_wr      <= 1'b1;
+                lit_ddr_wr_idx  <= append_clause_base_q + append_idx_q;
+                lit_ddr_wr_data <= append_lits_q[append_idx_q];
+            end else if (load_fire) begin
+                lit_ddr_wr      <= 1'b1;
+                lit_ddr_wr_idx  <= lit_count_q;
+                lit_ddr_wr_data <= load_literal;
             end
         end
     end

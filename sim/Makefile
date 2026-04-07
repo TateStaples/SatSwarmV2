@@ -28,7 +28,7 @@ VERILATOR_FLAGS := -Wall --timing --sv --cc --exe \
   --Wno-INITIALDLY --Wno-WIDTHTRUNC --Wno-WIDTHEXPAND --Wno-MODDUP \
   --Wno-BLKANDNBLK --Wno-WIDTH --Wno-BLKLOOPINIT --Wno-SYNCASYNCNET
 
-.PHONY: all build test benchmark clean help debug_single regression_single regression_multi mini
+.PHONY: all build test benchmark clean help debug_single regression_single regression_multi mini test_ddr_mirror
 
 all: build
 
@@ -172,20 +172,24 @@ test_vde_heap:
 	@./obj_dir/Vtb_vde_heap
 
 # Default parameters for regression (can be overridden)
+# Keep these deliberately high so the default regression envelope matches the
+# intended DDR-mirroring use case rather than the smallest simulation configs.
 MAX_VARS ?= 256
-MAX_CLAUSES ?= 2048
-MAX_LITS ?= 16384
+MAX_CLAUSES ?= 8192
+MAX_LITS ?= 65536
 MAX_CLAUSE_LEN ?= $(MAX_VARS)
 CLAUSE_RX_FIFO_DEPTH ?= 16
 CLAUSE_SHARING_MODE ?= 0
 SHARE_MAX_LEN ?= 4
+ENABLE_LIT_DDR_MIRROR ?= 1
 
 # Output executable targets
 OBJ_SINGLE := obj_dir/Vtb_regression_single
-STAMP_SINGLE := obj_dir/.build_single_stamp
+STAMP_SINGLE := obj_dir/.build_single_stamp_v$(MAX_VARS)_c$(MAX_CLAUSES)_l$(MAX_LITS)_cl$(MAX_CLAUSE_LEN)_fifo$(CLAUSE_RX_FIFO_DEPTH)_m$(CLAUSE_SHARING_MODE)_sm$(SHARE_MAX_LEN)_ddr$(ENABLE_LIT_DDR_MIRROR)
 
 $(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_SRCS) Makefile
 	@echo "Building single-core regression testbench with MAX_VARS=$(MAX_VARS)..."
+	@mkdir -p obj_dir
 	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_SRCS) \
 		--top-module tb_regression_single \
 		-GMAX_VARS_PER_CORE=$(MAX_VARS) \
@@ -195,8 +199,10 @@ $(STAMP_SINGLE): sv/tb_regression_single.sv cpp/sim_regression_single.cpp $(RTL_
 		-GCLAUSE_RX_FIFO_DEPTH=$(CLAUSE_RX_FIFO_DEPTH) \
 		-GCLAUSE_SHARING_MODE=$(CLAUSE_SHARING_MODE) \
 		-GSHARE_MAX_LEN=$(SHARE_MAX_LEN) \
+		-GENABLE_LIT_DDR_MIRROR=$(ENABLE_LIT_DDR_MIRROR) \
 		-CFLAGS "-std=c++17 -Wno-unknown-warning-option" \
 		-I../src/Mega \
+		-Mdir obj_dir \
 		--build -j 8
 	@touch $(STAMP_SINGLE)
 
@@ -253,14 +259,39 @@ $(STAMP_MINI): sv/tb_mini.sv $(MINI_SRCS) Makefile
 
 mini: $(STAMP_MINI)
 
+# DDR mirror integration test: builds 1x1, runs the default CNF, and checks
+# that DDR writes land in the expected literal-pool region.
+# Relies on the default problem (sim_main.cpp) producing at least one conflict
+# so that learned-clause DDR writes actually occur.
+STAMP_DDR_MIRROR := obj_dir_ddr_mirror/.build_ddr_mirror_stamp_ddr$(ENABLE_LIT_DDR_MIRROR)
+
+$(STAMP_DDR_MIRROR): sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) Makefile
+	@echo "Building DDR mirror test (1x1, DDR_CHECK enabled)..."
+	@mkdir -p obj_dir_ddr_mirror
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=1 -GGRID_Y=1 \
+		-DDDR_CHECK=1 \
+		-CFLAGS "-std=c++17" \
+		-I../src/Mega \
+		-Mdir obj_dir_ddr_mirror \
+		--build -j 8
+	@touch $(STAMP_DDR_MIRROR)
+
+test_ddr_mirror: $(STAMP_DDR_MIRROR)
+	@echo "Running DDR mirror test (SAT 5v -- fast, exercises host-load writes)..."
+	@./obj_dir_ddr_mirror/V$(TOP) +CNF=../tests/generated_instances/sat_5v_10c_1.cnf +EXPECT=SAT
+	@echo "DDR mirror test passed."
+
 clean:
-	rm -rf obj_dir obj_dir_mini obj_dir_1x1 obj_dir_1x2 obj_dir_2x2 obj_dir_3x3 logs *.vcd benchmark_results.txt .build_*_stamp
+	rm -rf obj_dir obj_dir_mini obj_dir_1x1 obj_dir_1x2 obj_dir_2x2 obj_dir_3x3 obj_dir_ddr_mirror logs *.vcd benchmark_results.txt .build_*_stamp
 
 help:
 	@echo "SatSwarmv2 Makefile Targets:"
-	@echo "  make build     - Compile with Verilator"
-	@echo "  make test      - Build and run test suite"
-	@echo "  make benchmark - Run benchmarks and save results"
-	@echo "  make wave      - Build with waveform tracing and view"
-	@echo "  make mini      - Build Mini DPLL solver (no CAE)"
-	@echo "  make clean     - Remove build artifacts"
+	@echo "  make build            - Compile with Verilator"
+	@echo "  make test             - Build and run test suite"
+	@echo "  make benchmark        - Run benchmarks and save results"
+	@echo "  make wave             - Build with waveform tracing and view"
+	@echo "  make mini             - Build Mini DPLL solver (no CAE)"
+	@echo "  make test_ddr_mirror  - Build and run DDR write-through integration test"
+	@echo "  make clean            - Remove build artifacts"

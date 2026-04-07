@@ -1,0 +1,104 @@
+============================================================
+ RESUME: 2x2_none from post_phys_opt.dcp
+ TAG:    2026_03_26-140059
+ RUN_DIR: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_130056
+============================================================
+Found checkpoint: /home/ubuntu/src/project_data/SatSwarmV2/src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/cl_satswarm.2026_03_26-140059.post_phys_opt.dcp
+[2026-03-26T17:11:44+0000] Launching Vivado route resume...
+Vivado PID: 129191  log: /home/ubuntu/src/project_data/SatSwarmV2/deploy/logs/grid_sharing_20260326_130056/resume_2x2_none_route.log
+[2026-03-26T17:13:44+0000] route resume still running...
+[2026-03-26T17:15:44+0000] route resume still running...
+# route_design -directive Default -tns_cleanup
+Command: route_design -directive Default -tns_cleanup
+INFO: [Route 35-254] Multithreading enabled for route_design using a maximum of 8 CPUs
+Phase 1 Build RT Design
+[2026-03-26T17:17:44+0000] route resume still running...
+Phase 2 Router Initialization
+Phase 2.1 Fix Topology Constraints
+Phase 2.1 Fix Topology Constraints | Checksum: 1ca1fadbb
+Phase 2.2 Pre Route Cleanup
+Phase 2.2 Pre Route Cleanup | Checksum: 1ca1fadbb
+Phase 2.3 Global Clock Net Routing
+Phase 2.3 Global Clock Net Routing | Checksum: 340398ece
+Phase 2.4 Update Timing
+[2026-03-26T17:19:44+0000] route resume still running...
+Phase 2.1 Fix Topology Constraints | Checksum: 1ca1fadbb
+Phase 2.2 Pre Route Cleanup
+Phase 2.2 Pre Route Cleanup | Checksum: 1ca1fadbb
+Phase 2.3 Global Clock Net Routing
+Phase 2.3 Global Clock Net Routing | Checksum: 340398ece
+Phase 2.4 Update Timing
+Phase 2.4 Update Timing | Checksum: 27ad5ca96
+INFO: [Route 35-416] Intermediate Timing Summary | WNS=0.711  | TNS=0.000  | WHS=-0.086 | THS=-24.321|
+[2026-03-26T17:21:44+0000] route resume still running...
+Phase 2.5 Update Timing for Bus Skew | Checksum: 26b30ad3a
+Phase 2.6 Soft Constraint Pins - Fast Budgeting
+Phase 2.6 Soft Constraint Pins - Fast Budgeting | Checksum: 26b30ad3a
+Phase 2 Router Initialization | Checksum: 260efa7fb
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+[2026-03-26T17:23:44+0000] route resume still running...
+Phase 2.5 Update Timing for Bus Skew | Checksum: 26b30ad3a
+Phase 2.6 Soft Constraint Pins - Fast Budgeting
+Phase 2.6 Soft Constraint Pins - Fast Budgeting | Checksum: 26b30ad3a
+Phase 2 Router Initialization | Checksum: 260efa7fb
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+[2026-03-26T17:25:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
+[2026-03-26T17:27:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
+[2026-03-26T17:29:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
+[2026-03-26T17:31:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
+[2026-03-26T17:33:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
+[2026-03-26T17:35:44+0000] route resume still running...
+Phase 3 Global Routing
+Phase 3 Global Routing | Checksum: 260efa7fb
+Phase 4 Initial Routing
+Phase 4.1 Initial Net Routing Pass
+Phase 4.1 Initial Net Routing Pass | Checksum: 1842dcad2
+Phase 4 Initial Routing | Checksum: 166c4876d
+Phase 5 Rip-up And Reroute
+Phase 5.1 Global Iteration 0
