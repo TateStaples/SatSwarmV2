@@ -6,6 +6,7 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 SIM_DIR=$(dirname "$SCRIPT_DIR")
 TESTS_DIR="$SIM_DIR/tests/small_tests"
+TIMEOUT_SEC=5
 
 # Enable logging
 if [ -z "$VERISAT_LOGGING" ]; then
@@ -56,7 +57,7 @@ for v in $v_counts; do
         fi
         
         printf "  %-40s ... " "$filename"
-        output=$("$SCRIPT_DIR/run_cnf.sh" "$test_file" "$expect")
+        output=$("$SCRIPT_DIR/run_cnf.sh" "$test_file" "$expect" "" "$TIMEOUT_SEC")
         
         if echo "$output" | grep -q "TEST PASSED"; then
             echo "PASSED"

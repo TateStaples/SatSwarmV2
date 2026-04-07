@@ -115,7 +115,7 @@ module tb_satswarmv2;
     ddr_write_grant <= 1'b0;
 
     if (ddr_write_req) begin
-      tb_ddr_mem[ddr_write_addr] <= ddr_write_data;
+      tb_ddr_mem[ddr_write_addr] = ddr_write_data;
       ddr_write_grant <= 1'b1;
       ddr_write_count <= ddr_write_count + 1;
 `ifdef DDR_CHECK

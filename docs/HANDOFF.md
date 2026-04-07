@@ -8,12 +8,12 @@ Welcome. This document captures the **current state** of SatSwarmV2 development,
 
 **Update (2026-03-31 → 2026-04-01, sharing sweep):** Grid/sharing sweep run `grid_sharing_20260331_144138` completed three of four entries:
 
-| Grid | Mode | Build tag | AFI | agfi | State |
-| ---- | ---- | --------- | --- | ---- | ----- |
-| 2×2  | 2clz | `2026_03_31-144138` | `afi-07e84cf377a21810e` | `agfi-0e32325155d52e9a2` | **available** |
-| 3×3  | 2clz | `2026_03_31-175343` | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | **available** |
-| 2×2  | 3clz | `2026_04_01-004349` | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | **available** |
-| 3×3  | 3clz | `2026_04_01-035153` | — | — | **FAILED** (Vivado segfault/OOM ~07:05 UTC, needs retry) |
+| Grid | Mode | Build tag           | AFI                     | agfi                     | State                                                    |
+| ---- | ---- | ------------------- | ----------------------- | ------------------------ | -------------------------------------------------------- |
+| 2×2  | 2clz | `2026_03_31-144138` | `afi-07e84cf377a21810e` | `agfi-0e32325155d52e9a2` | **available**                                            |
+| 3×3  | 2clz | `2026_03_31-175343` | `afi-0321c2767044f669e` | `agfi-019b6ef57d1bb5553` | **available**                                            |
+| 2×2  | 3clz | `2026_04_01-004349` | `afi-0d0c6789a8312fe2e` | `agfi-0a0bef585e35a4855` | **available**                                            |
+| 3×3  | 3clz | `2026_04_01-035153` | —                       | —                        | **FAILED** (Vivado segfault/OOM ~07:05 UTC, needs retry) |
 
 Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
@@ -23,36 +23,39 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
 **Update (2026-04-01, no-sharing baseline sweep):** Run `grid_sharing_20260401_132542` launched for 2×2/3×3/4×4 `none` mode (MAX_LITS=8192). 2×2 completed; 3×3 failed (Vivado segfault + disk full during tar packaging); 4×4 failed immediately (disk full). Disk cleaned (~3.4 GB freed from orphaned/intermediate DCPs). 3×3 and 4×4 retried (pid 243628, appending to same run dir and `summary.csv`).
 
-| Grid | Mode | Build tag | AFI | agfi | State |
-| ---- | ---- | --------- | --- | ---- | ----- |
-| 2×2  | none | `2026_04_01-132542` | `afi-0620b908c628bb5ac` | `agfi-0557b672797cfa0e1` | submitted |
-| 3×3  | none | — | — | — | **retrying** |
-| 4×4  | none | — | — | — | **retrying** |
+| Grid | Mode | Build tag           | AFI                     | agfi                     | State        |
+| ---- | ---- | ------------------- | ----------------------- | ------------------------ | ------------ |
+| 2×2  | none | `2026_04_01-132542` | `afi-0620b908c628bb5ac` | `agfi-0557b672797cfa0e1` | submitted    |
+| 3×3  | none | —                   | —                       | —                        | **retrying** |
+| 4×4  | none | —                   | —                       | —                        | **retrying** |
 
 **Update (2026-04-06, DDR write-through implementation — complete):**
 
 1. **DDR literal pool write-through — fully wired (P0-A + P0-B)**
+
    - `src/Mega/pse.sv`: outputs `lit_ddr_wr`, `lit_ddr_wr_idx`, `lit_ddr_wr_data`, `pse_append_active`, `pse_append_word_len` — fires on every literal load and learned-clause append.
    - `src/Mega/solver_core.sv`: wires PSE DDR outputs to `global_write_req/addr/data`; fires `alloc_req` + `alloc_words` on clause append edge; address = `CORE_ID * MAX_LITS * 4 + lit_idx * 4` (per `docs/spec/DDR_LIT_LAYOUT.md`).
    - `src/Mega/global_mem_arbiter.sv`: added `ddr_write_done` input + `write_active_q` guard — new writes blocked until bridge signals BRESP received, eliminating AXI address/data corruption on back-to-back writes.
    - `src/Mega/satswarm_top.sv` + `hdk_cl_satswarm/design/satswarm_core_bridge.sv`: `ddr_write_done` threaded top-to-bottom.
    - `hdk_cl_satswarm/design/cl_satswarm.sv`: `ddr_wr_addr_q`/`ddr_wr_data_q` latched on `DDR_IDLE→DDR_WR_ADDR` so AXI signals stable across `DDR_WR_ADDR/DATA/RESP` states; `ddr_write_done` pulsed in `DDR_WR_RESP` on `m_ddr_axi_bvalid`; `DDR_PRESENT=1` (DDR4 IP enabled for AFI builds).
+1. **Testbench DDR mock upgraded (P1)**
 
-2. **Testbench DDR mock upgraded (P1)**
    - `sim/sv/tb_satswarmv2.sv`: sparse associative-array DDR model (`tb_ddr_mem[addr]`); `ddr_write_done` fires one cycle after `ddr_write_grant` (mimics BRESP); `ddr_write_count` counter; `DDR_CHECK` assertions at end of each `run_test` verifying ≥1 write occurred and all addresses inside `[0, GRID_X*GRID_Y*MAX_LITS*4)`.
    - `sim/sv/tb_regression_single.sv`, `tb_single_core_only.sv`, `tb_unsat_tests.sv`, `quick_test.sv`: `ddr_write_done` wired; simple `ddr_write_done <= ddr_write_grant` mock (single-cycle latency).
+1. **`make test_ddr_mirror` target (P1)**
 
-3. **`make test_ddr_mirror` target (P1)**
    - Builds 1×1 with `-DDDR_CHECK=1`; runs SAT 5v (5159 cycles, 30 DDR writes) — **passes**.
    - Address-range assertion fires `$fatal` for any write ≥ pool limit.
+1. **Verification outcomes this session**
 
-4. **Verification outcomes this session**
    - `sim`: `make build_1x1` **passes** (clean Verilator elaboration, no port/signal warnings).
    - `sim`: `make test_ddr_mirror` **passes** — `[DDR_CHECK] PASS: 30 DDR writes (all within pool range)`.
    - `sim`: SAT 5v smoke test: **PASS** (5159 cycles).
-  - Note: UNSAT timeout behavior is reproducible in this working tree, but root cause (pre-existing vs DDR-induced) is unconfirmed and remains under investigation.
+
+- Note: UNSAT timeout behavior is reproducible in this working tree, but root cause (pre-existing vs DDR-induced) is unconfirmed and remains under investigation.
 
 5. **AWS shell flow status**
+
    - `hdk_cl_satswarm/design/cl_satswarm.sv`: `.DDR_PRESENT(1)` — DDR4 IP enabled for next AFI build.
    - Next step: rebuild AFI with DDR enabled and run `run_fpga_suite.sh` on hardware to verify literal pool mirror correctness end-to-end.
 
@@ -67,6 +70,7 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 ### What was done
 
 **Build health (Gate 1):** all three configurations build cleanly with no errors.
+
 - `make build_1x1` (MAX_VARS=256, MAX_CLAUSES=8192, MAX_LITS=65536) — PASS
 - `make build_1x1_fpga` (FPGA-parameter config) — PASS
 - `make build_2x2` (4-core elaboration) — PASS
@@ -93,6 +97,7 @@ write path does not stall or alter the solver.
 returns SAT from all 4 cores.  PASS.
 
 **DDR_CHECK infrastructure (Gate 6):** `tb_regression_single.sv` upgraded with:
+
 - `failed_tests` counter — incremented on result mismatch, OOB DDR writes, and
   timeout; final summary prints `N TEST(S) FAILED` instead of always
   "ALL TESTS PASSED".
@@ -123,8 +128,7 @@ for correctness.  Three bugs were found and fixed:
 1. **`sim/sv/tb_satswarmv2.sv` line 87** — dead `ddr_write_done <= 1'b0` assignment
    (immediately overridden by the unconditional `ddr_write_done <= ddr_write_grant`
    at line 101 via SystemVerilog NBA last-write rule).  Removed the dead default.
-
-2. **`sim/sv/quick_test.sv`** — (a) no DDR mock: `ddr_write_grant`/`ddr_read_grant`
+1. **`sim/sv/quick_test.sv`** — (a) no DDR mock: `ddr_write_grant`/`ddr_read_grant`
    were declared but never driven, causing the arbiter to deadlock in
    `ARB_WR_WAIT_GRANT` on the first literal load (since `ENABLE_LIT_DDR_MIRROR=1`
    by default).  Added a proper registered DDR mock identical to `tb_regression_single`.
@@ -134,8 +138,7 @@ for correctness.  Three bugs were found and fixed:
    registered mock which fires done one cycle after grant.
    (c) Module declared as `tb_satswarmv2` — collides with the main testbench of the
    same name.  Renamed to `tb_quick_test` with a header comment.
-
-3. **`sim/sv/tb_single_core_only.sv`** — `clause_store` (a `int[$][$]` queue of
+1. **`sim/sv/tb_single_core_only.sv`** — `clause_store` (a `int[$][$]` queue of
    queues used by `verify_model`) was referenced but never declared.  Added the
    declaration.
 
@@ -172,6 +175,7 @@ core, `ddr_write_addr`/`ddr_write_data` (driven combinatorially from
 transaction before BRESP had been received.
 
 **Fix applied (previous session):**
+
 - `src/Mega/global_mem_arbiter.sv`: added `logic write_active_q`; set on
   `ddr_write_grant`, cleared on `ddr_write_done`; `ARB_IDLE` gates new writes on
   `!write_active_q`.
@@ -214,10 +218,11 @@ The repository's documentation has been modularized:
 3. **Build tag:** `2026_04_02-195210`. Started 19:52 UTC, completed 22:02 UTC (~2h10m).
 4. **Timing: WNS=+0.711 ns (MET)**, WHS=+0.010 ns, 0 errors.
 5. AFI auto-submitted:
+
    - AFI: `afi-07b833dc55da8f85f`
    - AGFI: `agfi-0f4c080b925f34eaf`
    - State: **submitted/pending** as of 22:02 UTC
-   - Create JSON: `deploy/logs/grid_sharing_20260402_195210/afi_create_1x1_none_20260402_195210.json`
+   - Create JSON: `deploy/logs/ge rid_sharing_20260402_195210/afi_create_1x1_none_20260402_195210.json`
 
 **Purpose:** Baseline to measure whether 4× clause capacity improves solve rates on harder / larger problems (more learned clauses retained before eviction). Compare against `afi-048fa7b3b873620c3` (same config but MAX_CLAUSES=2048).
 
@@ -234,10 +239,11 @@ The repository's documentation has been modularized:
 3. Build tag: `2026_03_31-024747`. Synth ~7 min, place ~36 min, route ~32 min. Total: **1h 32m**.
 4. **Timing: WNS=+0.711 ns (MET)**, WHS=+0.010 ns, 0 errors, 0 critical warnings.
 5. Uploaded tar to S3 and submitted AFI:
-  - AFI: `afi-058e8c5c1e2864659`
-  - AGFI: `agfi-042da882ac102dd2e`
-  - Name: `SatSwarmV2-1x1-large-maxlits16384`
-  - State: **available** (confirmed 2026-04-01)
+
+- AFI: `afi-058e8c5c1e2864659`
+- AGFI: `agfi-042da882ac102dd2e`
+- Name: `SatSwarmV2-1x1-large-maxlits16384`
+- State: **available** (confirmed 2026-04-01)
 
 **Parameter notes flagged for future work:**
 
@@ -276,16 +282,21 @@ The repository's documentation has been modularized:
 
 1. Uploaded `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/2026_03_26-042416.Developer_CL.tar` to `s3://satswarm-v2-afi-624824941978/dcp/2026_03_26-042416.Developer_CL.tar`.
 2. Submitted AFI creation:
-  - AFI: `afi-08804376adf00f2ab`
-  - AGFI: `agfi-0ecd81ca9a8dd581c`
-  - Name: `SatSwarmV2-1x1-maxlits16384-2026_03_26-042416`
-  - Initial state: `pending`
+
+- AFI: `afi-08804376adf00f2ab`
+- AGFI: `agfi-0ecd81ca9a8dd581c`
+- Name: `SatSwarmV2-1x1-maxlits16384-2026_03_26-042416`
+- Initial state: `pending`
+
 3. Persisted create response JSON:
-  - `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`
+
+- `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`
+
 4. Updated `deploy/run_grid_sharing_builds.sh` so every successful run automatically:
-  - uploads latest `Developer_CL.tar` to S3
-  - calls `aws ec2 create-fpga-image`
-  - records AFI metadata in summary CSV
+
+- uploads latest `Developer_CL.tar` to S3
+- calls `aws ec2 create-fpga-image`
+- records AFI metadata in summary CSV
 
 **Default automation knobs (can override via env):**
 
@@ -339,28 +350,33 @@ Cycle counts within 0.1% of old AFI — hardware is receiving the same corrupted
 
 1. Monitored the full 2x2 sharing-mode run `sharing_2x2_20260324_161553` to completion (`none`, `2clz`, `3clz`, `4clz` all `ok` in `deploy/logs/sharing_2x2_20260324_161553/summary.csv`).
 2. Uploaded completed `Developer_CL.tar` artifacts and created AFIs for each mode:
-  - `none`: `afi-0070486be9cca64bb` (`agfi-06be2426aa615503a`)
-  - `2clz`: `afi-0cce87e15db5a8c58` (`agfi-028e6419bce2d9003`)
-  - `3clz`: `afi-0c9157a0d6d10ac9b` (`agfi-03c4ec38595841774`)
-  - `4clz`: `afi-0db4c324dc633940e` (`agfi-0197eb8028efe5692`)
+
+- `none`: `afi-0070486be9cca64bb` (`agfi-06be2426aa615503a`)
+- `2clz`: `afi-0cce87e15db5a8c58` (`agfi-028e6419bce2d9003`)
+- `3clz`: `afi-0c9157a0d6d10ac9b` (`agfi-03c4ec38595841774`)
+- `4clz`: `afi-0db4c324dc633940e` (`agfi-0197eb8028efe5692`)
+
 3. Verified AFI states via AWS:
-  - `none`, `2clz`, `3clz` are `available`
-  - `4clz` is `pending` (submitted 2026-03-24 21:51 UTC)
+
+- `none`, `2clz`, `3clz` are `available`
+- `4clz` is `pending` (submitted 2026-03-24 21:51 UTC)
+
 4. Updated documentation to track this run and AFI lifecycle:
-  - `docs/Synth.md` (new 2026-03-24 sharing AFI table + 4clz entry)
-  - `docs/FPGA.md` (deploy-facing AFI list with current states)
-  - `docs/Deploy.md` (index pointers to latest AFI status sections)
-  - `docs/HANDOFF.md` (AFI status corrections + new 4clz entry)
+
+- `docs/Synth.md` (new 2026-03-24 sharing AFI table + 4clz entry)
+- `docs/FPGA.md` (deploy-facing AFI list with current states)
+- `docs/Deploy.md` (index pointers to latest AFI status sections)
+- `docs/HANDOFF.md` (AFI status corrections + new 4clz entry)
 
 **Artifacts and logs:**
 
 - Run log: `deploy/logs/run_2x2_sharing_builds_20260324_161553.out`
 - Summary CSV: `deploy/logs/sharing_2x2_20260324_161553/summary.csv`
 - AFI create responses:
-  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
-  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
-  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
-  - `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`
+    - `deploy/logs/sharing_2x2_20260324_161553/afi_create_none_2026_03_24-161553.json`
+    - `deploy/logs/sharing_2x2_20260324_161553/afi_create_2clz_2026_03_24-173923.json`
+    - `deploy/logs/sharing_2x2_20260324_161553/afi_create_3clz_2026_03_24-190133.json`
+    - `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`
 
 **Remaining follow-up:**
 
@@ -487,8 +503,8 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | 1×1 A2 (clock-divide, clk_solver XDC fix)               | `2026_03_19-031457`     | WNS=+0.711 ns ✅     | ✅               | ✅     | ❌ REQP-123 fail           | afi-064b74577e3b2f258 — FAILED. `.i_clk_hbm_ref(1'b0)` with `CLK_GRP_A_EN(1)`.                       |
 | **1×1 A2 (CL-owned MMCM, CLK_GRP_A_EN=0)**              | **`2026_03_19-051231`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-0520f5f8b8900def7** (agfi-0b41689a08b4d4d5f). Preferred 1×1.                                   |
 | **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
-| **1×1 A2 large (MAX_LITS=16384, MAX_CLAUSES=2048)** | **`2026_03_31-024747`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e); Default directives, `--no-encrypt`. |
-| **2×2 A2 sharing 2clz (MAX_LITS=8192, MODE=1)** | **`2026_03_31-144138`** | **WNS=+0.711 ns ✅** | **✅** | **✅** | **⏳ pending** | **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2); `run_grid_sharing_builds.sh`, grid sweep `grid_sharing_20260331_144138`. |
+| **1×1 A2 large (MAX_LITS=16384, MAX_CLAUSES=2048)**     | **`2026_03_31-024747`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ pending**             | **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e); Default directives, `--no-encrypt`.              |
+| **2×2 A2 sharing 2clz (MAX_LITS=8192, MODE=1)**         | **`2026_03_31-144138`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ pending**             | **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2); `run_grid_sharing_builds.sh`, grid sweep `grid_sharing_20260331_144138`. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 

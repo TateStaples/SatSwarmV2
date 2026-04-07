@@ -1,14 +1,15 @@
 #!/bin/bash
-# Usage: ./run_cnf.sh <cnf_file> [final_expect: SAT|UNSAT] [max_cycles]
+# Usage: ./run_cnf.sh <cnf_file> [final_expect: SAT|UNSAT] [max_cycles] [timeout_sec]
 
 if [ -z "$1" ]; then
-    echo "Usage: ./run_cnf.sh <cnf_file> [SAT|UNSAT] [max_cycles]"
+    echo "Usage: ./run_cnf.sh <cnf_file> [SAT|UNSAT] [max_cycles] [timeout_sec]"
     exit 1
 fi
 
 CNF_FILE=$(realpath "$1")
 EXPECTED=$2
 MAXCYCLES=${3:-5000000}
+TIMEOUT_SEC=${4:-180}
 
 # Determine script directory to find Makefile
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
@@ -19,6 +20,7 @@ if [ ! -z "$EXPECTED" ]; then
     echo "Expected Result: $EXPECTED"
 fi
 echo "Max Cycles: $MAXCYCLES"
+echo "Timeout (sec): $TIMEOUT_SEC"
 
 cd "$SIM_DIR"
 
@@ -31,13 +33,13 @@ BIN="${BIN:-$SIM_DIR/obj_dir/Vtb_satswarmv2}"
 #     BIN="$SIM_DIR/obj_dir/Vtb_regression_single"
 # fi
 
-# Run the single regression executable with +CNF arg and a 120s timeout
+# Run the single regression executable with +CNF arg and an optional wall-clock timeout
 # Check for gtimeout (mac) or timeout (linux)
 # Pass $@ to allow +DEBUG_LEVEL etc overrides
 if command -v gtimeout &> /dev/null; then
-    gtimeout 180s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
+    gtimeout "${TIMEOUT_SEC}s" "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
 elif command -v timeout &> /dev/null; then
-    timeout 180s "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
+    timeout "${TIMEOUT_SEC}s" "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
 else
     echo "Warning: timeout not found. Running without timeout."
     "$BIN" +CNF="$CNF_FILE" +EXPECT=$EXPECTED +MAXCYCLES=$MAXCYCLES "$@"
