@@ -13,5 +13,7 @@ int main(int argc, char **argv) {
     context.timeInc(1);
     top.eval();
   }
+  // Run SystemVerilog `final` blocks (DDR counter summary, $error checks, etc.)
+  top.final();
   return context.gotFinish() ? 0 : 1;
 }

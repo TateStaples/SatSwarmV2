@@ -22,6 +22,7 @@ module tb_regression_single;
   logic [31:0] ddr_write_addr;
   logic [31:0] ddr_write_data;
   logic ddr_write_grant;
+  logic ddr_write_done;
 
   // Parameters for testing - SINGLE CORE, but same max vars
   parameter int GRID_X = 1;
@@ -34,7 +35,10 @@ module tb_regression_single;
 
   // Clause sharing mode (overridable via Verilator -G)
   parameter int CLAUSE_SHARING_MODE = 0;
-  parameter int SHARE_MAX_LEN = 4;  // Max clause length to share (mode 2)
+  parameter int SHARE_MAX_LEN = 4;    // Max clause length to share (mode 2)
+  parameter int MAX_CLAUSE_LEN = MAX_VARS_PER_CORE;  // CAE working-clause buffer
+  parameter int CLAUSE_RX_FIFO_DEPTH = 16;           // Per-core incoming clause FIFO
+  parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1;
 
   // DUT - SatSwarm Top Level
   satswarm_top #(
@@ -44,7 +48,10 @@ module tb_regression_single;
     .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
     .MAX_LITS(MAX_LITS),
     .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
-    .SHARE_MAX_LEN(SHARE_MAX_LEN)
+    .SHARE_MAX_LEN(SHARE_MAX_LEN),
+    .MAX_CLAUSE_LEN(MAX_CLAUSE_LEN),
+    .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH),
+    .ENABLE_LIT_DDR_MIRROR(ENABLE_LIT_DDR_MIRROR)
   ) dut (
     .DEBUG(debug_level),
     .clk(clk),
@@ -66,15 +73,32 @@ module tb_regression_single;
     .ddr_write_req(ddr_write_req),
     .ddr_write_addr(ddr_write_addr),
     .ddr_write_data(ddr_write_data),
-    .ddr_write_grant(ddr_write_grant)
+    .ddr_write_grant(ddr_write_grant),
+    .ddr_write_done(ddr_write_done)
   );
 
   // DDR4 Mock
   always @(posedge clk) begin
-    ddr_read_grant <= ddr_read_req;
-    ddr_read_valid <= ddr_read_req;
-    ddr_read_data <= '0;
+    ddr_read_grant  <= ddr_read_req;
+    ddr_read_valid  <= ddr_read_req;
+    ddr_read_data   <= '0;
     ddr_write_grant <= ddr_write_req;
+    ddr_write_done  <= ddr_write_grant; // fires cycle after grant (mimics BRESP)
+  end
+
+  // Global DDR write tracker — counts ALL writes from reset (including CNF load phase).
+  // run_test() resets per-test counters for its solve-phase window, but the global
+  // ddr_write_count / ddr_oob_write_count accumulate across the whole simulation.
+  // The final block prints global totals for post-run inspection.
+  longint unsigned ddr_write_count_global;
+  longint unsigned ddr_oob_write_count_global;
+  localparam longint DDR_POOL_BYTES_TOTAL = longint'(GRID_X) * longint'(GRID_Y) * longint'(MAX_LITS) * 4;
+  always @(posedge clk) begin
+    if (ddr_write_req) begin
+      ddr_write_count_global++;
+      if (ddr_write_addr >= DDR_POOL_BYTES_TOTAL)
+        ddr_oob_write_count_global++;
+    end
   end
 
   initial clk = 0;
@@ -82,11 +106,16 @@ module tb_regression_single;
 
   // Performance counters and clause storage for brute-force verification
   longint unsigned cycle_count;
+  longint unsigned ddr_write_count;
+  longint unsigned ddr_oob_write_count;
+  longint unsigned ddr_pool_write_count [0:8];
+  int failed_tests;
   int clause_count;
   int var_count;
   string test_name;
   real start_time;
   real end_time;
+  longint unsigned max_cycles_override;
   localparam int MAX_TB_CLAUSES = 4096;
   localparam int MAX_TB_CLAUSE_LEN = 32;
   int clause_flat [0:MAX_TB_CLAUSES-1][0:MAX_TB_CLAUSE_LEN-1];
@@ -286,9 +315,18 @@ module tb_regression_single;
 
   task automatic run_test(input string name, input string cnf_file, input bit expected_sat, input longint unsigned max_cycles);
     bit model_valid;
+    int pool_bytes;
+    int total_pool_bytes;
+    int pool_idx;
+    longint unsigned effective_max_cycles;
     begin
       model_valid = 1'b1; // Default valid
       test_name = name;
+      pool_bytes = MAX_LITS * 4;
+      total_pool_bytes = GRID_X * GRID_Y * pool_bytes;
+      effective_max_cycles = max_cycles;
+      if (max_cycles_override > effective_max_cycles)
+        effective_max_cycles = max_cycles_override;
       $display("\n========================================");
       $display("TEST: %s", name);
       $display("========================================");
@@ -317,9 +355,21 @@ module tb_regression_single;
 
       // Wait for completion
       cycle_count = 0;
-      while (!host_done && cycle_count < max_cycles) begin
+      ddr_write_count = 0;
+      ddr_oob_write_count = 0;
+      for (int bi = 0; bi < 9; bi++) ddr_pool_write_count[bi] = 0;
+      while (!host_done && cycle_count < effective_max_cycles) begin
         @(posedge clk);
         cycle_count++;
+        if (ddr_write_req) begin
+          ddr_write_count++;
+          if (ddr_write_addr >= total_pool_bytes) begin
+            ddr_oob_write_count++;
+          end else begin
+            pool_idx = ddr_write_addr / pool_bytes;
+            if (pool_idx >= 0 && pool_idx < 9) ddr_pool_write_count[pool_idx]++;
+          end
+        end
         if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 10000 == 0) begin
           $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d", cycle_count, host_done, host_sat, host_unsat);
         end
@@ -345,6 +395,10 @@ module tb_regression_single;
         $display("  Est. Real Time @ 100MHz: %.3f ms", time_actual_ms);
         $display("  Clauses: %0d", clause_count);
         $display("  Variables: %0d", var_count);
+        $display("  DDR write req count: %0d", ddr_write_count);
+        $display("  DDR OOB write count: %0d (pool bytes total=%0d)", ddr_oob_write_count, total_pool_bytes);
+        for (int bi = 0; bi < GRID_X * GRID_Y && bi < 9; bi++)
+          $display("  DDR pool[%0d] writes: %0d", bi, ddr_pool_write_count[bi]);
         $display("  Result: %s", host_sat ? "SAT" : "UNSAT");
         
         if (host_sat) begin
@@ -354,17 +408,24 @@ module tb_regression_single;
             end
         end
 
-        if (host_sat != expected_sat) begin
+        if (ddr_oob_write_count > 0) begin
+          $display("  [DDR_CHECK] FAIL: %0d OOB writes outside pool (pool=%0d bytes)",
+                   ddr_oob_write_count, total_pool_bytes);
+          failed_tests++;
+        end
+        if (host_sat != expected_sat || !model_valid) begin
           $display("\n*** TEST FAILED ***\n");
+          failed_tests++;
           // $finish; // Don't stop, continue to next test
         end else begin
           $display("\n*** TEST PASSED ***\n");
         end
       end else begin
         $display("\n=== TIMEOUT ===");
-        $display("  Exceeded %0d cycles", max_cycles);
+        $display("  Exceeded %0d cycles", effective_max_cycles);
         $display("  Status at timeout: done=%0d sat=%0d", host_done, host_sat);
         $display("\n*** TEST FAILED ***\n");
+        failed_tests++;
         // $finish; // Don't stop
       end
     end
@@ -376,6 +437,8 @@ module tb_regression_single;
     string expected_str;
     bit dynamic_expect_sat;
     bit has_dynamic_cnf;
+
+    failed_tests = 0;
 
     $display("\n");
     $display("=====================================");
@@ -390,6 +453,11 @@ module tb_regression_single;
     // Check for Command Line Arguments (Dynamic Testing)
     if ($value$plusargs("DEBUG=%d", debug_level)) begin
         // debug_level updated
+    end
+
+    max_cycles_override = 0;
+    if ($value$plusargs("MAX_CYCLES=%d", max_cycles_override)) begin
+      $display("MAX_CYCLES override enabled: %0d", max_cycles_override);
     end
 
     has_dynamic_cnf = 0;
@@ -461,7 +529,11 @@ module tb_regression_single;
         $display("=====================================");
     end
     $display("=====================================");
-    $display("ALL TESTS PASSED");
+    if (failed_tests == 0) begin
+      $display("ALL TESTS PASSED");
+    end else begin
+      $display("%0d TEST(S) FAILED", failed_tests);
+    end
     $display("=====================================");
     $finish;
   end
@@ -471,6 +543,18 @@ module tb_regression_single;
     #(900_000_000); // ~15 sec sim time budget
     $display("\n*** GLOBAL TIMEOUT - ABORTING ***");
     $finish;
+  end
+
+  // Always print DDR counter summary, even if another module calls $finish.
+  final begin
+    $display("\n[TB FINAL] DDR writes (global, all phases): %0d", ddr_write_count_global);
+    $display("[TB FINAL] DDR OOB writes (global): %0d (pool=%0d bytes)", ddr_oob_write_count_global, DDR_POOL_BYTES_TOTAL);
+    if (ddr_oob_write_count_global > 0) begin
+      $display("[TB FINAL] [DDR_CHECK] FAIL: OOB DDR writes detected!");
+      $error("[DDR_CHECK] OOB DDR write(s) in global tracker — check LIT_POOL_BYTE_BASE calculation.");
+    end else begin
+      $display("[TB FINAL] [DDR_CHECK] PASS: all writes in-pool.");
+    end
   end
 
 endmodule

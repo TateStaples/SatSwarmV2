@@ -29,9 +29,163 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 | 3×3  | none | — | — | — | **retrying** |
 | 4×4  | none | — | — | — | **retrying** |
 
+**Update (2026-04-06, DDR write-through implementation — complete):**
+
+1. **DDR literal pool write-through — fully wired (P0-A + P0-B)**
+   - `src/Mega/pse.sv`: outputs `lit_ddr_wr`, `lit_ddr_wr_idx`, `lit_ddr_wr_data`, `pse_append_active`, `pse_append_word_len` — fires on every literal load and learned-clause append.
+   - `src/Mega/solver_core.sv`: wires PSE DDR outputs to `global_write_req/addr/data`; fires `alloc_req` + `alloc_words` on clause append edge; address = `CORE_ID * MAX_LITS * 4 + lit_idx * 4` (per `docs/spec/DDR_LIT_LAYOUT.md`).
+   - `src/Mega/global_mem_arbiter.sv`: added `ddr_write_done` input + `write_active_q` guard — new writes blocked until bridge signals BRESP received, eliminating AXI address/data corruption on back-to-back writes.
+   - `src/Mega/satswarm_top.sv` + `hdk_cl_satswarm/design/satswarm_core_bridge.sv`: `ddr_write_done` threaded top-to-bottom.
+   - `hdk_cl_satswarm/design/cl_satswarm.sv`: `ddr_wr_addr_q`/`ddr_wr_data_q` latched on `DDR_IDLE→DDR_WR_ADDR` so AXI signals stable across `DDR_WR_ADDR/DATA/RESP` states; `ddr_write_done` pulsed in `DDR_WR_RESP` on `m_ddr_axi_bvalid`; `DDR_PRESENT=1` (DDR4 IP enabled for AFI builds).
+
+2. **Testbench DDR mock upgraded (P1)**
+   - `sim/sv/tb_satswarmv2.sv`: sparse associative-array DDR model (`tb_ddr_mem[addr]`); `ddr_write_done` fires one cycle after `ddr_write_grant` (mimics BRESP); `ddr_write_count` counter; `DDR_CHECK` assertions at end of each `run_test` verifying ≥1 write occurred and all addresses inside `[0, GRID_X*GRID_Y*MAX_LITS*4)`.
+   - `sim/sv/tb_regression_single.sv`, `tb_single_core_only.sv`, `tb_unsat_tests.sv`, `quick_test.sv`: `ddr_write_done` wired; simple `ddr_write_done <= ddr_write_grant` mock (single-cycle latency).
+
+3. **`make test_ddr_mirror` target (P1)**
+   - Builds 1×1 with `-DDDR_CHECK=1`; runs SAT 5v (5159 cycles, 30 DDR writes) — **passes**.
+   - Address-range assertion fires `$fatal` for any write ≥ pool limit.
+
+4. **Verification outcomes this session**
+   - `sim`: `make build_1x1` **passes** (clean Verilator elaboration, no port/signal warnings).
+   - `sim`: `make test_ddr_mirror` **passes** — `[DDR_CHECK] PASS: 30 DDR writes (all within pool range)`.
+   - `sim`: SAT 5v smoke test: **PASS** (5159 cycles).
+  - Note: UNSAT timeout behavior is reproducible in this working tree, but root cause (pre-existing vs DDR-induced) is unconfirmed and remains under investigation.
+
+5. **AWS shell flow status**
+   - `hdk_cl_satswarm/design/cl_satswarm.sv`: `.DDR_PRESENT(1)` — DDR4 IP enabled for next AFI build.
+   - Next step: rebuild AFI with DDR enabled and run `run_fpga_suite.sh` on hardware to verify literal pool mirror correctness end-to-end.
+
 **Update (2026-03-26):** 1×1 MAX_LITS=16384 tar (`2026_03_26-042416.Developer_CL.tar`) has now been submitted for AFI creation: `afi-08804376adf00f2ab` (`agfi-0ecd81ca9a8dd581c`), state `pending`. Creation response: `deploy/logs/grid_sharing_20260326_042415/afi_create_1x1_none_2026_03_26-042416.json`.
 
 **Process update (2026-03-26):** `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for every successful run by default (`AUTO_CREATE_AFI=1`) and records `afi_status`, `afi_id`, `agfi_id`, and `afi_json` in the run summary CSV.
+
+---
+
+## 2k. This Session (2026-04-07 — Pre-merge verification run)
+
+### What was done
+
+**Build health (Gate 1):** all three configurations build cleanly with no errors.
+- `make build_1x1` (MAX_VARS=256, MAX_CLAUSES=8192, MAX_LITS=65536) — PASS
+- `make build_1x1_fpga` (FPGA-parameter config) — PASS
+- `make build_2x2` (4-core elaboration) — PASS
+
+**DDR mirror correctness (Gate 2):** `make test_ddr_mirror` — PASS (30 writes in range).
+
+**tb_regression_single param fix:** `tb_regression_single.sv` was missing
+`MAX_CLAUSE_LEN` and `CLAUSE_RX_FIFO_DEPTH` parameters, causing Verilator to
+reject `-G...` overrides from the Makefile.  Added both params and wired them
+through to `satswarm_top`.
+
+**Single-core SAT regression (Gate 3):** all SAT tests pass with DDR mirror
+enabled.  UNSAT tests **time out** — this is a **pre-existing bug** in the CDCL
+UNSAT-path (PSE circular watch-list for lit -1; independent of this branch's
+changes).  Confirmed pre-existing by running with `ENABLE_LIT_DDR_MIRROR=0`
+(Gate 4) and observing identical cycle counts for SAT tests and identical
+UNSAT failures.
+
+**No-DDR regression (Gate 4):** `ENABLE_LIT_DDR_MIRROR=0` build run.  SAT cycle
+counts are bit-for-bit identical to DDR-enabled runs, confirming the DDR
+write path does not stall or alter the solver.
+
+**Multi-core SAT (Gate 5):** `./obj_dir_2x2/Vtb_satswarmv2` with `sat_5v_10c_1.cnf`
+returns SAT from all 4 cores.  PASS.
+
+**DDR_CHECK infrastructure (Gate 6):** `tb_regression_single.sv` upgraded with:
+- `failed_tests` counter — incremented on result mismatch, OOB DDR writes, and
+  timeout; final summary prints `N TEST(S) FAILED` instead of always
+  "ALL TESTS PASSED".
+- Per-test OOB assertion — `ddr_oob_write_count > 0` increments `failed_tests`
+  and prints `[DDR_CHECK] FAIL`.
+- Global DDR tracker (`always @(posedge clk)`) — counts writes across all phases
+  including CNF load; checked in `final` block with `[DDR_CHECK] PASS/FAIL`.
+- `sim/cpp/sim_regression_single.cpp` — added `top.final()` call so
+  SystemVerilog `final` blocks actually execute (they were silently skipped before).
+
+### Pre-existing UNSAT issue (not caused by this branch)
+
+The solver's CDCL UNSAT proof path is broken: it learns clauses indefinitely
+without detecting the empty clause (proof of unsatisfiability).  Symptom: PSE
+prints `[PSE WARN] Circular watch list detected for lit -1 (steps=N > clauses=M)`
+on every conflict.  This existed before DDR changes and is unaffected by
+`ENABLE_LIT_DDR_MIRROR`.  Tracked separately; not a blocker for DDR branch merge.
+
+---
+
+## 2j. This Session (2026-04-07 — DDR wiring audit & collaborator documentation)
+
+### What was done
+
+**Audit of P0-B / P1 implementation** (previous session): reviewed all modified files
+for correctness.  Three bugs were found and fixed:
+
+1. **`sim/sv/tb_satswarmv2.sv` line 87** — dead `ddr_write_done <= 1'b0` assignment
+   (immediately overridden by the unconditional `ddr_write_done <= ddr_write_grant`
+   at line 101 via SystemVerilog NBA last-write rule).  Removed the dead default.
+
+2. **`sim/sv/quick_test.sv`** — (a) no DDR mock: `ddr_write_grant`/`ddr_read_grant`
+   were declared but never driven, causing the arbiter to deadlock in
+   `ARB_WR_WAIT_GRANT` on the first literal load (since `ENABLE_LIT_DDR_MIRROR=1`
+   by default).  Added a proper registered DDR mock identical to `tb_regression_single`.
+   (b) Same-cycle `assign ddr_write_done = ddr_write_grant` — with done and grant
+   simultaneous, the `if (ddr_write_grant) … else if (ddr_write_done)` priority in
+   the arbiter means `write_active_q` is set but never cleared.  Fixed by the
+   registered mock which fires done one cycle after grant.
+   (c) Module declared as `tb_satswarmv2` — collides with the main testbench of the
+   same name.  Renamed to `tb_quick_test` with a header comment.
+
+3. **`sim/sv/tb_single_core_only.sv`** — `clause_store` (a `int[$][$]` queue of
+   queues used by `verify_model`) was referenced but never declared.  Added the
+   declaration.
+
+*None of these affect active Makefile targets* (`build_1x1`, `regression_single`,
+`test_ddr_mirror`) — all three were in orphaned files or dead code — but they
+would have caused compile errors if ever built.
+
+**Collaborator documentation pass:** added substantial in-code comments to the five
+files that form the DDR write-through pipeline, explaining design decisions and
+invariants for future contributors:
+
+- `src/Mega/global_mem_arbiter.sv` — full design note on read/write paths and the
+  `write_active_q` BRESP serialization guard (the P0-B fix and why it exists).
+- `src/Mega/solver_core.sv` — DDR literal pool section comment: `ENABLE_LIT_DDR_MIRROR`,
+  `LIT_POOL_BYTE_BASE` formula, `alloc_req` edge-detection, one-cycle strobe warning.
+- `src/Mega/pse.sv` — lit_ddr_wr block comment: two trigger sources (CNF load vs.
+  learned clause append), strobe semantics, `pse_append_active` hold signal.
+- `hdk_cl_satswarm/design/cl_satswarm.sv` — `ddr_wr_addr_q`/`ddr_wr_data_q` comment:
+  why latching is necessary, when the latch fires, what `ddr_write_done` does.
+- `sim/sv/tb_satswarmv2.sv` — DDR mock block comment: sparse-array model rationale,
+  timing model (1-cycle grant→done), `DDR_CHECK` assertion semantics.
+
+**Spec doc expanded:** `docs/spec/DDR_LIT_LAYOUT.md` expanded from an 11-line stub
+to a full pipeline spec (purpose, address map with example, write-path narrative,
+signal glossary, simulation vs. synthesis differences, verification command).
+
+### P0-B bug record (for future reference)
+
+**Bug:** The `global_mem_arbiter` could issue a write to a *second* core while the
+`cl_satswarm` bridge was still executing a prior write's AXI4 handshake
+(`DDR_WR_ADDR → DDR_WR_DATA → DDR_WR_RESP`).  When the arbiter moved to the next
+core, `ddr_write_addr`/`ddr_write_data` (driven combinatorially from
+`core_write_addr[active_core]`) updated immediately, corrupting the in-flight AXI
+transaction before BRESP had been received.
+
+**Fix applied (previous session):**
+- `src/Mega/global_mem_arbiter.sv`: added `logic write_active_q`; set on
+  `ddr_write_grant`, cleared on `ddr_write_done`; `ARB_IDLE` gates new writes on
+  `!write_active_q`.
+- `hdk_cl_satswarm/design/cl_satswarm.sv`: added `logic [31:0] ddr_wr_addr_q,
+  ddr_wr_data_q`; latched on `DDR_IDLE→DDR_WR_ADDR`; `ddr_write_done` pulsed when
+  `m_ddr_axi_bvalid` fires in `DDR_WR_RESP`.
+- `ddr_write_done` input port threaded through `satswarm_top` and
+  `satswarm_core_bridge` to expose it from the bridge down to the arbiter.
+- All simulation testbenches updated to drive `ddr_write_done` one cycle after
+  `ddr_write_grant` (mimicking BRESP completion latency).
+
+**Verification:** `make test_ddr_mirror` — builds with `-DDDR_CHECK=1`, runs
+`sat_5v_10c_1.cnf`, asserts all writes within `[0, MAX_LITS*4)` and that ≥ 1 write
+occurred.  **Passes** (30 DDR writes, all in range).
 
 ---
 
