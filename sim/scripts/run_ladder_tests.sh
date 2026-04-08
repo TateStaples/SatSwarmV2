@@ -7,6 +7,7 @@ SCRIPT_DIR=$(dirname "$(realpath "$0")")
 SIM_DIR=$(dirname "$SCRIPT_DIR")
 TESTS_DIR="$SIM_DIR/tests/small_tests"
 TIMEOUT_SEC=10
+SMALL_V_TIMEOUT_SEC=5
 
 # Enable logging
 if [ -z "$VERISAT_LOGGING" ]; then
@@ -38,6 +39,11 @@ total_failed=0
 for v in $v_counts; do
     echo ""
     echo "--- Testing ${v}v instances ---"
+
+    timeout_for_v=$TIMEOUT_SEC
+    if [ "$v" -lt 10 ]; then
+        timeout_for_v=$SMALL_V_TIMEOUT_SEC
+    fi
     
     # Get all tests for this v count
     tests_for_v=$(ls "$TESTS_DIR"/*_${v}v_*.cnf)
@@ -57,7 +63,7 @@ for v in $v_counts; do
         fi
         
         printf "  %-40s ... " "$filename"
-        output=$("$SCRIPT_DIR/run_cnf.sh" "$test_file" "$expect" "" "$TIMEOUT_SEC")
+        output=$("$SCRIPT_DIR/run_cnf.sh" "$test_file" "$expect" "" "$timeout_for_v")
         
         if echo "$output" | grep -q "TEST PASSED"; then
             echo "PASSED"

@@ -165,7 +165,9 @@ module pse #(
         .full(prop_fifo_full),
         .empty(prop_fifo_empty),
         .count(prop_fifo_count),
-        .flush(clear_assignments || (state_q == IDLE && start))
+        // Flush when starting a new propagation round from IDLE or COMPLETE (COMPLETE
+        // is the post-BCP resting state — we no longer drop to IDLE just to preserve done=1).
+        .flush(clear_assignments || ((state_q == IDLE || state_q == COMPLETE) && start))
     );
 
     // Clause Store Interface Signals
@@ -831,8 +833,11 @@ module pse #(
                     end
                 end else if (!conflict_detected_q && !prop_fifo_empty) begin
                     state_d = DEQ_PROP;
-                end else if (!start) begin
-                    state_d = IDLE;
+                end else begin
+                    // Hold COMPLETE (done stays 1) until the next start/load/dequeue path.
+                    // Dropping to IDLE here races solver_core's PSE_PHASE sampler and can
+                    // strand it with pse_done=0 while the engine is already quiescent.
+                    state_d = COMPLETE;
                 end
             end
 
@@ -947,10 +952,9 @@ module pse #(
             conflict_clause_len_q <= conflict_clause_len_d;
             conflict_clause_q <= conflict_clause_d;
 
-            // NOTE: RESET_WATCHES counter increment stays here (control); memory writes moved below.
-            if (state_q == RESET_WATCHES) begin
-                reset_idx_q <= reset_idx_q + 1'b1;
-            end
+            // reset_idx_q: only via reset_idx_d (combinational case(RESET_WATCHES)).
+            // Do not increment here — a second +=1 after reset_idx_d made exit from RESET_WATCHES
+            // impossible (last NBA overshot limit every cycle → state stuck).
 
             // NOTE: clear_assignments control signals only; memory writes moved to sync-only block.
             if (clear_assignments) begin

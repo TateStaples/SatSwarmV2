@@ -65,6 +65,27 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
 **Update (2026-04-08, DDR branch BuildAll — in progress):** Full BuildAll launched on DDR branch (branch `DDR`, tag `2026_04_08-060728`). Strategy: `Default/Default/Default`, clock recipes `A2/B0/C0/H0`, `--no-encrypt`. This is the first AFI build with DDR write-through enabled (`DDR_PRESENT=1`, `ENABLE_LIT_DDR_MIRROR=1`). Synthesis verified clean (0 errors, 200 critical warnings) on prior `SynthCL` run (tag `2026_04_08-053405`). Full implementation in progress — AFI submission pending completion. Notable resource change vs last build: RAM64M8 ~5× increase (9,966 → 49,840) driven by DDR mirror literal storage; FFs halved (107K → 58K).
 
+**Update (2026-04-08, remote DDR sync + BRAM regression fix):** Synced branch `DDR` to `origin/DDR` (pulled commit `c2184240`, scaling defaults update), then reapplied local BRAM/pipeline work on top in branch `BRAM+DDR`.
+
+What was fixed:
+
+1. **Trail query stale-index regression (root cause for small SAT flips):**
+
+  - In `src/Mega/trail_manager.sv`, the new pipelined query path had dropped the historical cross-check `trail[var_to_index[var]].variable == query_var`.
+  - Result: stale `var_to_index` metadata could be treated as a valid assignment after backtracks, producing false "already assigned" outcomes and occasional SAT→UNSAT misclassification on small cases.
+  - Fix: restored the cross-check in the stage-2 pipelined validity gate while keeping the BRAM-aligned pipeline.
+
+2. **Fast regression policy update for small cases:**
+
+  - `sim/scripts/run_bigger_ladder.sh`: apply `5s` wall timeout for all `<10v` tests; keep default timeout for larger instances.
+  - `sim/scripts/run_ladder_tests.sh`: same `<10v => 5s` timeout policy for consistency.
+
+Verification:
+
+- `sim/scripts/run_bigger_ladder.sh` completes **98/98 PASS** after the trail-query fix.
+- Reproduced prior failing micro-case and confirmed pass with bounded run:
+  `BIN=sim/obj_dir_1x1/Vtb_satswarmv2 gtimeout 5s ./scripts/run_cnf.sh sim/tests/small_tests/sat_3v_10c_47.cnf SAT`.
+
 ---
 
 ## 2l. This Session (2026-04-08 — DDR branch first AFI build)

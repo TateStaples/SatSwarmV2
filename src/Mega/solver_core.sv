@@ -202,8 +202,21 @@ module solver_core #(
         // INVARIANT: VDE runs only when PSE is done and no conflict exists.
         VDE_PHASE,              // Renamed from PROPAGATE: Request decision from VDE
         VDE_FALLBACK,           // Fallback scan for unassigned variable
-        VDE_TRAIL_CHECK,        // FIX5: 1-cycle wait — read registered trail query for VDE decision guard
-        PSE_PROP_CHECK,         // FIX5: 1-cycle wait — read registered trail query for propagation guard
+        VDE_FALLBACK_WAIT0,   // BRAM query pipeline bubble
+        VDE_FALLBACK_WAIT1,
+        VDE_FALLBACK_WAIT2,
+        VDE_FALLBACK_WAIT3,
+        VDE_FALLBACK_ACT,     // Sample trail_query_valid_r after waits
+        VDE_TRAIL_WAIT0,      // BRAM query pipeline bubbles
+        VDE_TRAIL_WAIT1,
+        VDE_TRAIL_WAIT2,
+        VDE_TRAIL_WAIT3,
+        VDE_TRAIL_CHECK,      // Consume trail_query_*_r
+        PSE_PROP_WAIT0,
+        PSE_PROP_WAIT1,
+        PSE_PROP_WAIT2,
+        PSE_PROP_WAIT3,
+        PSE_PROP_CHECK,       // Consume trail_query_*_r for propagation guard
         // INVARIANT: PSE runs to completion. Logic must handle "Redundant" vs "Conflicting" props.
         PSE_PHASE,              // Renamed from ACCUMULATE_PROPS: Wait for PSE propagation
         // INVARIANT: CAE runs only after a conflict is confirmed and levels are queried.
@@ -605,7 +618,8 @@ module solver_core #(
     // Trail manager query is driven by internal FSM logic usually (trail_query_var).
     // During conflict analysis resolution (BACKTRACK_PHASE), CAE drives it (cae_level_query_var).
     assign muxed_trail_query_var = (state_q == BACKTRACK_PHASE || state_q == CONFLICT_ANALYSIS) ? cae_level_query_var : trail_query_var;
-    assign cae_level_query_levels = trail_query_level; // Fanout result to CAE
+    // CAE must see level aligned with BRAM pipelined query (not comb trail_query_level)
+    assign cae_level_query_levels = trail_query_level_r;
     
     // Trail Manager instantiation
     trail_manager #(
@@ -1114,7 +1128,7 @@ module solver_core #(
                         vde_check_var_d   = vde_decision_var;
                         vde_check_phase_d = vde_decision_phase;
                         vde_request       = 1'b0;
-                        state_d           = VDE_TRAIL_CHECK;
+                        state_d           = VDE_TRAIL_WAIT0;
                     end else if (vde_all_assigned) begin
                         vde_repeat_count_d = '0;
                         vde_repeat_var_d   = '0;
@@ -1128,6 +1142,24 @@ module solver_core #(
                         state_d = VDE_PHASE;
                     end
                 end
+            end
+
+            // Pipeline bubbles for BRAM-backed trail query (see trail_manager)
+            VDE_TRAIL_WAIT0: begin
+                trail_query_var = vde_check_var_q;
+                state_d         = VDE_TRAIL_WAIT1;
+            end
+            VDE_TRAIL_WAIT1: begin
+                trail_query_var = vde_check_var_q;
+                state_d         = VDE_TRAIL_WAIT2;
+            end
+            VDE_TRAIL_WAIT2: begin
+                trail_query_var = vde_check_var_q;
+                state_d         = VDE_TRAIL_WAIT3;
+            end
+            VDE_TRAIL_WAIT3: begin
+                trail_query_var = vde_check_var_q;
+                state_d         = VDE_TRAIL_CHECK;
             end
 
             // Fallback: linear scan for an unassigned variable if VDE repeats
@@ -1146,7 +1178,29 @@ module solver_core #(
                     fallback_idx_d = 32'd1;
                 end else begin
                     trail_query_var = fallback_idx_q;
-                    if (!trail_query_valid) begin
+                    state_d = VDE_FALLBACK_WAIT0;
+                end
+            end
+
+            VDE_FALLBACK_WAIT0: begin
+                trail_query_var = fallback_idx_q;
+                state_d = VDE_FALLBACK_WAIT1;
+            end
+            VDE_FALLBACK_WAIT1: begin
+                trail_query_var = fallback_idx_q;
+                state_d = VDE_FALLBACK_WAIT2;
+            end
+            VDE_FALLBACK_WAIT2: begin
+                trail_query_var = fallback_idx_q;
+                state_d = VDE_FALLBACK_WAIT3;
+            end
+            VDE_FALLBACK_WAIT3: begin
+                trail_query_var = fallback_idx_q;
+                state_d = VDE_FALLBACK_ACT;
+            end
+            VDE_FALLBACK_ACT: begin
+                trail_query_var = fallback_idx_q;
+                if (!trail_query_valid_r) begin
                         // Use fallback decision with positive phase
                         decision_lit_d = $signed(fallback_idx_q);
                         last_decision_var_d = fallback_idx_q;
@@ -1179,10 +1233,9 @@ module solver_core #(
                         fallback_idx_d = fallback_idx_q + 1'b1;
                         state_d = VDE_FALLBACK;
                     end
-                end
             end
 
-            // FIX5: 1-cycle wait state — reads registered trail query from VDE_PHASE
+            // Registered trail query from VDE_PHASE (after VDE_TRAIL_WAIT*)
             VDE_TRAIL_CHECK: begin
                 // Keep trail query active so mux holds correct value
                 trail_query_var = vde_check_var_q;
@@ -1307,7 +1360,7 @@ module solver_core #(
                         prop_fifo_lit_d    = fifo_lit;
                         prop_fifo_reason_d = fifo_reason;
                         trail_query_var    = prop_var;
-                        state_d            = PSE_PROP_CHECK;
+                        state_d            = PSE_PROP_WAIT0;
                     end
                 end
                 
@@ -1356,12 +1409,31 @@ module solver_core #(
                 end
             end
 
-            // FIX5: 1-cycle wait state — reads registered trail query from PSE_PHASE FIFO pop
+            PSE_PROP_WAIT0: begin
+                prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
+                trail_query_var = prop_var;
+                state_d = PSE_PROP_WAIT1;
+            end
+            PSE_PROP_WAIT1: begin
+                prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
+                trail_query_var = prop_var;
+                state_d = PSE_PROP_WAIT2;
+            end
+            PSE_PROP_WAIT2: begin
+                prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
+                trail_query_var = prop_var;
+                state_d = PSE_PROP_WAIT3;
+            end
+            PSE_PROP_WAIT3: begin
+                prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
+                trail_query_var = prop_var;
+                state_d = PSE_PROP_CHECK;
+            end
+            // Consume pipelined trail query after PSE_PHASE FIFO pop
             PSE_PROP_CHECK: begin
                 // Recompute prop_var from saved FIFO item
                 prop_var = (prop_fifo_lit_q < 0) ? -prop_fifo_lit_q[31:0] : prop_fifo_lit_q[31:0];
 
-                // Keep trail query active so the combinatorial query_valid is also usable if needed
                 trail_query_var = prop_var;
 
                 prop_already_assigned = trail_query_valid_r;

@@ -70,8 +70,10 @@ module cae #(
         IDLE,
         INIT_CLAUSE,
         // CHECK_UIP removed: logic folded into INIT_CLAUSE and RESOLUTION end conditions
-        FIND_RESOLVE_FETCH,  // Stage 1: present trail_scan_idx to trail_read_idx (pipeline fill)
-        FIND_RESOLVE_CHECK,  // Stage 2: check registered trail data, decide match/skip
+        FIND_RESOLVE_FETCH,   // Present trail_scan_idx to trail_read_idx
+        FIND_RESOLVE_RDWAIT,  // BRAM read bubble
+        FIND_RESOLVE_RDWAIT2, // Registered trail_read output stable
+        FIND_RESOLVE_CHECK,   // Use trail_read_*_r
         RESOLUTION,
         FINALIZE_SCAN,
         FINALIZE_EMIT,
@@ -110,6 +112,10 @@ module cae #(
     // Track if resolution added new decision-level literals that may be above scan position
     logic rescan_needed_q, rescan_needed_d;
 
+    // Sub-phases for pipelined level_query (0..3 bubble, 4 commits aligned to trail_query_level_r)
+    logic [2:0] init_phase_q, init_phase_d;
+    logic [2:0] res_phase_q,  res_phase_d;
+
     // FINALIZE_SCAN iteration state
     logic [BUF_COUNT_W-1:0] fin_scan_idx_q, fin_scan_idx_d;
     logic                   fin_found_uip_q, fin_found_uip_d;
@@ -128,9 +134,7 @@ module cae #(
     logic               buf_overflow_q, buf_overflow_d;
     logic [15:0]        dropped_lits_q, dropped_lits_d;
 
-    // Pipeline registers for trail read signals (breaks critical timing path)
-    // trail_read_* from trail_manager are combinational; these registers add
-    // 1 cycle latency but allow higher fmax at synthesis (targeting 125 MHz).
+    // Pipeline registers for trail read (trail_manager BRAM read is 1 cycle after idx)
     logic [31:0] trail_read_var_r;
     logic        trail_read_value_r;
     logic [15:0] trail_read_level_r;
@@ -170,6 +174,9 @@ module cae #(
         fin_found_uip_d  = fin_found_uip_q;
         fin_found_sec_d  = fin_found_sec_q;
         fin_out_idx_d    = fin_out_idx_q;
+
+        init_phase_d     = init_phase_q;
+        res_phase_d      = res_phase_q;
 
         backtrack_d      = backtrack_q;
         unsat_d          = unsat_q;
@@ -255,27 +262,35 @@ module cae #(
                         fin_found_sec_d = 1'b0;
                         fin_out_idx_d   = 1;
                         for (int k = 0; k < MAX_LITS; k++) output_clause_d[k] = 0;
+                        init_phase_d    = '0;
                         state_d = FINALIZE_SCAN;
                     end else begin
+                        init_phase_d    = '0;
                         state_d = FIND_RESOLVE_FETCH;
                     end
                 end else begin
 `ifndef SYNTHESIS
                     if (DEBUG >= 2 && init_idx_q == 0) $display("[CAE DBG] INIT_CLAUSE: Len=%0d Lits={%0d, %0d, %0d, ...} DecLvl=%0d", conflict_len, conflict_lits[0], conflict_lits[1], conflict_lits[2], decision_level);
 `endif
-                    // Buffer population + count_at_level/sec_max_level computed in always_ff (using level_query_levels)
-                    init_idx_d = init_idx_q + 1;
+                    // Pipeline: phases 0–3 cover BRAM + query_*_r latency; phase 4 commits in always_ff
+                    if (init_phase_q == 3'd4) begin
+                        init_phase_d = '0;
+                        init_idx_d   = init_idx_q + 1'b1;
+                    end else
+                        init_phase_d = init_phase_q + 3'd1;
                     state_d = INIT_CLAUSE;
                 end
             end
 
-            // FIND_RESOLVE pipeline: 2-stage (FETCH → CHECK) with registered trail reads.
-            // Stage 1: present trail_scan_idx to trail_read_idx; data latched into _r regs.
-            // Stage 2: use registered trail data to check for match.
-            // This breaks the critical path through trail_manager async LUTRAM reads.
             FIND_RESOLVE_FETCH: begin
-                // trail_read_idx = trail_scan_idx_q (set by default above)
-                // Data will be available in trail_read_*_r next cycle.
+                state_d = FIND_RESOLVE_RDWAIT;
+            end
+
+            FIND_RESOLVE_RDWAIT: begin
+                state_d = FIND_RESOLVE_RDWAIT2;
+            end
+
+            FIND_RESOLVE_RDWAIT2: begin
                 state_d = FIND_RESOLVE_CHECK;
             end
 
@@ -303,6 +318,7 @@ module cae #(
                         reason_len_d       = clause_read_len;  // Valid via overridden clause_read_id
                         reason_lit_idx_d   = 0;
                         rescan_needed_d    = 1'b0;  // Reset rescan flag for new resolution step
+                        res_phase_d        = '0;
                         state_d = RESOLUTION;
                     end else begin
                         // Decision variable — no reason clause, finalize directly
@@ -330,29 +346,32 @@ module cae #(
 
             RESOLUTION: begin
                 if (reason_lit_idx_q < reason_len_q) begin
-                    r_lit = clause_read_literal;
-                    r_var = abs_lit(r_lit);
+                    if (res_phase_q == 3'd4) begin
+                        r_lit = clause_read_literal;
+                        r_var = abs_lit(r_lit);
 
-                    if (r_var != resolve_var_q && r_var != 0) begin
-                        exists = (r_var <= MAX_VARS) ? seen_q[r_var[VAR_W-1:0]] : 1'b0;
+                        if (r_var != resolve_var_q && r_var != 0) begin
+                            exists = (r_var <= MAX_VARS) ? seen_q[r_var[VAR_W-1:0]] : 1'b0;
 
-                        if (!exists) begin
-                            if (buf_count_q < MAX_BUFFER) begin
-                                buf_count_d = buf_count_q + 1;
-                                valid_count_d = valid_count_q + 1;
-                                // count_at_level and sec_max_level updated in always_ff
-                            end else begin
-                                buf_overflow_d = 1'b1;
-                                dropped_lits_d = dropped_lits_q + 1;
+                            if (!exists) begin
+                                if (buf_count_q < MAX_BUFFER) begin
+                                    buf_count_d = buf_count_q + 1;
+                                    valid_count_d = valid_count_q + 1;
+                                end else begin
+                                    buf_overflow_d = 1'b1;
+                                    dropped_lits_d = dropped_lits_q + 1;
 `ifndef SYNTHESIS
-                                $display("[CAE WARNING] Buffer overflow at cycle %0t: Dropped literal %0d. Total dropped: %0d", $time, r_var, dropped_lits_d);
+                                    $display("[CAE WARNING] Buffer overflow at cycle %0t: Dropped literal %0d. Total dropped: %0d", $time, r_var, dropped_lits_d);
 `endif
+                                end
                             end
                         end
-                    end
-
-                    reason_lit_idx_d = reason_lit_idx_q + 1;
+                        res_phase_d      = '0;
+                        reason_lit_idx_d = reason_lit_idx_q + 1'b1;
+                    end else
+                        res_phase_d = res_phase_q + 3'd1;
                 end else begin
+                    res_phase_d = '0;
                     // Done reading reason clause — CHECK_UIP folded inline
                     // The always_ff will decrement count_at_level_q by 1 this cycle
                     // (for the resolved variable). So effective count = count_at_level_q - 1.
@@ -503,6 +522,8 @@ module cae #(
             fin_found_uip_q <= 0;
             fin_found_sec_q <= 0;
             fin_out_idx_q <= 0;
+            init_phase_q <= '0;
+            res_phase_q  <= '0;
             backtrack_q <= 0;
             unsat_q <= 0;
             learned_valid_q <= 0;
@@ -525,9 +546,13 @@ module cae #(
                 seen_q <= '0;
                 active_in_buf_q <= '0;
                 buf_valid_q <= '0;
-            end
+                init_phase_q <= '0;
+            end else
+                init_phase_q <= init_phase_d;
 
-            // Trail read pipeline registers: latch combinational trail outputs every cycle.
+            res_phase_q <= res_phase_d;
+
+            // Trail read pipeline registers: latch trail_manager outputs every cycle.
             // FIND_RESOLVE_FETCH presents the address; FIND_RESOLVE_CHECK reads these.
             trail_read_var_r         <= trail_read_var;
             trail_read_value_r       <= trail_read_value;
@@ -582,7 +607,7 @@ module cae #(
             end
 
             // --- INIT_CLAUSE: populate buffer with dedup, compute incremental counters ---
-            if (state_q == INIT_CLAUSE && init_idx_q < conflict_len) begin
+            if (state_q == INIT_CLAUSE && init_idx_q < conflict_len && init_phase_q == 3'd4) begin
                  logic [31:0] v;
                  v = abs_lit(conflict_lits[init_idx_q]);
                  if (v <= MAX_VARS && v != 0 && !seen_q[v[VAR_W-1:0]]) begin
@@ -604,7 +629,7 @@ module cae #(
 
             // --- RESOLUTION: merge reason literals + invalidate resolved var ---
             else if (state_q == RESOLUTION) begin
-                 if (reason_lit_idx_q < reason_len_q) begin
+                 if (reason_lit_idx_q < reason_len_q && res_phase_q == 3'd4) begin
                      logic signed [31:0] r_lit_local;
                      logic [31:0] r_var_local;
                      logic exists_local;
@@ -641,7 +666,7 @@ module cae #(
                             end
                         end
                     end
-                 end else begin
+                 end else if (reason_lit_idx_q >= reason_len_q) begin
                      // Invalidate resolved variable from buffer
                      for (int k = 0; k < MAX_BUFFER; k++) begin
                          if (k < buf_count_q && buf_valid_q[k] && abs_lit(buf_lits[k]) == resolve_var_q) begin
