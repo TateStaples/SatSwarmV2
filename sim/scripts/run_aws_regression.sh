@@ -87,7 +87,7 @@ for file in $FILES; do
     LOG_FILE="/tmp/aws_regression_${BASENAME}.log"
     
     # Timeout after 180s (XSIM is slower than Verilator)
-    if timeout 180s make TEST=test_satswarm_regression run PLUSARGS="+CNF=$file +EXPECT=$EXPECTED +DEBUG=0" > "$LOG_FILE" 2>&1; then
+    if timeout 180s make TEST=test_satswarm_regression run PLUSARGS="--testplusarg CNF=$file --testplusarg EXPECT=$EXPECTED --testplusarg DEBUG=0" > "$LOG_FILE" 2>&1; then
         
         # Double check the pass was printed
         if grep -q "TEST PASSED" "$LOG_FILE"; then

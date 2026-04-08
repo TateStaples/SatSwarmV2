@@ -63,6 +63,30 @@ Summary CSV: `deploy/logs/grid_sharing_20260331_144138/summary.csv`.
 
 **Process update (2026-03-26):** `deploy/run_grid_sharing_builds.sh` now auto-submits AFIs for every successful run by default (`AUTO_CREATE_AFI=1`) and records `afi_status`, `afi_id`, `agfi_id`, and `afi_json` in the run summary CSV.
 
+**Update (2026-04-08, DDR branch BuildAll — in progress):** Full BuildAll launched on DDR branch (branch `DDR`, tag `2026_04_08-060728`). Strategy: `Default/Default/Default`, clock recipes `A2/B0/C0/H0`, `--no-encrypt`. This is the first AFI build with DDR write-through enabled (`DDR_PRESENT=1`, `ENABLE_LIT_DDR_MIRROR=1`). Synthesis verified clean (0 errors, 200 critical warnings) on prior `SynthCL` run (tag `2026_04_08-053405`). Full implementation in progress — AFI submission pending completion. Notable resource change vs last build: RAM64M8 ~5× increase (9,966 → 49,840) driven by DDR mirror literal storage; FFs halved (107K → 58K).
+
+---
+
+## 2l. This Session (2026-04-08 — DDR branch first AFI build)
+
+### What was done
+
+1. **Disk cleanup** — removed all pre-Apr-02 build checkpoints and tarballs (~4 GB freed; disk was at 97%).
+
+2. **Synthesis verified clean** — `SynthCL` run (tag `2026_04_08-053405`) completed in ~29 min elapsed, 0 errors, 200 critical warnings (all pre-existing XDC/IP module-not-found warnings, same as prior builds). Post-synth resource snapshot:
+   - Total LUT6 equiv: ~652K (~33% of CL pblock)
+   - FFs: ~58K (~1.5% of CL pblock)
+   - BRAM: ~2 RAMB36 equiv (<1%)
+   - DSPs: 0
+
+3. **Full BuildAll launched** — `aws_build_dcp_from_cl.py --flow BuildAll --no-encrypt -p Default -o Default -r Default`, clock recipes A2/B0/C0/H0. Log: `build/scripts/2026_04_08-060728.vivado.log`. AFI submission will follow automatically once `Developer_CL.tar` is produced.
+
+### Next step
+
+- Wait for BuildAll to complete (~2–3 h), then upload `Developer_CL.tar` to `s3://satswarm-v2-afi-624824941978/dcp/` and run `aws ec2 create-fpga-image`.
+- Once AFI is available, run `run_fpga_suite.sh` on F2 to verify DDR literal pool mirror end-to-end.
+- Investigate pre-existing UNSAT path bug (PSE circular watch-list for lit -1) — confirmed not caused by DDR branch.
+
 ---
 
 ## 2k. This Session (2026-04-07 — Pre-merge verification run)

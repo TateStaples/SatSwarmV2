@@ -3,12 +3,12 @@ module satswarm_top #(
     parameter int GRID_X = 1,
     parameter int GRID_Y = 1,
     parameter int MAX_VARS_PER_CORE = 256,
-    parameter int MAX_CLAUSES_PER_CORE = 2048,
-    parameter int MAX_LITS = 16384,
+    parameter int MAX_CLAUSES_PER_CORE = 16384,
+    parameter int MAX_LITS = 65536,
     parameter int NUM_CORES = GRID_X * GRID_Y,
     parameter int CLAUSE_SHARING_MODE = 0,
     parameter int SHARE_MAX_LEN = 2,
-    parameter int MAX_CLAUSE_LEN = MAX_VARS_PER_CORE,  // CAE working-clause buffer; must be >= max possible conflict size
+    parameter int MAX_CLAUSE_LEN = 128,
     parameter int CLAUSE_RX_FIFO_DEPTH = 16,  // Per-core incoming clause FIFO; increase for grids with high sharing activity
     parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1
 )(

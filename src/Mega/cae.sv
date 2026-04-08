@@ -15,7 +15,7 @@
 `timescale 1ns/1ps
 
 module cae #(
-    parameter int MAX_LITS = 16,
+    parameter int MAX_LITS = 128,
     parameter int LEVEL_W  = 16,
     parameter int MAX_VARS = MAX_LITS
 )(

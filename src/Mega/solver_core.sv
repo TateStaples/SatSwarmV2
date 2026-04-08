@@ -2,9 +2,9 @@
 module solver_core #(
     parameter int CORE_ID = 0,
     parameter int MAX_VARS = 256,
-    parameter int MAX_CLAUSES = 256,
-    parameter int MAX_LITS = 4096,
-    parameter int MAX_CLAUSE_LEN = MAX_VARS,  // CAE buffer; was 32 (too small for vars > ~50)
+    parameter int MAX_CLAUSES = 16384,
+    parameter int MAX_LITS = 65536,
+    parameter int MAX_CLAUSE_LEN = 128,
     parameter int GRID_X = 2,
     parameter int GRID_Y = 2,
     // Clause sharing mode: 0=disabled, 1=binary clauses only (len==2),
@@ -160,14 +160,12 @@ module solver_core #(
     //   converts the leading edge of pse_append_active into a single-cycle
     //   alloc_req pulse, triggering global_allocator to reserve address space for
     //   the clause exactly once per learned clause, regardless of its length.
-    // =========================================================================
-    localparam [31:0] LIT_POOL_BYTE_BASE = 32'd0 + CORE_ID * (MAX_LITS * 32'd4);
-
     wire lit_ddr_wr;
     wire [$clog2(MAX_LITS+1)-1:0] lit_ddr_wr_idx;
     wire signed [31:0] lit_ddr_wr_data;
     wire pse_append_active;
     wire [15:0] pse_append_word_len;
+    localparam [31:0] LIT_POOL_BYTE_BASE = CORE_ID * (MAX_LITS * 32'd4);
 
     assign global_read_req   = 1'b0;
     assign global_read_addr  = '0;
