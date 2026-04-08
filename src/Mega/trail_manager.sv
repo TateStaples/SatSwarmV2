@@ -157,16 +157,16 @@ module trail_manager #(
                     query_reason = 16'h0;
                 end
 `ifndef SYNTHESIS
-                else if (DEBUG >= 3) begin
-                    $display("[TRAIL QUERY] var=%0d FAIL trail_crosscheck: trail[%0d].variable=%0d != %0d (lvl=%0d cur_lvl=%0d height=%0d)", 
-                        query_var, idx, entry_query.variable, query_var, lvl, current_level_q, trail_height_q);
+                else if (DEBUG >= 2) begin
+                    $display("[TRAIL QUERY] var=%0d FAIL xcheck: trail[%0d].var=%0d lvl=%0d cur=%0d h=%0d",
+                        query_var, idx, entry_query.variable, lvl, current_level_q, trail_height_q);
                 end
 `endif
             end
 `ifndef SYNTHESIS
-            else if (DEBUG >= 3 && query_var > 0) begin
-                $display("[TRAIL QUERY] var=%0d FAIL bounds: lvl=%0d cur_lvl=%0d idx=%0d height=%0d (lvl_ok=%b idx_ok=%b)", 
-                    query_var, lvl, current_level_q, idx, trail_height_q, (lvl <= current_level_q), (idx < trail_height_q));
+            else if (DEBUG >= 2 && query_var > 0) begin
+                $display("[TRAIL QUERY] var=%0d FAIL bounds: lvl=%0d cur=%0d idx=%0d h=%0d",
+                    query_var, lvl, current_level_q, idx, trail_height_q);
             end
 `endif
         end

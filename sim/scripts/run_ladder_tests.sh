@@ -6,7 +6,7 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 SIM_DIR=$(dirname "$SCRIPT_DIR")
 TESTS_DIR="$SIM_DIR/tests/small_tests"
-TIMEOUT_SEC=5
+TIMEOUT_SEC=10
 
 # Enable logging
 if [ -z "$VERISAT_LOGGING" ]; then

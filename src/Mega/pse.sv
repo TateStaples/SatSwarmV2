@@ -1088,7 +1088,14 @@ module pse #(
             wh1_wdata = init_clause_idx_q;
         end
     end
-    always_ff @(posedge clk) if (wh1_we) watch_head1[wh1_waddr] <= wh1_wdata;
+    always_ff @(posedge clk) begin
+        if (wh1_we) begin
+            watch_head1[wh1_waddr] <= wh1_wdata;
+`ifndef SYNTHESIS
+            if (DEBUG >= 3) $display("[WL1-HEAD] watch_head1[%0d] <= %0d (state=%0d)", wh1_waddr, wh1_wdata, state_q);
+`endif
+        end
+    end
 
     // -- watch_next1 write mux --
     logic        wn1_we;
@@ -1116,7 +1123,14 @@ module pse #(
             wn1_wdata = iw_head1_val;
         end
     end
-    always_ff @(posedge clk) if (wn1_we) watch_next1[wn1_waddr] <= wn1_wdata;
+    always_ff @(posedge clk) begin
+        if (wn1_we) begin
+            watch_next1[wn1_waddr] <= wn1_wdata;
+`ifndef SYNTHESIS
+            if (DEBUG >= 3) $display("[WL1-NEXT] watch_next1[%0d] <= %0d (state=%0d)", wn1_waddr, wn1_wdata, state_q);
+`endif
+        end
+    end
 
     // -- watched_lit1 write mux --
     logic        wl1_we;

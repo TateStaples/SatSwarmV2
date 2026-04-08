@@ -389,6 +389,14 @@ module cae #(
 
             // Multi-cycle sequential scan: one buffer entry per cycle
             FINALIZE_SCAN: begin
+`ifndef SYNTHESIS
+                if (DEBUG >= 3) $display("[FSCAN] idx=%0d buf_cnt=%0d valid=%b lit=%0d lvl=%0d dec_lvl=%0d found_uip=%b out[0]=%0d",
+                    fin_scan_idx_q, buf_count_q,
+                    (fin_scan_idx_q < buf_count_q) ? buf_valid_q[fin_scan_idx_q] : 1'b0,
+                    (fin_scan_idx_q < buf_count_q) ? buf_lits[fin_scan_idx_q] : 32'd0,
+                    (fin_scan_idx_q < buf_count_q) ? buf_levels[fin_scan_idx_q] : 16'd0,
+                    decision_level, fin_found_uip_q, output_clause_q[0]);
+`endif
                 if (fin_scan_idx_q < buf_count_q) begin
                     if (buf_valid_q[fin_scan_idx_q]) begin
                         if (abs_lit(buf_lits[fin_scan_idx_q]) != 0) begin
@@ -551,6 +559,27 @@ module cae #(
             buf_overflow_q <= buf_overflow_d;
             dropped_lits_q <= dropped_lits_d;
             for (int k = 0; k < MAX_LITS; k++) output_clause_q[k] <= output_clause_d[k];
+            // FINALIZE_SCAN: directly capture learned clause literals in always_ff
+            // using stable registered inputs. This avoids a Verilator scheduling hazard
+            // where always_comb re-evaluates output_clause_d[] mid-loop (with the newly
+            // scheduled fin_scan_idx but stale output_clause_q), zeroing the UIP slot.
+            if (state_q == FINALIZE_SCAN && fin_scan_idx_q < buf_count_q &&
+                buf_valid_q[fin_scan_idx_q] && abs_lit(buf_lits[fin_scan_idx_q]) != 0) begin
+                if (!fin_found_uip_q && buf_levels[fin_scan_idx_q] == decision_level) begin
+                    // UIP: place at slot 0 (override for-loop result)
+                    output_clause_q[0] <= buf_lits[fin_scan_idx_q];
+                end else if (decision_level > 0 && !fin_found_sec_q &&
+                             buf_levels[fin_scan_idx_q] == sec_max_level_q) begin
+                    // Second-highest-level literal: place at slot 1, shift old slot-1 up
+                    if (fin_out_idx_q > 1)
+                        output_clause_q[fin_out_idx_q] <= output_clause_q[1];
+                    output_clause_q[1] <= buf_lits[fin_scan_idx_q];
+                end else begin
+                    // All other literals
+                    if (fin_out_idx_q < MAX_LITS)
+                        output_clause_q[fin_out_idx_q] <= buf_lits[fin_scan_idx_q];
+                end
+            end
 
             // --- INIT_CLAUSE: populate buffer with dedup, compute incremental counters ---
             if (state_q == INIT_CLAUSE && init_idx_q < conflict_len) begin

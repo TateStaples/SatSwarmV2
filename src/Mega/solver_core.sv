@@ -1483,6 +1483,10 @@ module solver_core #(
                         // Capture asserting literal NOW while CAE outputs are stable.
                         // Avoids delta-cycle re-evaluation hazard in BACKTRACK_UNDO always_comb.
                         assert_lit_d = (cae_learned_len > 0) ? cae_learned_lits[0] : decision_lit_q;
+`ifndef SYNTHESIS
+                        if (DEBUG >= 2) $display("[CORE %0d] CAE_DONE: learned_len=%0d lits[0]=%0d lits[1]=%0d -> assert_lit=%0d",
+                                                 CORE_ID, cae_learned_len, cae_learned_lits[0], cae_learned_lits[1], assert_lit_d);
+`endif
 
                         // We rely on trail_backtrack_valid combinations
                         // to drive pse_clear_valid and vde_clear_valid.
