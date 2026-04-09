@@ -212,6 +212,33 @@ Typical wall-clock comparison on this 8-core machine:
 | Aggressive (current) | ~20 min | ~10 min | ~45 min | ~20 min | ~95 min |
 | Default | ~20 min | ~5 min | ~5 min | ~10 min | ~40 min |
 
+> **Note — above estimates are calibrated on MAX_CLAUSES=2048/MAX_LITS=16384 (small config).**
+> At MAX_CLAUSES=16384/MAX_LITS=65536 (production config), placement alone takes 2–3 hours:
+>
+> | Tag (Default) | Synth | Opt | Place | PhysOpt | Route | Total |
+> |---|---|---|---|---|---|---|
+> | 2026_04_08-224955 | ~22 min | ~27 min | 2h 41m | ~21 min | TBD | ~6–7h |
+>
+> Root cause: 49,809 RAM64M8 (LUTRAM) primitives. Each occupies one SLICEM tile;
+> ~50k SLICEMs must be placed and their routing resolved, extending Phase 2.1
+> (Floorplanning) from ~5 min to ~81 min CPU time.
+>
+> **Known LUTRAM sources (post 2026-04-08 analysis):**
+>
+> | Source | Bits | RAM64M8 | Notes |
+> |---|---|---|---|
+> | PSE `lit_mem [0:65535]` | 2 Mbit | 4,096 | Cannot be BRAM: async reads in BCP |
+> | PSE prop_q sfifo (fixed) | 2 Mbit → 16 Kbit | 4,096 → 16 | Was MAX_LITS=65536; **fixed to MAX_VARS=256** |
+> | PSE clause arrays (×6 at 16384×16) | 1.5 Mbit | 3,072 | Cannot be BRAM: multi-read per BCP cycle |
+> | PSE watch_head1/2 (512×16 each) | 16 Kbit | 32 | Too small for BRAM, fine as LUTRAM |
+> | Trail arrays (×4 at 256–257 entries) | ~40 Kbit | ~80 | Too small for BRAM (< 512 entries) |
+> | AWS IPs (AXI CDC, interconnect) | unknown | ~38k | Not visible in CL synthesis hierarchy report |
+>
+> **To enable BRAM for `lit_mem`**: add a 1-cycle register stage before every
+> combinational `lit_mem[addr]` read (SCAN_WATCH, SCAN_REPL, INIT_WATCHES states
+> in pse.sv). This requires splitting those FSM states into addr/data pairs.
+> Impact: saves 4096 RAM64M8, recovers ~8 min of placement time.
+
 The WNS from a `Default` run is pessimistic relative to the aggressive run but is a valid lower bound. If `Default` shows WNS > 0 the aggressive build will also pass; if `Default` shows a large negative WNS, the RTL needs pipelining regardless of strategy.
 
 ### clk_solver constraint history

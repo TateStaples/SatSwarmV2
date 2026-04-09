@@ -550,6 +550,7 @@ A post-REQP-123-fix build (tag `2026_03_18-120815`, A1/150 MHz) completed but ha
 | **2×2 A2 (BuildAll, Default directives, PCIS-fix RTL)** | **`2026_03_19-171700`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **✅ available**           | **afi-037e5d7f209df2123** (agfi-022074a3e1f323966); `create-fpga-image` submitted 2026-03-19.        |
 | **1×1 A2 large (MAX_LITS=16384, MAX_CLAUSES=2048)**     | **`2026_03_31-024747`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ pending**             | **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e); Default directives, `--no-encrypt`.              |
 | **2×2 A2 sharing 2clz (MAX_LITS=8192, MODE=1)**         | **`2026_03_31-144138`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ pending**             | **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2); `run_grid_sharing_builds.sh`, grid sweep `grid_sharing_20260331_144138`. |
+| **1×1 A2 DDR branch (BRAM+DDR, PROP_QUEUE_DEPTH=MAX_VARS)** | **`2026_04_08-224955`** | **WNS=+0.711 ns ✅** | **✅**           | **✅** | **⏳ pending**             | **afi-0d14b1f91d2444dcd** (agfi-095b41e5092996bc0); DDR branch; 10h 22m build; PSE PROP_QUEUE_DEPTH reduced to MAX_VARS=256; lit_mem=distributed. |
 
 All artifacts under: `src/aws-fpga/hdk/cl/examples/cl_satswarm/build/checkpoints/`
 
@@ -685,6 +686,7 @@ Design files: ensure both copies are synced before building:
 
 **AFIs**:
 
+- **afi-0d14b1f91d2444dcd** (agfi-095b41e5092996bc0) — 1×1 DDR branch, name `satswarm-bram-ddr-2026-04-08`, tag `2026_04_08-224955` — **pending** (submitted 2026-04-09). DDR branch; PSE PROP_QUEUE_DEPTH=MAX_VARS=256 (saves 4080 RAM64M8 vs prior); lit_mem=distributed; WNS=+0.711 ns, WHS=+0.006 ns. Build time: 10h 22m.
 - **afi-07e84cf377a21810e** (agfi-0e32325155d52e9a2) — 2×2 **2clz** sharing, name `SatSwarmV2-2x2_2clz-maxlits8192-20260331_144138`, tag `2026_03_31-144138` — **pending** (submitted 2026-03-31). MAX_LITS=8192, MAX_CLAUSES_PER_CORE=2048, `SHARE_MAX_LEN=2`, Default directives, WNS=+0.711 ns. Creation JSON: `deploy/logs/grid_sharing_20260331_144138/afi_create_2x2_2clz_20260331_144138.json`.
 - **afi-058e8c5c1e2864659** (agfi-042da882ac102dd2e) — 1×1, name `SatSwarmV2-1x1-large-maxlits16384`, tag `2026_03_31-024747` — **pending** (submitted 2026-03-31). MAX_LITS=16384, MAX_CLAUSES_PER_CORE=2048, Default directives, WNS=+0.711 ns.
 - **afi-0db4c324dc633940e** (agfi-0197eb8028efe5692) — 2×2, sharing `4clz`, tag `2026_03_24-202347` — **pending** (submitted 2026-03-24 21:51 UTC). Creation JSON: `deploy/logs/sharing_2x2_20260324_161553/afi_create_4clz_2026_03_24-215103.json`.

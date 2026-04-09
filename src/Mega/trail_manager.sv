@@ -133,13 +133,26 @@ module trail_manager #(
     endfunction
 
 `ifndef SYNTHESIS
+    // Initialize var_to_index to sentinel 16'hFFFF so dup_var_on_trail never
+    // sees an X index on the first push (xsim doesn't short-circuit && on X).
+    initial begin
+        for (int i = 0; i <= MAX_VARS; i++)
+            var_to_index[i] = 16'hFFFF;
+    end
+
     function automatic logic dup_var_on_trail(
         input logic [15:0] dup_lvl,
         input logic [15:0] dup_idx,
         input logic [31:0] pvar
     );
-        dup_var_on_trail = (dup_lvl <= current_level_q && dup_idx < trail_height_q &&
-                            trail[dup_idx].variable == pvar);
+        // Extra bounds guard: even if dup_idx is somehow out of range, prevent
+        // the trail[] access rather than crashing xsim with out-of-bounds read.
+        if (dup_idx >= MAX_VARS[15:0]) begin
+            dup_var_on_trail = 1'b0;
+        end else begin
+            dup_var_on_trail = (dup_lvl <= current_level_q && dup_idx < trail_height_q &&
+                                trail[dup_idx].variable == pvar);
+        end
     endfunction
 `endif
 
@@ -358,6 +371,7 @@ module trail_manager #(
             trunc_lvl_hold_q     <= '0;
             trunc_old_height_q   <= '0;
             trunc_ls_addr_q      <= '0;
+            bt_rd_idx_q          <= '0;
         end else if (clear_all) begin
             trunc_phase_q   <= '0;
             trail_height_q  <= '0;

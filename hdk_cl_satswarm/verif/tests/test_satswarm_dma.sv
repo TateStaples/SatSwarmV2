@@ -27,7 +27,7 @@ module test_satswarm_dma;
     logic [31:0] ddr_write_addr, ddr_write_data;
 
     // DUT
-    cl_satswarm #(
+    satswarm_core_bridge #(
         .GRID_X(1), .GRID_Y(1),
         .MAX_VARS_PER_CORE(256),
         .MAX_CLAUSES_PER_CORE(512),

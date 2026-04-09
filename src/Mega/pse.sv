@@ -16,7 +16,10 @@ module pse #(
     parameter int MAX_LITS    = 65536,
     parameter int MAX_CLAUSE_LEN = 128,
     parameter int CORE_ID     = 0,
-    parameter int PROP_QUEUE_DEPTH = MAX_LITS,
+    // Propagation queue holds at most MAX_VARS items: each variable is enqueued
+    // at most once per BCP round (assigned vars are never re-queued).  Using
+    // MAX_LITS=65536 was 256× too large and created 4096 RAM64M8 of LUTRAM.
+    parameter int PROP_QUEUE_DEPTH = MAX_VARS,
     parameter bit ENABLE_LIT_DDR_MIRROR = 1'b1
 )(
     input  logic [31:0]          DEBUG,
@@ -116,8 +119,11 @@ module pse #(
     // Clause Store (Local Arrays)
     (* ram_style = "distributed" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
     (* ram_style = "distributed" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
-    // VeriSAT-style: literal bulk targets BRAM/URAM; DDR mirror for capacity beyond on-chip (solver_core)
-    (* ram_style = "block" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
+    // lit_mem: BCP reads lit_mem combinatorially (lit_watch=lit_mem[w1], etc.) which
+    // prevents BRAM inference (requires registered reads).  Mark explicitly distributed
+    // to suppress spurious Synth 8-6849 "Infeasible block" warnings.
+    // To enable BRAM: pipeline all SCAN_WATCH/SCAN_REPL reads with one extra FSM stage.
+    (* ram_style = "distributed" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists (Local Arrays)
     (* ram_style = "distributed" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];

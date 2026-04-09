@@ -208,7 +208,10 @@ grep -c "CRITICAL WARNING" "$LOG_FILE" | xargs -I{} echo "  Critical warnings: {
 echo ""
 
 # ── Final verdict ─────────────────────────────────────────────────────────────
-FAIL_COUNT=$(grep -cE "Synth 8-3390|Synth 8-3391|dissolved into registers|Trying to implement RAM in registers" "$LOG_FILE" || true)
+# Anchor to Vivado's actual WARNING/CRITICAL WARNING lines to avoid counting
+# the TCL script's echoed "FAIL [Synth 8-339x]: ..." puts lines (which repeat
+# the message text and would otherwise double the count).
+FAIL_COUNT=$(grep -cE "^\s*(CRITICAL )?WARNING:.*\[Synth 8-339[01]\]" "$LOG_FILE" || true)
 
 if [[ "$VIVADO_EXIT" -ne 0 || "$FAIL_COUNT" -gt 0 ]]; then
     echo "RESULT: FAIL"
