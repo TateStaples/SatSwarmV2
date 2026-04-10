@@ -13,7 +13,7 @@ Use the lightest check that answers your current question.
 
 | Goal                                    | Best tool                                       | Typical cost            | When to use                                                                                                          |
 | --------------------------------------- | ----------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Understand expected solver behavior     | `sim/mega_sim.py` or `sim/scripts/gen_trace.py` | seconds                 | First pass when logic looks wrong and you need a readable golden trace                                               |
+| Understand expected solver behavior     | `sim/mega_sim.py`, `sim/mega_sim_exact.py`, or `sim/scripts/gen_trace.py` | seconds                 | First pass when logic looks wrong and you need a readable golden trace                                               |
 | Check one RTL scenario quickly          | single Verilator CNF run                        | seconds                 | Fast local iteration after a focused RTL change                                                                      |
 | Validate one subsystem                  | `make test_vde_heap` or `run_unit_tests.sh`     | seconds to low minutes  | After changes isolated to a specific block                                                                           |
 | Recheck single-core correctness broadly | `run_bigger_ladder.sh`                          | minutes                 | Before declaring a solver change safe                                                                                |
@@ -66,7 +66,7 @@ Use `+DEBUG=1` first. Only step up to `+DEBUG=2` when you already know roughly w
 
 ---
 
-## Golden-Trace Debugging With `mega_sim.py`
+## Golden-Trace Debugging With `mega_sim.py` / `mega_sim_exact.py`
 
 When the RTL looks wrong, start by establishing what the solver should be doing on the same CNF.
 
@@ -75,6 +75,7 @@ When the RTL looks wrong, start by establishing what the solver should be doing 
 ```bash
 cd /home/ubuntu/src/project_data/SatSwarmV2/sim
 python3 mega_sim.py tests/generated_instances/sat_20v_80c_1.cnf
+python3 mega_sim_exact.py tests/generated_instances/sat_20v_80c_1.cnf --json
 ```
 
 `mega_sim.py` is useful because it emits a readable software trace of:
@@ -87,6 +88,8 @@ python3 mega_sim.py tests/generated_instances/sat_20v_80c_1.cnf
 - final result
 
 It is not a cycle-accurate model of the RTL, but it is a good statement of intended solver behavior.
+
+`mega_sim_exact.py` uses the same high-level (non cycle-accurate) style, but is stricter about deterministic VDE ordering, watched-literal movement tracking, and learned-clause ordering. Use `--json` when you want machine-readable decision/watch/learned sequences.
 
 ### Normalized trace output
 
