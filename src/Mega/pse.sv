@@ -97,6 +97,15 @@ module pse #(
         INJECT_CLAUSE  // New state for inserting foreign clauses
     } state_e;
 
+    // Parameterized index widths — scale with MAX_LITS / MAX_CLAUSES instead of hardcoded [15:0].
+    localparam int LIT_IDX_W  = $clog2(MAX_LITS > 1 ? MAX_LITS : 2);       // Width for lit_mem indices
+    localparam int CLS_IDX_W  = $clog2(MAX_CLAUSES > 1 ? MAX_CLAUSES : 2); // Width for clause indices
+    localparam int LIT_CNT_W  = $clog2(MAX_LITS + 1);      // Width for lit_count (needs to represent MAX_LITS exactly)
+    localparam int CLS_CNT_W  = $clog2(MAX_CLAUSES + 1);   // Width for clause_count
+    localparam int RST_IDX_W  = $clog2(MAX_CLAUSES + 3*MAX_VARS + 1); // Width for reset_idx counter
+    localparam logic [CLS_IDX_W-1:0] CLS_SENTINEL = {CLS_IDX_W{1'b1}}; // All-ones "invalid clause ID"
+    localparam logic [LIT_IDX_W-1:0] LIT_SENTINEL = {LIT_IDX_W{1'b1}}; // All-ones "invalid lit index"
+
     // Assignment encoding: 2'b00 = unassigned, 2'b01 = false, 2'b10 = true
     // Assignments and Reasons — ram_style hints force LUTRAM inference on UltraScale+.
     // BCP reads multiple arrays per cycle (assign_state, lit_mem, watch_head*, watch_next*)
@@ -107,32 +116,32 @@ module pse #(
 
     // Clause Store (Local Arrays)
     (* ram_style = "distributed" *) logic [15:0] clause_len    [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic [15:0] clause_start  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [LIT_IDX_W-1:0] clause_start  [0:MAX_CLAUSES-1];
     (* ram_style = "distributed" *) logic signed [31:0] lit_mem [0:MAX_LITS-1];
 
     // Watch Lists (Local Arrays)
-    (* ram_style = "distributed" *) logic [15:0] watched_lit1  [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic [15:0] watched_lit2  [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic [15:0] watch_next1   [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic [15:0] watch_next2   [0:MAX_CLAUSES-1];
-    (* ram_style = "distributed" *) logic [15:0] watch_head1   [0:2*MAX_VARS-1];
-    (* ram_style = "distributed" *) logic [15:0] watch_head2   [0:2*MAX_VARS-1];
+    (* ram_style = "distributed" *) logic [LIT_IDX_W-1:0] watched_lit1  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [LIT_IDX_W-1:0] watched_lit2  [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [CLS_IDX_W-1:0] watch_next1   [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [CLS_IDX_W-1:0] watch_next2   [0:MAX_CLAUSES-1];
+    (* ram_style = "distributed" *) logic [CLS_IDX_W-1:0] watch_head1   [0:2*MAX_VARS-1];
+    (* ram_style = "distributed" *) logic [CLS_IDX_W-1:0] watch_head2   [0:2*MAX_VARS-1];
 
     // Watcher replacement staging (2-cycle serialize for BRAM inference)
-    logic [15:0] watch_repl_clause_id_q;
+    logic [CLS_IDX_W-1:0] watch_repl_clause_id_q;
     logic        watch_repl_list_sel_q;
-    logic [15:0] watch_repl_new_w_q;
+    logic [LIT_IDX_W-1:0] watch_repl_new_w_q;
     logic [15:0] watch_repl_old_idx_q;
     logic [15:0] watch_repl_new_idx_q;
-    logic [15:0] watch_repl_prev_id_q;
-    logic [15:0] watch_repl_next_clause_q;
+    logic [CLS_IDX_W-1:0] watch_repl_prev_id_q;
+    logic [CLS_IDX_W-1:0] watch_repl_next_clause_q;
 
     // Clause-append staging registers (used in APPEND_CLAUSE serializer)
     logic signed [MAX_CLAUSE_LEN-1:0][31:0]    append_lits_q;
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]       append_len_q;
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]       append_idx_q, append_idx_d;
-    logic [15:0]                                append_clause_base_q; // lit_count at capture
-    logic [15:0]                                append_clause_id_q;   // clause_count at capture
+    logic [LIT_IDX_W-1:0]                       append_clause_base_q; // lit_count at capture
+    logic [CLS_IDX_W-1:0]                       append_clause_id_q;   // clause_count at capture
 
     // Propagation queue
     logic prop_fifo_empty, prop_fifo_full;
@@ -161,55 +170,63 @@ module pse #(
 
     // Clause Store Interface Signals
     logic        cs_wr_en;
-    logic [15:0] cs_wr_clause_id;
-    logic [15:0] cs_wr_lit_count;
-    logic [15:0] cs_wr_clause_start;
+    logic [CLS_IDX_W-1:0] cs_wr_clause_id;
+    logic [LIT_CNT_W-1:0] cs_wr_lit_count;
+    logic [LIT_IDX_W-1:0] cs_wr_clause_start;
     logic [15:0] cs_wr_clause_len;
-    logic [15:0] cs_wr_lit_addr;
+    logic [LIT_IDX_W-1:0] cs_wr_lit_addr;
     logic signed [31:0] cs_wr_literal;
     
-    logic [15:0] cs_rd_clause_id;
+    logic [CLS_IDX_W-1:0] cs_rd_clause_id;
     logic [$clog2(MAX_CLAUSE_LEN+1)-1:0]  cs_rd_lit_idx;
     logic signed [31:0] cs_rd_literal;
     logic [15:0] cs_rd_clause_len;
-    logic [15:0] cs_rd_clause_start;
-    logic [15:0] cs_mem_addr;
+    logic [LIT_IDX_W-1:0] cs_rd_clause_start;
+    logic [LIT_IDX_W-1:0] cs_mem_addr;
     logic signed [31:0] cs_mem_literal;
 
     // Watch Manager Interface Signals
     logic        wm_clear_all;
     logic [15:0] wm_clear_idx;
     logic        wm_link_en;
-    logic [15:0] wm_link_clause_id, wm_link_w1, wm_link_w2, wm_link_idx1, wm_link_idx2;
+    logic [CLS_IDX_W-1:0] wm_link_clause_id;
+    logic [LIT_IDX_W-1:0] wm_link_w1, wm_link_w2;
+    logic [15:0] wm_link_idx1, wm_link_idx2;
     logic        wm_move_en;
-    logic [15:0] wm_move_clause_id, wm_move_new_w, wm_move_old_idx, wm_move_new_idx, wm_move_prev_id;
+    logic [CLS_IDX_W-1:0] wm_move_clause_id;
+    logic [LIT_IDX_W-1:0] wm_move_new_w;
+    logic [15:0] wm_move_old_idx, wm_move_new_idx;
+    logic [CLS_IDX_W-1:0] wm_move_prev_id;
     logic        wm_move_list_sel;
-    logic [15:0] wm_rd_clause_id, wm_rd_w1, wm_rd_w2, wm_next1, wm_next2;
-    logic [15:0] wm_rd_head_idx, wm_head1, wm_head2;
+    logic [CLS_IDX_W-1:0] wm_rd_clause_id;
+    logic [LIT_IDX_W-1:0] wm_rd_w1, wm_rd_w2;
+    logic [CLS_IDX_W-1:0] wm_next1, wm_next2;
+    logic [15:0] wm_rd_head_idx;
+    logic [CLS_IDX_W-1:0] wm_head1, wm_head2;
 
     // Bookkeeping
-    logic [15:0] clause_count_q, clause_count_d;
-    logic [15:0] lit_count_q, lit_count_d;
+    logic [CLS_CNT_W-1:0] clause_count_q, clause_count_d;
+    logic [LIT_CNT_W-1:0] lit_count_q, lit_count_d;
     logic [15:0] cur_clause_len_q, cur_clause_len_d;
-    logic [15:0] init_clause_idx_q, init_clause_idx_d;
+    logic [CLS_IDX_W-1:0] init_clause_idx_q, init_clause_idx_d;
     logic [31:0] max_var_seen_q, max_var_seen_d;
-    logic [15:0] reset_idx_q, reset_idx_d;  // Counter for RESET_WATCHES state
+    logic [RST_IDX_W-1:0] reset_idx_q, reset_idx_d;  // Counter for RESET_WATCHES state
     logic        hold_q, hold_d;            // Hold-off scanning while resyncing results from trail
 
     // Scan state for current watch list traversal
     logic signed [31:0] cur_prop_lit_q, cur_prop_lit_d;
     logic [0:0]        scan_list_sel_q, scan_list_sel_d; // 0 -> watch1 list, 1 -> watch2 list
-    logic [15:0]       scan_clause_q, scan_clause_d;
-    logic [15:0]       scan_prev_q, scan_prev_d;
+    logic [CLS_IDX_W-1:0] scan_clause_q, scan_clause_d;
+    logic [CLS_IDX_W-1:0] scan_prev_q, scan_prev_d;
     logic              sampled_q, sampled_d;
-    logic [15:0]       scan_cstart_q, scan_cstart_d;
+    logic [LIT_IDX_W-1:0] scan_cstart_q, scan_cstart_d;
     logic [15:0]       scan_clen_q, scan_clen_d;
-    logic [15:0]       scan_w1_q, scan_w1_d;
-    logic [15:0]       scan_w2_q, scan_w2_d;
+    logic [LIT_IDX_W-1:0] scan_w1_q, scan_w1_d;
+    logic [LIT_IDX_W-1:0] scan_w2_q, scan_w2_d;
     logic signed [31:0] scan_lit_watch_q, scan_lit_watch_d;
     logic signed [31:0] scan_lit_other_q, scan_lit_other_d;
     logic [1:0]        scan_other_truth_q, scan_other_truth_d;
-    logic [15:0]       scan_idx_q, scan_idx_d;
+    logic [LIT_IDX_W-1:0] scan_idx_q, scan_idx_d;
     logic [15:0]       scan_steps_q, scan_steps_d; // Safety counter to detect circular watch lists
 
     // Local assignment write request
@@ -342,7 +359,7 @@ module pse #(
         logic [31:0] v;
         logic signed [31:0] neg_lit;
         logic [15:0] idx;
-        logic [15:0] w1, w2;
+        logic [LIT_IDX_W-1:0] w1, w2;
         logic [15:0] idx1, idx2;
         logic [15:0] base, len;
         logic [15:0] repl_head_idx, old_head_idx;
@@ -350,12 +367,13 @@ module pse #(
         logic signed [31:0] lit_watch, lit_other;
         logic [1:0] other_truth;
         logic found_repl;
-        logic [15:0] repl_idx;
+        logic [LIT_IDX_W-1:0] repl_idx;
         logic signed [31:0] repl_lit;
-        logic [15:0] cstart, clen;
+        logic [LIT_IDX_W-1:0] cstart;
+        logic [15:0] clen;
         logic signed [31:0] l;
         logic [1:0] t;
-        logic [15:0] next_clause;
+        logic [CLS_IDX_W-1:0] next_clause;
 
         // Initialize defaults
         state_d            = clear_assignments ? IDLE : state_q;
@@ -410,8 +428,8 @@ module pse #(
         lit_watch = '0; lit_other = '0; other_truth = '0;
         truth_query_a = '0;
         truth_query_b = '0;
-        next_clause = 16'hFFFF;
-        
+        next_clause = CLS_SENTINEL;
+
         assign_wr_en       = 1'b0;
         assign_wr_idx      = '0;
         assign_wr_val      = 2'b00;
@@ -563,21 +581,21 @@ module pse #(
                     scan_list_sel_d = 1'b0;
                     neg_lit = -prop_fifo_out;
                     scan_clause_d   = watch_head1[safe_lit_idx(neg_lit)];
-                    scan_prev_d     = 16'hFFFF;
+                    scan_prev_d     = CLS_SENTINEL;
                     scan_steps_d    = 16'd0;
                     state_d = SCAN_WATCH;
                 end
             end
 
             SCAN_WATCH: begin
-                if (scan_clause_q == 16'hFFFF) begin
+                if (scan_clause_q == CLS_SENTINEL) begin
                     // TRACE FFFF
 
                     if (scan_list_sel_q == 1'b0) begin
                         scan_list_sel_d = 1'b1;
                         neg_lit = -cur_prop_lit_q;
                         scan_clause_d   = watch_head2[safe_lit_idx(neg_lit)];
-                        scan_prev_d     = 16'hFFFF;
+                        scan_prev_d     = CLS_SENTINEL;
                         state_d = SCAN_WATCH;
                     end else begin
                         state_d = DEQ_PROP;
@@ -594,14 +612,14 @@ module pse #(
                         scan_list_sel_d = 1'b1;
                         neg_lit = -cur_prop_lit_q;
                         scan_clause_d   = watch_head2[safe_lit_idx(neg_lit)];
-                        scan_prev_d     = 16'hFFFF;
+                        scan_prev_d     = CLS_SENTINEL;
                         scan_steps_d    = 16'd0;
                     end else begin
                         state_d = DEQ_PROP;
                     end
                 end else begin
 
-                    
+
                     scan_steps_d = scan_steps_q + 16'd1;
 
                     w1 = watched_lit1[scan_clause_q];
@@ -643,15 +661,15 @@ module pse #(
                     // Clause satisfied by other literal, or watched literal not false — skip
                     scan_prev_d   = scan_clause_q;
                     next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
-                    if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
-                        scan_clause_d = 16'hFFFF;
+                    if (next_clause == scan_clause_q || (scan_prev_q != CLS_SENTINEL && next_clause == scan_prev_q))
+                        scan_clause_d = CLS_SENTINEL;
                     else
                         scan_clause_d = next_clause;
                     state_d = SCAN_WATCH;
                 end else begin
                     // Watched literal is false and other is not true — need replacement
                     scan_other_truth_d = other_truth;
-                    scan_idx_d         = 16'd0;
+                    scan_idx_d         = '0;
                     state_d            = SCAN_REPL;
                 end
             end
@@ -734,8 +752,8 @@ module pse #(
 
                         scan_prev_d   = scan_clause_q;
                         next_clause = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
-                        if (next_clause == scan_clause_q || (scan_prev_q != 16'hFFFF && next_clause == scan_prev_q))
-                            scan_clause_d = 16'hFFFF;
+                        if (next_clause == scan_clause_q || (scan_prev_q != CLS_SENTINEL && next_clause == scan_prev_q))
+                            scan_clause_d = CLS_SENTINEL;
                         else
                             scan_clause_d = next_clause;
 
@@ -856,8 +874,8 @@ module pse #(
             reset_idx_q      <= '0;
             max_var_seen_q   <= '0;
             scan_list_sel_q  <= '0;
-            scan_clause_q    <= 16'hFFFF;
-            scan_prev_q      <= 16'hFFFF;
+            scan_clause_q    <= CLS_SENTINEL;
+            scan_prev_q      <= CLS_SENTINEL;
             cur_prop_lit_q   <= '0;
             initialized_q    <= 1'b0;
             hold_q           <= 1'b0;
@@ -898,7 +916,7 @@ module pse #(
 
             // Latch watcher replacement params when entering WATCH_REPL_CYCLE1.
             if (state_d == WATCH_REPL_CYCLE1 && state_q == SCAN_REPL_EVAL) begin
-                logic [15:0] nc;
+                logic [CLS_IDX_W-1:0] nc;
                 watch_repl_clause_id_q <= scan_clause_q;
                 watch_repl_list_sel_q  <= scan_list_sel_q;
                 watch_repl_new_w_q     <= scan_cstart_q + scan_idx_q;
@@ -906,8 +924,8 @@ module pse #(
                 watch_repl_new_idx_q   <= safe_lit_idx(scan_repl_lit_q);
                 watch_repl_prev_id_q   <= scan_prev_q;
                 nc = (scan_list_sel_q == 1'b0) ? watch_next1[scan_clause_q] : watch_next2[scan_clause_q];
-                watch_repl_next_clause_q <= (nc == scan_clause_q || (scan_prev_q != 16'hFFFF && nc == scan_prev_q))
-                    ? 16'hFFFF : nc;
+                watch_repl_next_clause_q <= (nc == scan_clause_q || (scan_prev_q != CLS_SENTINEL && nc == scan_prev_q))
+                    ? CLS_SENTINEL : nc;
             end
 
             cur_clause_len_q <= cur_clause_len_d;
@@ -952,8 +970,9 @@ module pse #(
     // ── Combinational read helpers: enables LUTRAM inference for watch arrays ──
     // Async reads see the pre-write (pre-posedge) value — identical semantics to
     // SystemVerilog non-blocking assignment RHS evaluation.
-    logic [15:0] iw_w1, iw_w2, iw_idx1, iw_idx2;
-    logic [15:0] iw_head1_val, iw_head2_val;
+    logic [LIT_IDX_W-1:0] iw_w1, iw_w2;
+    logic [15:0] iw_idx1, iw_idx2;
+    logic [CLS_IDX_W-1:0] iw_head1_val, iw_head2_val;
     always_comb begin
         iw_w1        = clause_start[init_clause_idx_q];
         iw_w2        = (clause_len[init_clause_idx_q] > 1)
@@ -966,12 +985,12 @@ module pse #(
     end
 
     // Pre-read watch_next for WATCH_REPL_CYCLE1
-    logic [15:0] repl_next1_val, repl_next2_val;
+    logic [CLS_IDX_W-1:0] repl_next1_val, repl_next2_val;
     assign repl_next1_val = watch_next1[watch_repl_clause_id_q];
     assign repl_next2_val = watch_next2[watch_repl_clause_id_q];
 
     // Pre-read watch_head for WATCH_REPL_CYCLE2
-    logic [15:0] repl_head1_val, repl_head2_val;
+    logic [CLS_IDX_W-1:0] repl_head1_val, repl_head2_val;
     assign repl_head1_val = watch_head1[watch_repl_new_idx_q];
     assign repl_head2_val = watch_head2[watch_repl_new_idx_q];
 
@@ -1002,13 +1021,14 @@ module pse #(
 
     // -- watch_head1 write mux --
     logic        wh1_we;
-    logic [15:0] wh1_waddr, wh1_wdata;
+    logic [15:0] wh1_waddr;
+    logic [CLS_IDX_W-1:0] wh1_wdata;
     always_comb begin
         wh1_we    = 1'b0;
         wh1_waddr = '0;
-        wh1_wdata = 16'hFFFF;
+        wh1_wdata = CLS_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE1 && !watch_repl_list_sel_q &&
-            watch_repl_prev_id_q == 16'hFFFF) begin
+            watch_repl_prev_id_q == CLS_SENTINEL) begin
             wh1_we    = 1'b1;
             wh1_waddr = watch_repl_old_idx_q;
             wh1_wdata = repl_next1_val;
@@ -1021,7 +1041,7 @@ module pse #(
                     reset_idx_q < MAX_CLAUSES + 2*MAX_VARS) begin
             wh1_we    = 1'b1;
             wh1_waddr = reset_idx_q - MAX_CLAUSES;
-            wh1_wdata = 16'hFFFF;
+            wh1_wdata = CLS_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wh1_we    = 1'b1;
             wh1_waddr = iw_idx1;
@@ -1032,13 +1052,13 @@ module pse #(
 
     // -- watch_next1 write mux --
     logic        wn1_we;
-    logic [15:0] wn1_waddr, wn1_wdata;
+    logic [CLS_IDX_W-1:0] wn1_waddr, wn1_wdata;
     always_comb begin
         wn1_we    = 1'b0;
         wn1_waddr = '0;
-        wn1_wdata = 16'hFFFF;
+        wn1_wdata = CLS_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE1 && !watch_repl_list_sel_q &&
-            watch_repl_prev_id_q != 16'hFFFF) begin
+            watch_repl_prev_id_q != CLS_SENTINEL) begin
             wn1_we    = 1'b1;
             wn1_waddr = watch_repl_prev_id_q;
             wn1_wdata = repl_next1_val;
@@ -1048,8 +1068,8 @@ module pse #(
             wn1_wdata = repl_head1_val;
         end else if (state_q == RESET_WATCHES && reset_idx_q < MAX_CLAUSES) begin
             wn1_we    = 1'b1;
-            wn1_waddr = reset_idx_q;
-            wn1_wdata = 16'hFFFF;
+            wn1_waddr = reset_idx_q[CLS_IDX_W-1:0];
+            wn1_wdata = CLS_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wn1_we    = 1'b1;
             wn1_waddr = init_clause_idx_q;
@@ -1060,19 +1080,20 @@ module pse #(
 
     // -- watched_lit1 write mux --
     logic        wl1_we;
-    logic [15:0] wl1_waddr, wl1_wdata;
+    logic [CLS_IDX_W-1:0] wl1_waddr;
+    logic [LIT_IDX_W-1:0] wl1_wdata;
     always_comb begin
         wl1_we    = 1'b0;
         wl1_waddr = '0;
-        wl1_wdata = 16'hFFFF;
+        wl1_wdata = LIT_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE2 && !watch_repl_list_sel_q) begin
             wl1_we    = 1'b1;
             wl1_waddr = watch_repl_clause_id_q;
             wl1_wdata = watch_repl_new_w_q;
         end else if (state_q == RESET_WATCHES && reset_idx_q < MAX_CLAUSES) begin
             wl1_we    = 1'b1;
-            wl1_waddr = reset_idx_q;
-            wl1_wdata = 16'hFFFF;
+            wl1_waddr = reset_idx_q[CLS_IDX_W-1:0];
+            wl1_wdata = LIT_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wl1_we    = 1'b1;
             wl1_waddr = init_clause_idx_q;
@@ -1093,13 +1114,14 @@ module pse #(
 
     // -- watch_head2 write mux --
     logic        wh2_we;
-    logic [15:0] wh2_waddr, wh2_wdata;
+    logic [15:0] wh2_waddr;
+    logic [CLS_IDX_W-1:0] wh2_wdata;
     always_comb begin
         wh2_we    = 1'b0;
         wh2_waddr = '0;
-        wh2_wdata = 16'hFFFF;
+        wh2_wdata = CLS_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE1 && watch_repl_list_sel_q &&
-            watch_repl_prev_id_q == 16'hFFFF) begin
+            watch_repl_prev_id_q == CLS_SENTINEL) begin
             wh2_we    = 1'b1;
             wh2_waddr = watch_repl_old_idx_q;
             wh2_wdata = repl_next2_val;
@@ -1112,7 +1134,7 @@ module pse #(
                     reset_idx_q < MAX_CLAUSES + 2*MAX_VARS) begin
             wh2_we    = 1'b1;
             wh2_waddr = reset_idx_q - MAX_CLAUSES;
-            wh2_wdata = 16'hFFFF;
+            wh2_wdata = CLS_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wh2_we    = 1'b1;
             wh2_waddr = iw_idx2;
@@ -1123,13 +1145,13 @@ module pse #(
 
     // -- watch_next2 write mux --
     logic        wn2_we;
-    logic [15:0] wn2_waddr, wn2_wdata;
+    logic [CLS_IDX_W-1:0] wn2_waddr, wn2_wdata;
     always_comb begin
         wn2_we    = 1'b0;
         wn2_waddr = '0;
-        wn2_wdata = 16'hFFFF;
+        wn2_wdata = CLS_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE1 && watch_repl_list_sel_q &&
-            watch_repl_prev_id_q != 16'hFFFF) begin
+            watch_repl_prev_id_q != CLS_SENTINEL) begin
             wn2_we    = 1'b1;
             wn2_waddr = watch_repl_prev_id_q;
             wn2_wdata = repl_next2_val;
@@ -1139,8 +1161,8 @@ module pse #(
             wn2_wdata = repl_head2_val;
         end else if (state_q == RESET_WATCHES && reset_idx_q < MAX_CLAUSES) begin
             wn2_we    = 1'b1;
-            wn2_waddr = reset_idx_q;
-            wn2_wdata = 16'hFFFF;
+            wn2_waddr = reset_idx_q[CLS_IDX_W-1:0];
+            wn2_wdata = CLS_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wn2_we    = 1'b1;
             wn2_waddr = init_clause_idx_q;
@@ -1151,19 +1173,20 @@ module pse #(
 
     // -- watched_lit2 write mux --
     logic        wl2_we;
-    logic [15:0] wl2_waddr, wl2_wdata;
+    logic [CLS_IDX_W-1:0] wl2_waddr;
+    logic [LIT_IDX_W-1:0] wl2_wdata;
     always_comb begin
         wl2_we    = 1'b0;
         wl2_waddr = '0;
-        wl2_wdata = 16'hFFFF;
+        wl2_wdata = LIT_SENTINEL;
         if (state_q == WATCH_REPL_CYCLE2 && watch_repl_list_sel_q) begin
             wl2_we    = 1'b1;
             wl2_waddr = watch_repl_clause_id_q;
             wl2_wdata = watch_repl_new_w_q;
         end else if (state_q == RESET_WATCHES && reset_idx_q < MAX_CLAUSES) begin
             wl2_we    = 1'b1;
-            wl2_waddr = reset_idx_q;
-            wl2_wdata = 16'hFFFF;
+            wl2_waddr = reset_idx_q[CLS_IDX_W-1:0];
+            wl2_wdata = LIT_SENTINEL;
         end else if (state_q == INIT_WATCHES && init_clause_idx_q < clause_count_q) begin
             wl2_we    = 1'b1;
             wl2_waddr = init_clause_idx_q;

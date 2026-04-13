@@ -48,6 +48,34 @@ build_1x1:
 		-Mdir obj_dir_1x1 \
 		--build -j 8
 
+# Build 1x1 with large parameters for re-simulating hard instances
+# NOTE: clause IDs are 16-bit throughout the RTL, so MAX_CLAUSES must be <= 32768
+build_1x1_large:
+	@echo "Building SatSwarmv2 1x1 with large parameters (MAX_CLAUSES=32768, MAX_LITS=1048576)..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=1 -GGRID_Y=1 \
+		-GMAX_CLAUSES_PER_CORE=32768 \
+		-GMAX_LITS=1048576 \
+		-CFLAGS "-std=c++17" \
+		-I../src/Mega \
+		-Mdir obj_dir_1x1_large \
+		--build -j 8
+
+# Same as large but with restarts disabled
+build_1x1_norestart:
+	@echo "Building SatSwarmv2 1x1 with large params + restarts DISABLED..."
+	$(VERILATOR) $(VERILATOR_FLAGS) sv/tb_satswarmv2.sv cpp/sim_main.cpp $(RTL_SRCS) \
+		--top-module $(TOP) \
+		-GGRID_X=1 -GGRID_Y=1 \
+		-GMAX_CLAUSES_PER_CORE=32768 \
+		-GMAX_LITS=1048576 \
+		-GRESTART_CONFLICT_THRESHOLD=0 \
+		-CFLAGS "-std=c++17" \
+		-I../src/Mega \
+		-Mdir obj_dir_1x1_norestart \
+		--build -j 8
+
 # Build 1x1 matching the current FPGA AFI parameters (MAX_CLAUSES=8192, MAX_LITS=8192)
 build_1x1_fpga:
 	@echo "Building SatSwarmv2 1x1 with FPGA-matching parameters (MAX_CLAUSES=8192, MAX_LITS=8192)..."

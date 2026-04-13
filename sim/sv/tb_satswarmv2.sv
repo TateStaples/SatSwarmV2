@@ -32,6 +32,8 @@ module tb_satswarmv2;
 
   // Clause sharing mode (overridable via Verilator -G)
   parameter int CLAUSE_SHARING_MODE = 0;
+  // Restart threshold (overridable; 0 = disabled)
+  parameter int RESTART_CONFLICT_THRESHOLD = 64;
 
   // DUT - SatSwarm Top Level
   satswarm_top #(
@@ -40,7 +42,8 @@ module tb_satswarmv2;
     .MAX_VARS_PER_CORE(MAX_VARS_PER_CORE),
     .MAX_CLAUSES_PER_CORE(MAX_CLAUSES_PER_CORE),
     .MAX_LITS(MAX_LITS),
-    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE)
+    .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
+    .RESTART_CONFLICT_THRESHOLD(RESTART_CONFLICT_THRESHOLD)
   ) dut (
     .DEBUG(debug_level),
     .clk(clk),
@@ -90,6 +93,24 @@ module tb_satswarmv2;
   int _clause_count_idx = 0;
   int debug_level = 0;  // 0=heartbeat+final, 1=architectural, 2=full microarch
   longint unsigned max_cycles_cfg = 5000000;  // default timeout cycles
+
+  // ── Debug tracking variables for buffer/capacity analysis ──
+  int dbg_prev_state;
+  int dbg_max_clause_watermark;
+  int dbg_max_lit_watermark;
+  int dbg_max_trail_watermark;
+  int dbg_max_dlvl_watermark;
+  int dbg_total_clause_drops;
+  int dbg_prev_conflict_count;
+
+  // ── Learned clause validation against known solution ──
+  bit solution_loaded = 0;
+  bit solution_values [0:511];  // solution_values[var] = 1 if var is true
+  int dbg_invalid_learned_count = 0;
+  int dbg_valid_learned_count = 0;
+  int dbg_prev_cae_state = 0;
+  int dbg_prev_lit_count = 0;
+  bit dbg_lit_overflow_detected = 0;
 
   task automatic push_literal(input int lit, input bit clause_end);
     begin
@@ -322,29 +343,215 @@ module tb_satswarmv2;
 
       // Wait for completion
       cycle_count = 0;
+
+      // Reset tracking variables
+      dbg_prev_state = 0;
+      dbg_max_clause_watermark = 0;
+      dbg_max_lit_watermark = 0;
+      dbg_max_trail_watermark = 0;
+      dbg_max_dlvl_watermark = 0;
+      dbg_total_clause_drops = 0;
+      dbg_prev_conflict_count = 0;
+
       while (!host_done && cycle_count < max_cycles_cfg) begin
         @(posedge clk);
         cycle_count++;
-        // Heartbeat: print periodically for DEBUG_LEVEL 0, detailed for levels 1-2
+
+        // ── EVENT: State transition to FINISH_UNSAT — full forensics ──
+        if (dut.cols[0].rows[0].u_core.state_q == 12 && dbg_prev_state != 12) begin // FINISH_UNSAT = 12
+          $display("[UNSAT-TRIGGER Cycle %0d] *** FINISH_UNSAT entered ***", cycle_count);
+          $display("  came_from_state=%0d  decision_level=%0d  trail_height=%0d",
+                   dbg_prev_state,
+                   dut.cols[0].rows[0].u_core.decision_level_q,
+                   dut.cols[0].rows[0].u_core.trail_height);
+          $display("  cae_unsat=%0b  cae_learned_len=%0d  conflict_clause[0]=%0d  conflict_clause[1]=%0d",
+                   dut.cols[0].rows[0].u_core.cae_unsat,
+                   dut.cols[0].rows[0].u_core.cae_learned_len,
+                   dut.cols[0].rows[0].u_core.conflict_clause_q[0],
+                   dut.cols[0].rows[0].u_core.conflict_clause_q[1]);
+          $display("  cae_backtrack_level=%0d  cae_buf_overflow=%0b  cae_dropped_lits=%0d",
+                   dut.cols[0].rows[0].u_core.u_cae.backtrack_q,
+                   dut.cols[0].rows[0].u_core.u_cae.buf_overflow_q,
+                   dut.cols[0].rows[0].u_core.u_cae.dropped_lits_q);
+          $display("  total_conflicts=%0d  total_restarts=%0d  total_learned=%0d  total_decisions=%0d",
+                   dut.cols[0].rows[0].u_core.total_conflicts,
+                   dut.cols[0].rows[0].u_core.total_restarts,
+                   dut.cols[0].rows[0].u_core.total_learned,
+                   dut.cols[0].rows[0].u_core.total_decisions);
+          $display("  pse_clause_count=%0d/%0d  pse_lit_count=%0d/%0d",
+                   dut.cols[0].rows[0].u_core.u_pse.clause_count_q, MAX_CLAUSES_PER_CORE,
+                   dut.cols[0].rows[0].u_core.u_pse.lit_count_q, MAX_LITS);
+          $display("  prop_fifo_count=%0d  prop_fifo_full=%0b",
+                   dut.cols[0].rows[0].u_core.prop_fifo_count,
+                   dut.cols[0].rows[0].u_core.prop_fifo_full);
+          // Determine which UNSAT condition fired
+          if (dbg_prev_state == 7) begin // BACKTRACK_PHASE = 7
+            if (dut.cols[0].rows[0].u_core.cae_unsat)
+              $display("  >>> UNSAT reason: cae_unsat (conflict at decision level 0)");
+            else if (dut.cols[0].rows[0].u_core.cae_learned_len == 0)
+              $display("  >>> UNSAT reason: cae_learned_len == 0 (empty learned clause)");
+            else if (dut.cols[0].rows[0].u_core.conflict_clause_q[0] == 0 &&
+                     dut.cols[0].rows[0].u_core.conflict_clause_q[1] == 0)
+              $display("  >>> UNSAT reason: conflict_clause[0:1] == {0,0} (zeroed conflict clause)");
+          end else if (dbg_prev_state == 5) begin // PSE_PHASE = 5
+            $display("  >>> UNSAT reason: conflict at decision_level 0 during PSE propagation");
+          end
+        end
+
+        // ── EVENT: Entering CONFLICT_ANALYSIS ──
+        if (dut.cols[0].rows[0].u_core.state_q == 6 && dbg_prev_state != 6) begin // CONFLICT_ANALYSIS = 6
+          if (debug_level >= 1 || (cycle_count % 100000 == 0))
+            $display("[CONFLICT Cycle %0d] dlvl=%0d trail=%0d pse_clauses=%0d pse_lits=%0d conflicts=%0d",
+                     cycle_count,
+                     dut.cols[0].rows[0].u_core.decision_level_q,
+                     dut.cols[0].rows[0].u_core.trail_height,
+                     dut.cols[0].rows[0].u_core.u_pse.clause_count_q,
+                     dut.cols[0].rows[0].u_core.u_pse.lit_count_q,
+                     dut.cols[0].rows[0].u_core.total_conflicts);
+        end
+
+        // ── EVENT: Learned clause dropped (PSE rejected append) ──
+        if (dut.cols[0].rows[0].u_core.state_q == 8 && dbg_prev_state == 7) begin // BACKTRACK_UNDO from BACKTRACK_PHASE
+          if (!dut.cols[0].rows[0].u_core.pse_direct_append_accepted &&
+              dut.cols[0].rows[0].u_core.cae_direct_append_en) begin
+            dbg_total_clause_drops++;
+            if (dbg_total_clause_drops <= 20 || dbg_total_clause_drops % 100 == 0)
+              $display("[CLAUSE-DROP Cycle %0d] Learned clause REJECTED by PSE (clauses=%0d/%0d, lits=%0d/%0d) total_drops=%0d",
+                       cycle_count,
+                       dut.cols[0].rows[0].u_core.u_pse.clause_count_q, MAX_CLAUSES_PER_CORE,
+                       dut.cols[0].rows[0].u_core.u_pse.lit_count_q, MAX_LITS,
+                       dbg_total_clause_drops);
+          end
+        end
+
+        // ── EVENT: Propagation FIFO full ──
+        if (dut.cols[0].rows[0].u_core.prop_fifo_full)
+          $display("[FIFO-FULL Cycle %0d] Propagation FIFO full! count=%0d",
+                   cycle_count, dut.cols[0].rows[0].u_core.prop_fifo_count);
+
+        // ── EVENT: Validate learned clause against known solution ──
+        if (solution_loaded && dut.cols[0].rows[0].u_core.cae_done_edge &&
+            dut.cols[0].rows[0].u_core.cae_learned_len > 0 &&
+            !dut.cols[0].rows[0].u_core.cae_unsat) begin
+          automatic int llen = dut.cols[0].rows[0].u_core.cae_learned_len;
+          automatic bit clause_sat = 0;
+          automatic string lit_str = "";
+          for (int i = 0; i < llen && i < 256; i++) begin
+            automatic int signed slit = dut.cols[0].rows[0].u_core.cae_learned_lits[i];
+            automatic int uvar = (slit < 0) ? -slit : slit;
+            automatic bit lit_true;
+            if (slit > 0)
+              lit_true = solution_values[uvar];
+            else
+              lit_true = !solution_values[uvar];
+            if (lit_true) clause_sat = 1;
+            $sformat(lit_str, "%s %0d", lit_str, slit);
+          end
+          if (!clause_sat) begin
+            dbg_invalid_learned_count++;
+            $display("[INVALID-LEARNED Cycle %0d] Conflict #%0d: Learned clause (len=%0d) NOT satisfied by known solution!",
+                     cycle_count, dut.cols[0].rows[0].u_core.total_conflicts, llen);
+            $display("  Lits:%s", lit_str);
+            $display("  dlvl=%0d trail=%0d backtrack_to=%0d",
+                     dut.cols[0].rows[0].u_core.decision_level_q,
+                     dut.cols[0].rows[0].u_core.trail_height,
+                     dut.cols[0].rows[0].u_core.u_cae.backtrack_q);
+            // Print the truth values for each literal
+            for (int i = 0; i < llen && i < 256; i++) begin
+              automatic int signed slit2 = dut.cols[0].rows[0].u_core.cae_learned_lits[i];
+              automatic int uvar2 = (slit2 < 0) ? -slit2 : slit2;
+              $display("    lit=%0d var=%0d sol_val=%0b => lit_true=%0b",
+                       slit2, uvar2, solution_values[uvar2],
+                       (slit2 > 0) ? solution_values[uvar2] : !solution_values[uvar2]);
+            end
+          end else begin
+            dbg_valid_learned_count++;
+          end
+        end
+
+        // ── High-water-mark tracking ──
+        if (dut.cols[0].rows[0].u_core.u_pse.clause_count_q > dbg_max_clause_watermark)
+          dbg_max_clause_watermark = dut.cols[0].rows[0].u_core.u_pse.clause_count_q;
+        if (dut.cols[0].rows[0].u_core.u_pse.lit_count_q > dbg_max_lit_watermark)
+          dbg_max_lit_watermark = dut.cols[0].rows[0].u_core.u_pse.lit_count_q;
+        if (dut.cols[0].rows[0].u_core.trail_height > dbg_max_trail_watermark)
+          dbg_max_trail_watermark = dut.cols[0].rows[0].u_core.trail_height;
+        if (dut.cols[0].rows[0].u_core.decision_level_q > dbg_max_dlvl_watermark)
+          dbg_max_dlvl_watermark = dut.cols[0].rows[0].u_core.decision_level_q;
+
+        dbg_prev_state = dut.cols[0].rows[0].u_core.state_q;
+
+        // ── Lit count overflow detection ──
+        begin
+          int cur_lit_count;
+          cur_lit_count = dut.cols[0].rows[0].u_core.u_pse.lit_count_q;
+          if (cur_lit_count < dbg_prev_lit_count && dbg_prev_lit_count > 60000 && !dbg_lit_overflow_detected) begin
+            $display("[LIT-OVERFLOW Cycle %0d] *** lit_count wrapped: %0d -> %0d (clauses=%0d) ***",
+                     cycle_count, dbg_prev_lit_count, cur_lit_count,
+                     dut.cols[0].rows[0].u_core.u_pse.clause_count_q);
+            dbg_lit_overflow_detected = 1;
+          end
+          dbg_prev_lit_count = cur_lit_count;
+        end
+
+        // ── Periodic heartbeat ──
         if (debug_level == 0) begin
           if (cycle_count % 10000 == 0) begin
-             // Access internal signal total_conflicts from Core 0 (assuming single core or interest in Core 0)
-             $display("[Heartbeat] Cycle %0d | Conflicts: %0d", cycle_count, dut.cols[0].rows[0].u_core.total_conflicts);
+             $display("[Heartbeat] Cycle %0d | Conflicts: %0d | Decisions: %0d | Restarts: %0d | Learned: %0d | Clauses: %0d/%0d | Lits: %0d/%0d | Trail: %0d | DLvl: %0d",
+                      cycle_count,
+                      dut.cols[0].rows[0].u_core.total_conflicts,
+                      dut.cols[0].rows[0].u_core.total_decisions,
+                      dut.cols[0].rows[0].u_core.total_restarts,
+                      dut.cols[0].rows[0].u_core.total_learned,
+                      dut.cols[0].rows[0].u_core.u_pse.clause_count_q, MAX_CLAUSES_PER_CORE,
+                      dut.cols[0].rows[0].u_core.u_pse.lit_count_q, MAX_LITS,
+                      dut.cols[0].rows[0].u_core.trail_height,
+                      dut.cols[0].rows[0].u_core.decision_level_q);
           end
         end else if (debug_level >= 1) begin
           if (cycle_count == 1 || cycle_count == 2 || cycle_count == 3 || cycle_count % 100 == 0) begin
-            $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d state=%0d dlvl=%0d height=%0d pse_state=%0d pse_done=%0d pse_conflict=%0d", 
+            $display("[Cycle %0d] done=%0d sat=%0d unsat=%0d state=%0d dlvl=%0d height=%0d pse_state=%0d pse_done=%0d pse_conflict=%0d clauses=%0d lits=%0d",
                      cycle_count, host_done, host_sat, host_unsat,
                      dut.cols[0].rows[0].u_core.state_q,
                      dut.cols[0].rows[0].u_core.decision_level_q,
                      dut.cols[0].rows[0].u_core.trail_height,
                      dut.cols[0].rows[0].u_core.u_pse.state_q,
                      dut.cols[0].rows[0].u_core.u_pse.done,
-                     dut.cols[0].rows[0].u_core.u_pse.conflict_detected);
+                     dut.cols[0].rows[0].u_core.u_pse.conflict_detected,
+                     dut.cols[0].rows[0].u_core.u_pse.clause_count_q,
+                     dut.cols[0].rows[0].u_core.u_pse.lit_count_q);
           end
         end
       end
       end_time = $realtime;
+
+      // ── Post-run capacity summary ──
+      $display("\n=== CAPACITY SUMMARY ===");
+      $display("  Clause high-water: %0d / %0d (%0d%%)", dbg_max_clause_watermark, MAX_CLAUSES_PER_CORE,
+               (dbg_max_clause_watermark * 100) / MAX_CLAUSES_PER_CORE);
+      $display("  Literal high-water: %0d / %0d (%0d%%)", dbg_max_lit_watermark, MAX_LITS,
+               (dbg_max_lit_watermark * 100) / MAX_LITS);
+      $display("  Trail high-water: %0d", dbg_max_trail_watermark);
+      $display("  Decision level high-water: %0d", dbg_max_dlvl_watermark);
+      $display("  Learned clause drops: %0d", dbg_total_clause_drops);
+      $display("  Final stats: conflicts=%0d decisions=%0d restarts=%0d learned=%0d",
+               dut.cols[0].rows[0].u_core.total_conflicts,
+               dut.cols[0].rows[0].u_core.total_decisions,
+               dut.cols[0].rows[0].u_core.total_restarts,
+               dut.cols[0].rows[0].u_core.total_learned);
+      $display("  CAE buf_overflow=%0b dropped_lits=%0d",
+               dut.cols[0].rows[0].u_core.u_cae.buf_overflow_q,
+               dut.cols[0].rows[0].u_core.u_cae.dropped_lits_q);
+      if (solution_loaded) begin
+        $display("=== LEARNED CLAUSE VALIDATION ===");
+        $display("  Valid learned clauses: %0d", dbg_valid_learned_count);
+        $display("  INVALID learned clauses: %0d", dbg_invalid_learned_count);
+        if (dbg_invalid_learned_count > 0)
+          $display("  >>> BUG CONFIRMED: %0d learned clauses violated the known satisfying assignment!", dbg_invalid_learned_count);
+        else
+          $display("  All learned clauses are consistent with the known solution.");
+      end
+      $display("  Restart threshold: %0d", RESTART_CONFLICT_THRESHOLD);
       if (debug_level >= 1) $display("[Final Cycle %0d] done=%0d sat=%0d unsat=%0d - TEST STOPPING", cycle_count, host_done, host_sat, host_unsat);
 
       // Report results
@@ -411,6 +618,36 @@ module tb_satswarmv2;
     
     // Read MAXCYCLES from plusargs (default 5,000,000)
     if (!$value$plusargs("MAXCYCLES=%d", max_cycles_cfg)) max_cycles_cfg = 5000000;
+
+    // Load known satisfying assignment for learned clause validation
+    begin
+      string sol_file;
+      if ($value$plusargs("SOLUTION=%s", sol_file)) begin
+        int fd;
+        string line;
+        fd = $fopen(sol_file, "r");
+        if (fd) begin
+          // Skip "SAT" line
+          void'($fgets(line, fd));
+          // Parse assignment line: space-separated signed ints ending with 0
+          begin
+            int sval;
+            // Initialize all to 0
+            for (int i = 0; i < 512; i++) solution_values[i] = 0;
+            while ($fscanf(fd, "%d", sval) == 1) begin
+              if (sval == 0) break;
+              if (sval > 0) solution_values[sval] = 1;
+              else solution_values[-sval] = 0;
+            end
+          end
+          $fclose(fd);
+          solution_loaded = 1;
+          $display("[TB] Loaded known solution from %s for learned clause validation", sol_file);
+        end else begin
+          $display("[TB] WARNING: Could not open solution file: %s", sol_file);
+        end
+      end
+    end
 
     if (debug_level != 0) begin
       $display("\n");

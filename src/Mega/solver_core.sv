@@ -11,7 +11,8 @@ module solver_core #(
     //                      2=short clauses (len<=SHARE_MAX_LEN)
     parameter int CLAUSE_SHARING_MODE = 0,
     parameter int SHARE_MAX_LEN = 4,  // Max clause length to share (mode 2)
-    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO depth
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16,  // Per-core incoming clause FIFO depth
+    parameter int RESTART_CONFLICT_THRESHOLD = 64  // Restart after N conflicts; 0 = disabled
 )(
     input  logic [31:0]  DEBUG, 
     input  logic clk,  // Clock
@@ -228,8 +229,7 @@ module solver_core #(
     // Restart flag asserted when conflict counter crosses threshold
     logic        restart_pending_q, restart_pending_d;
 
-    // Simple conflict-triggered restart threshold (tunable)
-    localparam int RESTART_CONFLICT_THRESHOLD = 16'd64; // Restart after 64 conflicts
+    // Simple conflict-triggered restart threshold (from module parameter list)
 
     // Clause sharing state
     logic [31:0] share_tx_attempts_q, share_tx_attempts_d;
@@ -1434,6 +1434,11 @@ module solver_core #(
                     if (restart_mode_q) begin
                         // Restart mode: no learned clause to append, no asserting literal
                         restart_mode_d = 1'b0;
+                        // BUG FIX: Clear stale decision literal so PSE doesn't seed it
+                        // at level 0 after restart. Without this, PSE's SEED_DECISION
+                        // state sees decision_var != 0 and injects the pre-restart
+                        // decision as a level-0 assignment, causing false UNSAT.
+                        decision_lit_d = '0;
 `ifndef SYNTHESIS
                         if (DEBUG > 0) $strobe("[CORE %0d] BACKTRACK_UNDO restart complete: level=%0d trail_height=%0d",
                                                CORE_ID, decision_level_q, trail_height);

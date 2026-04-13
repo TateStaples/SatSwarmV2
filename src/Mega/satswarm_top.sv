@@ -9,7 +9,8 @@ module satswarm_top #(
     parameter int CLAUSE_SHARING_MODE = 0,
     parameter int SHARE_MAX_LEN = 2,
     parameter int MAX_CLAUSE_LEN = MAX_VARS_PER_CORE,  // CAE working-clause buffer; must be >= max possible conflict size
-    parameter int CLAUSE_RX_FIFO_DEPTH = 16  // Per-core incoming clause FIFO; increase for grids with high sharing activity
+    parameter int CLAUSE_RX_FIFO_DEPTH = 16,  // Per-core incoming clause FIFO; increase for grids with high sharing activity
+    parameter int RESTART_CONFLICT_THRESHOLD = 64  // Restart after N conflicts; 0 = disabled
 )(
     input  logic [31:0]  DEBUG, // Runtime Debug Level
     input  logic clk,
@@ -207,7 +208,8 @@ module satswarm_top #(
                     .GRID_Y(GRID_Y),
                     .CLAUSE_SHARING_MODE(CLAUSE_SHARING_MODE),
                     .SHARE_MAX_LEN(SHARE_MAX_LEN),
-                    .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH)
+                    .CLAUSE_RX_FIFO_DEPTH(CLAUSE_RX_FIFO_DEPTH),
+                    .RESTART_CONFLICT_THRESHOLD(RESTART_CONFLICT_THRESHOLD)
                 ) u_core (
                     .DEBUG(DEBUG),
                     .clk(clk),
