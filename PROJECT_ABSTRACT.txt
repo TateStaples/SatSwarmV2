@@ -1,0 +1,26 @@
+SatSwarmV2: Tiled Hardware SAT Solving with Dynamic Work-Stealing Parallelism
+Boolean satisfiability (SAT) solving is a fundamental computational problem: given a set of logical constraints, determine whether any assignment of true/false values to variables can satisfy all constraints simultaneously. SAT solving is computationally hard—worst-case time can grow exponentially with problem size. Yet SAT solving is ubiquitous: it powers hardware verification (does this chip design work?), software testing (can this program reach a dangerous state?), and constraint solving (is this schedule feasible?). Modern algorithms mitigate the exponential blow-up through clever search strategies, but even optimized solvers remain slow on large problems, and traditional processors execute them sequentially.
+
+SatSwarm introduces a new idea: tiled hardware with dynamic work-stealing. Instead of independent solvers, a grid of solver tiles share a common problem and dynamically coordinate their search. When one tile is stuck exploring a hard branch while a neighboring tile is idle, the idle tile can steal one of the first tile's unexplored branches and begin solving it independently.
+
+Each tile in SatSwarm is a complete SAT solver, implementing the industry-standard CDCL algorithm (Conflict-Driven Clause Learning), the same algorithm used in top software solvers. The key innovation is in connecting multiple tiles with a 2D mesh network that enables them to communicate work on-demand. When a tile discovers new logical facts (learned constraints) during its search, it can share these with neighbors, steering the overall search toward a solution faster.
+
+
+
+
+Results on standard benchmarks show that this work-stealing approach scales better with
+problem difficulty than existing methods. On medium-difficulty problems (75 variables),
+a 3×3 grid (9 tiles) achieves 5.57× speedup—far better than independent portfolio solvers
+could achieve. Compared to the state-of-the-art single-tile hardware solver (VeriSAT),
+SatSwarmV2 reaches solutions dramatically faster on larger problems, despite running at
+lower clock frequency. This validates the core insight: parallelism at the algorithmic
+level, with dynamic load balancing, beats raw speed on a single sequential engine.
+
+This work demonstrates that tiled, work-stealing parallelism is a fundamentally better
+architectural approach to SAT solving than either single monolithic cores or independent
+parallel solvers. The design naturally adapts to problem structure—harder problems generate
+more branches, creating more work-stealing opportunities. SatSwarmV2 opens a new frontier:
+dynamic branch-level parallelism implemented directly in hardware, with scalability that
+improves on harder instances. This approach is broadly applicable to any domain where SAT
+solving is the computational bottleneck: hardware verification, formal methods, and
+constraint solving.

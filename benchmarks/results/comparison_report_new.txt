@@ -1,0 +1,148 @@
+========================================================================================================================
+SatSwarmV2 Configuration Comparison (UF50 & UUF50)
+========================================================================================================================
+
+OVERALL STATISTICS (all correct results)
+------------------------------------------------------------------------------------------------------------------------
+1x1   : Count: 207 | Mean:    688,526 | Median:    348,685 | Std:    684,779
+2x2   : Count: 227 | Mean:    559,295 | Median:    259,939 | Std:    577,671
+3x3   : Count: 240 | Mean:    457,523 | Median:    229,300 | Std:    489,567
+
+PER-DATASET STATISTICS
+------------------------------------------------------------------------------------------------------------------------
+
+UF100:
+  1x1   : Count:  21 | Mean:    448,641 | Median:    360,977 | Std:    280,064
+  2x2   : Count:  24 | Mean:    266,751 | Median:    214,538 | Std:    270,737
+  3x3   : Count:  25 | Mean:    151,314 | Median:     88,249 | Std:    166,904
+
+UF125:
+  1x1   : Count:  10 | Mean:    608,654 | Median:    515,730 | Std:    479,140
+  2x2   : Count:  16 | Mean:    419,695 | Median:    386,897 | Std:    351,834
+  3x3   : Count:  23 | Mean:    349,265 | Median:    344,066 | Std:    219,593
+
+UF150:
+  1x1   : Count:   1 | Mean:  1,645,018 | Median:  1,645,018 | Std:          0
+  2x2   : Count:  12 | Mean:    768,701 | Median:    774,446 | Std:    413,833
+  3x3   : Count:  17 | Mean:    526,252 | Median:    378,882 | Std:    278,413
+
+UF50:
+  1x1   : Count:  25 | Mean:     33,038 | Median:     29,842 | Std:     19,664
+  2x2   : Count:  25 | Mean:     17,094 | Median:     15,691 | Std:      8,690
+  3x3   : Count:  25 | Mean:      9,961 | Median:      8,126 | Std:      5,241
+
+UF75:
+  1x1   : Count:  25 | Mean:    164,345 | Median:    175,101 | Std:     88,399
+  2x2   : Count:  25 | Mean:     76,920 | Median:     41,970 | Std:     73,530
+  3x3   : Count:  25 | Mean:     28,288 | Median:     23,106 | Std:     20,950
+
+UUF100:
+  1x1   : Count:  25 | Mean:  1,162,185 | Median:  1,172,810 | Std:    330,807
+  2x2   : Count:  25 | Mean:    984,104 | Median:    934,154 | Std:    274,491
+  3x3   : Count:  25 | Mean:    806,823 | Median:    749,806 | Std:    224,789
+
+UUF125:
+  1x1   : Count:  25 | Mean:  1,415,926 | Median:  1,342,034 | Std:    260,395
+  2x2   : Count:  25 | Mean:  1,290,545 | Median:  1,256,746 | Std:    180,996
+  3x3   : Count:  25 | Mean:  1,157,270 | Median:  1,156,261 | Std:    115,513
+
+UUF150:
+  1x1   : Count:  25 | Mean:  1,817,805 | Median:  1,696,056 | Std:    436,881
+  2x2   : Count:  25 | Mean:  1,515,538 | Median:  1,492,495 | Std:    232,814
+  3x3   : Count:  25 | Mean:  1,313,799 | Median:  1,306,961 | Std:    186,255
+
+UUF50:
+  1x1   : Count:  25 | Mean:     62,124 | Median:     58,738 | Std:     21,345
+  2x2   : Count:  25 | Mean:     53,986 | Median:     51,995 | Std:     15,714
+  3x3   : Count:  25 | Mean:     46,023 | Median:     44,848 | Std:     11,810
+
+UUF75:
+  1x1   : Count:  25 | Mean:    359,456 | Median:    320,524 | Std:    163,970
+  2x2   : Count:  25 | Mean:    246,551 | Median:    239,060 | Std:     71,526
+  3x3   : Count:  25 | Mean:    199,569 | Median:    186,135 | Std:     61,149
+
+
+========================================================================================================================
+SPEEDUP ANALYSIS (vs 1x1 baseline)
+========================================================================================================================
+
+OVERALL SPEEDUP:
+  2x2 (4 cores):   1.23x speedup (mean),   1.34x (median), Efficiency:  30.8%
+  3x3 (9 cores):   1.50x speedup (mean),   1.52x (median), Efficiency:  16.7%
+
+PER-DATASET SPEEDUP:
+
+  UF100:
+    2x2:   1.68x speedup, Efficiency:  42.0%
+    3x3:   2.96x speedup, Efficiency:  32.9%
+
+  UF125:
+    2x2:   1.45x speedup, Efficiency:  36.3%
+    3x3:   1.74x speedup, Efficiency:  19.4%
+
+  UF150:
+    2x2:   2.14x speedup, Efficiency:  53.5%
+    3x3:   3.13x speedup, Efficiency:  34.7%
+
+  UF50:
+    2x2:   1.93x speedup, Efficiency:  48.3%
+    3x3:   3.32x speedup, Efficiency:  36.9%
+
+  UF75:
+    2x2:   2.14x speedup, Efficiency:  53.4%
+    3x3:   5.81x speedup, Efficiency:  64.6%
+
+  UUF100:
+    2x2:   1.18x speedup, Efficiency:  29.5%
+    3x3:   1.44x speedup, Efficiency:  16.0%
+
+  UUF125:
+    2x2:   1.10x speedup, Efficiency:  27.4%
+    3x3:   1.22x speedup, Efficiency:  13.6%
+
+  UUF150:
+    2x2:   1.20x speedup, Efficiency:  30.0%
+    3x3:   1.38x speedup, Efficiency:  15.4%
+
+  UUF50:
+    2x2:   1.15x speedup, Efficiency:  28.8%
+    3x3:   1.35x speedup, Efficiency:  15.0%
+
+  UUF75:
+    2x2:   1.46x speedup, Efficiency:  36.4%
+    3x3:   1.80x speedup, Efficiency:  20.0%
+
+
+========================================================================================================================
+SAT vs UNSAT ANALYSIS
+========================================================================================================================
+
+
+SAT instances:
+  1x1   : Count:  82 | Mean:    269,361 | Median:    167,891 | Std:    341,061
+  2x2   : Count: 102 | Mean:    242,078 | Median:     90,380 | Std:    339,068
+  3x3   : Count: 115 | Mean:    188,856 | Median:     51,911 | Std:    249,204
+
+  Speedup:
+    2x2:   1.11x speedup, Efficiency:  27.8%
+    3x3:   1.43x speedup, Efficiency:  15.8%
+
+UNSAT instances:
+  1x1   : Count: 125 | Mean:    963,499 | Median:  1,163,832 | Std:    713,694
+  2x2   : Count: 125 | Mean:    818,145 | Median:    934,154 | Std:    602,560
+  3x3   : Count: 125 | Mean:    704,697 | Median:    749,806 | Std:    524,920
+
+  Speedup:
+    2x2:   1.18x speedup, Efficiency:  29.4%
+    3x3:   1.37x speedup, Efficiency:  15.2%
+
+
+========================================================================================================================
+CORRECTNESS SUMMARY
+========================================================================================================================
+
+  1x1: 237/300 correct ( 79.0%)
+  2x2: 256/300 correct ( 85.3%)
+  3x3: 270/300 correct ( 90.0%)
+
+========================================================================================================================
